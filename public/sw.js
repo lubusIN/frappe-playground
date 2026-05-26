@@ -32,6 +32,26 @@ self.addEventListener("fetch", (event) => {
     if (url.pathname.startsWith("/pyodide")) return;
     if (url.pathname.startsWith("/python")) return;
     if (url.pathname === "/" || url.pathname === "/worker.js" || url.pathname === "/sw.js" || url.pathname === "/index.html" || url.pathname === "/config.js" || url.pathname === "/playground.js") return;
+    
+    // Mock Socket.io so the frontend connects successfully and stops spamming errors
+    if (url.pathname.startsWith("/socket.io/")) {
+        // If it's a POST request (sending data), just return OK
+        if (event.request.method === "POST") {
+            return event.respondWith(new Response("ok", { status: 200 }));
+        }
+        
+        // If it's the initial handshake (sid is missing)
+        if (!url.searchParams.has("sid")) {
+            const handshake = `0{"sid":"mock-sid-123","upgrades":[],"pingInterval":25000,"pingTimeout":5000}`;
+            return event.respondWith(new Response(handshake, { 
+                status: 200, 
+                headers: { "Content-Type": "text/plain" } 
+            }));
+        }
+        
+        // For subsequent GET polling, just hang the request forever like a real long-poll
+        return event.respondWith(new Promise(() => {}));
+    }
 
     // Everything else belongs to Frappe (Python WSGI)
     event.respondWith(callPythonHandler(event.request));
