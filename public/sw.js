@@ -31,7 +31,7 @@ self.addEventListener("fetch", (event) => {
     if (url.pathname.startsWith("/wheels")) return;
     if (url.pathname.startsWith("/pyodide")) return;
     if (url.pathname.startsWith("/python")) return;
-    if (url.pathname === "/" || url.pathname === "/worker.js" || url.pathname === "/sw.js" || url.pathname === "/UI-App.js" || url.pathname === "/index.html") return;
+    if (url.pathname === "/" || url.pathname === "/worker.js" || url.pathname === "/sw.js" || url.pathname === "/index.html" || url.pathname === "/config.js" || url.pathname === "/playground.js") return;
 
     // Everything else belongs to Frappe (Python WSGI)
     event.respondWith(callPythonHandler(event.request));

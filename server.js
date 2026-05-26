@@ -11,7 +11,7 @@ app.use((req, res, next) => {
     next();
 });
 
-// Serve the web assets (index.html, worker.js, sw.js, UI-App.js)
+// Serve the web assets (index.html, worker.js, sw.js, playground.js)
 app.use(express.static(path.join(__dirname, 'public')));
 
 // Serve Frappe frontend assets

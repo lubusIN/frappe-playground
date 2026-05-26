@@ -2,6 +2,7 @@
 // Frappe WASM Playground — Web Worker (Pyodide Runtime Sandbox)
 // ──────────────────────────────────────────────────────────────────────────────
 import { loadPyodide } from "/pyodide/pyodide.mjs";
+import { PYTHON_PACKAGES, BENCH_DIRECTORIES, SITE_CONFIG } from "./config.js";
 
 let pyodide;
 let fromServiceWorkerPort;
@@ -12,32 +13,27 @@ const STORAGE_ENDPOINT = `${self.location.origin}/storage`;
 // ─── Boot Sequence ──────────────────────────────────────────────────────────
 
 async function bootPython() {
-    self.postMessage({ type: "LOG", message: "Loading Pyodide..." });
+    await initPyodideAndPackages();
+    await fetchAndMountFilesystem();
+    await configureFrappeEnvironment();
+    
+    self.postMessage({ type: "LOG", message: "Frappe booted successfully!" });
+    self.postMessage({ type: "READY" });
+}
 
-    // 1. Initialize Pyodide engine
+async function initPyodideAndPackages() {
+    self.postMessage({ type: "LOG", message: "Loading Pyodide..." });
     pyodide = await loadPyodide();
 
-    // 2. Load foundational WASM binary packages
     self.postMessage({ type: "LOG", message: "Loading core packages..." });
     await pyodide.loadPackage(["micropip", "cryptography", "tzdata"]);
 
-    // 3. Install pure-Python dependencies from PyPI via micropip
     self.postMessage({ type: "LOG", message: "Installing Python dependencies..." });
     const micropip = pyodide.pyimport("micropip");
-    await micropip.install([
-        "RestrictedPython", "filetype", "filelock", "pypdf", "passlib",
-        "markdown2", "bleach", "bleach-allowlist", "croniter", "cssutils",
-        "email-reply-parser", "pydantic", "sqlparse", "sql_metadata",
-        "terminaltables", "traceback-with-variables", "typing_extensions",
-        "xlrd", "zxcvbn", "markdownify", "PyJWT", "semantic-version",
-        "chardet", "html5lib", "oauthlib", "openpyxl", "xlsxwriter",
-        "phonenumbers", "premailer", "pyotp", "requests-oauthlib", "rsa",
-        "sentry-sdk", "tenacity", "Pillow", "pytz", "requests", "urllib3",
-        "nh3", "Babel", "MarkupSafe", "PyYAML", "beautifulsoup4",
-        "python-dateutil", "posthog", "pdfkit", "PyMySQL", "whoosh",
-    ], { keep_going: true });
+    await micropip.install(PYTHON_PACKAGES, { keep_going: true });
+}
 
-    // 4. Fetch runtime assets (Frappe code bundle + pre-baked SQLite DB + local wheels)
+async function fetchAndMountFilesystem() {
     self.postMessage({ type: "LOG", message: "Fetching Frappe runtime..." });
     const [codeRes, dbRes, docoptRes, num2wordsRes, assetsRes] = await Promise.all([
         fetch(`${STORAGE_ENDPOINT}/frappe_runtime.tar.gz`),
@@ -53,7 +49,6 @@ async function bootPython() {
     const num2wordsArr = new Uint8Array(await num2wordsRes.arrayBuffer());
     const assetsJson = await assetsRes.text();
 
-    // 5. Mount filesystem: Frappe code, site database, wheels
     self.postMessage({ type: "LOG", message: "Mounting virtual filesystem..." });
     pyodide.FS.mkdir("/home/pyodide/frappe_env");
     pyodide.unpackArchive(codeArr, "gztar", { extractDir: "/home/pyodide/frappe_env" });
@@ -61,27 +56,13 @@ async function bootPython() {
     // Write wheels to FS for emfs:// install
     pyodide.FS.writeFile("/home/pyodide/docopt-0.6.2-py2.py3-none-any.whl", docoptArr);
     pyodide.FS.writeFile("/home/pyodide/num2words-0.5.14-py3-none-any.whl", num2wordsArr);
+    
+    const micropip = pyodide.pyimport("micropip");
     await micropip.install("emfs:///home/pyodide/docopt-0.6.2-py2.py3-none-any.whl");
     await micropip.install("emfs:///home/pyodide/num2words-0.5.14-py3-none-any.whl");
 
     // Create Bench directory structure
-    const dirs = [
-        "/home/pyodide/bench",
-        "/home/pyodide/bench/sites",
-        "/home/pyodide/bench/sites/assets",
-        "/home/pyodide/bench/sites/site1",
-        "/home/pyodide/bench/sites/site1/db",
-        "/home/pyodide/bench/sites/site1/locks",
-        "/home/pyodide/bench/sites/site1/logs",
-        "/home/pyodide/bench/sites/site1/private",
-        "/home/pyodide/bench/sites/site1/private/files",
-        "/home/pyodide/bench/sites/site1/public",
-        "/home/pyodide/bench/sites/site1/public/files",
-        "/home/pyodide/bench/logs",
-        "/home/logs",
-        "/home/pyodide/logs",
-    ];
-    for (const d of dirs) {
+    for (const d of BENCH_DIRECTORIES) {
         try { pyodide.FS.mkdir(d); } catch (_) { /* exists */ }
     }
 
@@ -90,8 +71,10 @@ async function bootPython() {
     pyodide.FS.writeFile("/home/pyodide/bench/sites/assets/assets.json", assetsJson);
     pyodide.FS.writeFile("/home/pyodide/bench/sites/apps.txt", "frappe\n");
     pyodide.FS.writeFile("/home/pyodide/bench/sites/currentsite.txt", "site1\n");
+    pyodide.FS.writeFile("/home/pyodide/bench/sites/site1/site_config.json", JSON.stringify(SITE_CONFIG));
+}
 
-    // 6. Fetch and execute Python architecture modules
+async function configureFrappeEnvironment() {
     self.postMessage({ type: "LOG", message: "Configuring Python environment..." });
     
     const [mocksRes, wsgiRes] = await Promise.all([
@@ -103,41 +86,7 @@ async function bootPython() {
     const wsgiCode = await wsgiRes.text();
 
     await pyodide.runPythonAsync(mocksCode);
-
-    // Write the site_config.json
-    await pyodide.runPythonAsync(`
-import json, os, warnings
-warnings.filterwarnings("ignore", category=SyntaxWarning, module=r"whoosh\\..*")
-warnings.filterwarnings("ignore", category=DeprecationWarning, module=r"whoosh\\..*")
-
-site_config = {
-    "db_type": "sqlite",
-    "db_name": "site1",
-    "use_memory_cache": True,
-    "developer_mode": 1,
-    "ignore_csrf": 1,
-}
-with open("/home/pyodide/bench/sites/site1/site_config.json", "w") as f:
-    json.dump(site_config, f)
-
-os.chdir("/home/pyodide/bench/sites")
-os.environ["SITES_PATH"] = "/home/pyodide/bench/sites"
-os.environ["FRAPPE_SITE"] = "site1"
-
-import frappe
-frappe.init(site="site1", sites_path="/home/pyodide/bench/sites")
-frappe.connect()
-
-import frappe.auth
-def bypass_csrf(*args, **kwargs): return True
-frappe.auth.validate_csrf_token = bypass_csrf
-    `);
-
-    // Load the WSGI Server definitions
     await pyodide.runPythonAsync(wsgiCode);
-
-    self.postMessage({ type: "LOG", message: "Frappe booted successfully!" });
-    self.postMessage({ type: "READY" });
 }
 
 // ─── WSGI Request Handler ───────────────────────────────────────────────────
@@ -166,16 +115,26 @@ self.onmessage = async (event) => {
             console.log("WORKER PROCESSING REQUEST:", req.method, req.path);
 
             try {
-                self.pyRequestPayload = req;
+                // Initialize the Python function proxy if not already done
+                if (!self.pyHandleRequest) {
+                    self.pyHandleRequest = pyodide.globals.get("handle_request");
+                }
                 
-                // Execute the WSGI handler we loaded from wsgi_server.py
-                const resultJson = await pyodide.runPythonAsync(`
-import json, js
-req = js.self.pyRequestPayload.to_py()
-response = handle_request(req)
-json.dumps(response)
-                `);
-                responsePort.postMessage(JSON.parse(resultJson));
+                // Convert JS request to a Python Dict proxy
+                const pyReq = pyodide.toPy(req);
+                
+                // Call the native Python WSGI handler directly
+                const pyResponse = self.pyHandleRequest(pyReq);
+                
+                // Convert the returned Python Dict back to a native JS Map/Object
+                const jsResponse = pyResponse.toJs({ dict_converter: Object.fromEntries });
+                
+                // Cleanup proxies to prevent memory leaks
+                pyReq.destroy();
+                pyResponse.destroy();
+                
+                console.log("WORKER RESPONSE:", jsResponse.status, jsResponse.body);
+                responsePort.postMessage(jsResponse);
             } catch (err) {
                 // If Pyodide itself crashes, return a 500 so the SW doesn't hang
                 responsePort.postMessage({

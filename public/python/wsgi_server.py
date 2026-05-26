@@ -127,15 +127,34 @@ def handle_request(req):
     status_code = int(_status.split(" ")[0])
     try:
         body_bytes = b"".join(body_parts)
-        body_str = body_bytes.decode("utf-8", errors="replace")
     except Exception:
-        body_str = ""
+        body_bytes = b""
         
     if status_code >= 500:
-        print(f"WSGI 500 Error Body for {req['path']}: {body_str}")
+        print(f"WSGI 500 Error Body for {req['path']}: {body_bytes.decode('utf-8', errors='replace')}")
         
     return {
         "status": status_code,
         "headers": _headers,
-        "body": body_str
+        "body": body_bytes
     }
+
+# ──────────────────────────────────────────────────────────────────────────────
+# 5. Initialize Frappe Environment for WASM
+# ──────────────────────────────────────────────────────────────────────────────
+import json
+import warnings
+warnings.filterwarnings("ignore", category=SyntaxWarning, module=r"whoosh\\..*")
+warnings.filterwarnings("ignore", category=DeprecationWarning, module=r"whoosh\\..*")
+
+os.chdir("/home/pyodide/bench/sites")
+os.environ["SITES_PATH"] = "/home/pyodide/bench/sites"
+os.environ["FRAPPE_SITE"] = "site1"
+
+import frappe
+frappe.init(site="site1", sites_path="/home/pyodide/bench/sites")
+frappe.connect()
+
+import frappe.auth
+def bypass_csrf(*args, **kwargs): return True
+frappe.auth.validate_csrf_token = bypass_csrf
