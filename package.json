@@ -1,0 +1,15 @@
+{
+  "name": "frappe-wasm-playground",
+  "version": "1.0.0",
+  "description": "Frappe WASM Playground — Run Frappe Framework in the browser via Pyodide",
+  "main": "server.js",
+  "scripts": {
+    "dev": "node server.js",
+    "build": "bash scripts/build.sh",
+    "bundle": "bash scripts/bundle.sh"
+  },
+  "dependencies": {
+    "express": "^4.22.2",
+    "playwright": "^1.60.0"
+  }
+}

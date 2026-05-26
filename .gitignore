@@ -1,0 +1,25 @@
+# Dependencies
+node_modules/
+
+# Generated build artifacts (Docker build output)
+storage/
+
+# Downloaded Pyodide distribution (bundle script)
+public/pyodide/
+
+# Downloaded dependency wheels (bundle script)
+public/wheels/
+
+# Intermediate Docker build directory
+build/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+
+# Scratch files
+scratch/
+SPECS.md
