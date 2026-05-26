@@ -6,10 +6,16 @@
   "scripts": {
     "dev": "node server.js",
     "build": "bash scripts/build.sh",
-    "bundle": "bash scripts/bundle.sh"
+    "bundle": "bash scripts/bundle.sh",
+    "test": "playwright test",
+    "debug:vfs": "node tests/debug/inspect_vfs.js",
+    "debug:memory": "node tests/debug/inspect_memory.js"
   },
   "dependencies": {
     "express": "^4.22.2",
     "playwright": "^1.60.0"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.60.0"
   }
 }

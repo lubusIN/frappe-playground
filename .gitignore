@@ -23,3 +23,6 @@ Thumbs.db
 # Scratch files
 scratch/
 SPECS.md
+
+# Test results (Playwright traces, HTML reports, and screenshots)
+tests/results/
