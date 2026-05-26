@@ -142,10 +142,6 @@ def handle_request(req):
 # ──────────────────────────────────────────────────────────────────────────────
 # 5. Initialize Frappe Environment for WASM
 # ──────────────────────────────────────────────────────────────────────────────
-import json
-import warnings
-warnings.filterwarnings("ignore", category=SyntaxWarning, module=r"whoosh\\..*")
-warnings.filterwarnings("ignore", category=DeprecationWarning, module=r"whoosh\\..*")
 
 os.chdir("/home/pyodide/bench/sites")
 os.environ["SITES_PATH"] = "/home/pyodide/bench/sites"

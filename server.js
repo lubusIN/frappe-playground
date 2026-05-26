@@ -26,5 +26,5 @@ app.get('*', (req, res) => {
 });
 
 app.listen(PORT, () => {
-    console.log(`🚀 Frappe WASM Playground live at http://localhost:${PORT}`);
+    console.log(`🚀 Frappe Playground live at http://localhost:${PORT}`);
 });

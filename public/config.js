@@ -2,18 +2,14 @@
 // Frappe WASM Playground — Configuration Constants
 // ──────────────────────────────────────────────────────────────────────────────
 
-export const PYTHON_PACKAGES = [
-    "RestrictedPython", "filetype", "filelock", "pypdf", "passlib",
-    "markdown2", "bleach", "bleach-allowlist", "croniter", "cssutils",
-    "email-reply-parser", "pydantic", "sqlparse", "sql_metadata",
-    "terminaltables", "traceback-with-variables", "typing_extensions",
-    "xlrd", "zxcvbn", "markdownify", "PyJWT", "semantic-version",
-    "chardet", "html5lib", "oauthlib", "openpyxl", "xlsxwriter",
-    "phonenumbers", "premailer", "pyotp", "requests-oauthlib", "rsa",
-    "sentry-sdk", "tenacity", "Pillow", "pytz", "requests", "urllib3",
-    "nh3", "Babel", "MarkupSafe", "PyYAML", "beautifulsoup4",
-    "python-dateutil", "pdfkit", "PyMySQL", "whoosh"
-];
+export const SITE_CONFIG = {
+    db_type: "sqlite",
+    db_name: "site1",
+    use_memory_cache: true,
+    developer_mode: 1,
+    ignore_csrf: 1,
+    enable_telemetry: 0
+};
 
 export const BENCH_DIRECTORIES = [
     "/home/pyodide/bench",
@@ -32,11 +28,54 @@ export const BENCH_DIRECTORIES = [
     "/home/pyodide/logs"
 ];
 
-export const SITE_CONFIG = {
-    db_type: "sqlite",
-    db_name: "site1",
-    use_memory_cache: true,
-    developer_mode: 1,
-    ignore_csrf: 1,
-    enable_telemetry: 0
-};
+export const PYTHON_PACKAGES = [
+    "RestrictedPython",
+    "filetype",
+    "filelock",
+    "pypdf",
+    "passlib",
+    "markdown2",
+    "bleach",
+    "bleach-allowlist",
+    "croniter",
+    "cssutils",
+    "email-reply-parser",
+    "pydantic",
+    "sqlparse",
+    "sql_metadata",
+    "terminaltables",
+    "traceback-with-variables",
+    "typing_extensions",
+    "xlrd",
+    "zxcvbn",
+    "markdownify",
+    "PyJWT",
+    "semantic-version",
+    "chardet",
+    "html5lib",
+    "oauthlib",
+    "openpyxl",
+    "xlsxwriter",
+    "phonenumbers",
+    "premailer",
+    "pyotp",
+    "requests-oauthlib",
+    "rsa",
+    "sentry-sdk",
+    "tenacity",
+    "Pillow",
+    "pytz",
+    "requests",
+    "urllib3",
+    "nh3",
+    "Babel",
+    "MarkupSafe",
+    "PyYAML",
+    "beautifulsoup4",
+    "python-dateutil",
+    "pdfkit",
+    "PyMySQL",
+    "whoosh"
+];
+
+

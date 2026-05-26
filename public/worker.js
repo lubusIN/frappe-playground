@@ -114,6 +114,14 @@ async function initPyodideAndPackages() {
     self.postMessage({ type: "LOG", message: "Loading Pyodide..." });
     pyodide = await loadPyodide();
 
+    // Globally suppress Python 3.12+ SyntaxWarnings (like whoosh's invalid escape sequences) 
+    // before any packages are installed or compiled.
+    await pyodide.runPythonAsync(`
+        import warnings
+        warnings.filterwarnings("ignore", category=SyntaxWarning)
+        warnings.filterwarnings("ignore", category=DeprecationWarning)
+    `);
+
     self.postMessage({ type: "LOG", message: "Loading core packages..." });
     await pyodide.loadPackage(["micropip", "cryptography", "tzdata"]);
 
@@ -247,20 +255,25 @@ self.onmessage = async (event) => {
                 // easily when restored from IndexedDB. This step deletes the -wal and -shm
                 // files, leaving us with a perfectly clean, single site1.db file to save.
                 await pyodide.runPythonAsync(`
-import sqlite3
-try:
-    conn = sqlite3.connect('/home/pyodide/bench/sites/site1/db/site1.db')
-    conn.execute('PRAGMA wal_checkpoint(TRUNCATE)')
-    conn.execute('PRAGMA journal_mode = DELETE')
-    conn.close()
-except Exception as e:
-    pass
+                    import sqlite3
+                    try:
+                        conn = sqlite3.connect('/home/pyodide/bench/sites/site1/db/site1.db')
+                        conn.execute('PRAGMA wal_checkpoint(TRUNCATE)')
+                        conn.execute('PRAGMA journal_mode = DELETE')
+                        conn.close()
+                    except Exception as e:
+                        pass
                 `);
                 
                 // Persist database directory to IndexedDB after every write operation.
                 await saveDirectoryToIDB("/home/pyodide/bench/sites/site1/db");
                 
-                console.log("WORKER RESPONSE:", jsResponse.status, jsResponse.body);
+                let bodyLog = "[empty body]";
+                if (jsResponse.body && jsResponse.body.length > 0) {
+                    const textStr = new TextDecoder("utf-8").decode(jsResponse.body);
+                    bodyLog = textStr.length > 300 ? textStr.substring(0, 300) + "... [truncated]" : textStr;
+                }
+                console.log("WORKER RESPONSE:", jsResponse.status, "\\n", bodyLog);
                 responsePort.postMessage(jsResponse);
             } catch (err) {
                 // If Pyodide itself crashes, return a 500 so the SW doesn't hang
