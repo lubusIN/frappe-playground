@@ -10,8 +10,9 @@ let isFreshSession = true;
 let instanceScope = "default";
 let persistedCookieJarJson = null;
 
-// Local Express server serves storage/ at this endpoint
+// Static runtime files are served from /storage; browser assets are served from /assets.
 const STORAGE_ENDPOINT = `${self.location.origin}/storage`;
+const ASSETS_ENDPOINT = `${self.location.origin}/assets`;
 
 // ─── Custom IndexedDB Persistence ──────────────────────────────────
 // We use a custom IndexedDB sync mechanism instead of Emscripten IDBFS because
@@ -230,7 +231,7 @@ async function fetchAndMountFilesystem() {
         fetch(`${STORAGE_ENDPOINT}/frappe_runtime.tar.gz`),
         fetch(`${self.location.origin}/wheels/docopt-0.6.2-py2.py3-none-any.whl`),
         fetch(`${self.location.origin}/wheels/num2words-0.5.14-py3-none-any.whl`),
-        fetch(`${STORAGE_ENDPOINT}/assets/assets.json`),
+        fetch(`${ASSETS_ENDPOINT}/assets.json`),
     ]);
 
     const codeArr = new Uint8Array(await codeRes.arrayBuffer());

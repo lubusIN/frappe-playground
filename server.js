@@ -14,11 +14,9 @@ app.use((req, res, next) => {
 // Serve the web assets (index.html, worker.js, sw.js, playground.js)
 app.use(express.static(path.join(__dirname, 'public')));
 
-// Serve Frappe frontend assets
-app.use('/assets', express.static(path.join(__dirname, 'storage', 'assets')));
-
-// Emulate Cloudflare R2 storage bucket endpoint
-app.use('/storage', express.static(path.join(__dirname, 'storage')));
+// Serve prepared runtime files from the same layout Cloudflare Pages publishes.
+app.use('/storage', express.static(path.join(__dirname, 'public', 'storage')));
+app.use('/storage', (req, res) => res.sendStatus(404));
 
 // Handle direct route navigation fallbacks for the inner iframe paths
 app.get('*', (req, res) => {
