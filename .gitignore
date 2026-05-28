@@ -3,6 +3,8 @@ node_modules/
 
 # Generated build artifacts (Docker build output)
 storage/
+public/assets/
+public/storage/
 
 # Downloaded Pyodide distribution (bundle script)
 public/pyodide/

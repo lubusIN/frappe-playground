@@ -7,17 +7,17 @@
     "dev": "node server.js",
     "build": "bash scripts/build.sh",
     "bundle": "bash scripts/bundle.sh",
+    "deploy": "bash scripts/deploy.sh",
     "test": "playwright test",
     "test:e2e": "playwright test tests/e2e",
     "debug:vfs": "node tests/debug/inspect_vfs.js",
     "debug:memory": "node tests/debug/inspect_memory.js",
-    "check-limits": "bash scripts/check-cf-limits.sh"
-  },
-  "dependencies": {
-    "express": "^4.22.2",
-    "playwright": "^1.60.0"
+    "check-limits": "bash scripts/check-limits.sh"
   },
   "devDependencies": {
-    "@playwright/test": "^1.60.0"
+    "@playwright/test": "^1.60.0",
+    "express": "^4.22.2",
+    "playwright": "^1.60.0",
+    "wrangler": "^4.95.0"
   }
 }

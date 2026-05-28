@@ -7,8 +7,12 @@ echo "Checking Cloudflare Pages deployment limits..."
 MAX_FILES=20000
 MAX_FILE_SIZE_MB=25
 
-# Directories to check (assuming 'public' and 'storage' will be deployed)
-DIRS_TO_CHECK=("public" "storage")
+# Directories to check. Defaults to the Cloudflare Pages publish directory.
+if [ "$#" -gt 0 ]; then
+  DIRS_TO_CHECK=("$@")
+else
+  DIRS_TO_CHECK=("public")
+fi
 
 TOTAL_FILES=0
 LARGE_FILES_FOUND=0

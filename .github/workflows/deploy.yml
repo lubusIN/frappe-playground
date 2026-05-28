@@ -1,0 +1,48 @@
+name: Deploy to Cloudflare Pages
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      deployments: write
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v6
+
+      - name: Bundle Pyodide and Wheels
+        run: bash scripts/bundle.sh
+
+      - name: Build Frappe Runtime
+        run: bash scripts/build.sh
+
+      - name: Prepare Publish Directory
+        run: bash scripts/prepare.sh
+
+      - name: Check Cloudflare Limits
+        id: check_limits
+        run: bash scripts/check-limits.sh public
+
+      - name: Publish to Cloudflare Pages
+        id: deploy
+        if: steps.check_limits.outcome == 'success' && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository)
+        uses: cloudflare/wrangler-action@v4
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          command: pages deploy public --project-name=frappe-playground
+          gitHubToken: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Add deployment URL to summary
+        if: steps.deploy.outputs.deployment-url != ''
+        run: |
+          echo "### Cloudflare Pages deployment" >> "$GITHUB_STEP_SUMMARY"
+          echo "${{ steps.deploy.outputs.deployment-url }}" >> "$GITHUB_STEP_SUMMARY"
