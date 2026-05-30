@@ -2,10 +2,11 @@
   "name": "frappe-wasm-playground",
   "version": "1.0.0",
   "description": "Frappe WASM Playground — Run Frappe Framework in the browser via Pyodide",
-  "main": "server.js",
   "scripts": {
-    "start": "node server.js",
-    "build": "bash scripts/build.sh",
+    "dev": "vite --host 0.0.0.0",
+    "build": "vite build",
+    "start": "vite preview --host 0.0.0.0",
+    "build:runtime": "bash scripts/build.sh",
     "bundle": "bash scripts/bundle.sh",
     "deploy": "bash scripts/deploy.sh",
     "test": "playwright test",
@@ -16,8 +17,17 @@
   },
   "devDependencies": {
     "@playwright/test": "^1.60.0",
-    "express": "^4.22.2",
+    "@vitejs/plugin-vue": "^6.0.7",
+    "autoprefixer": "^10.5.0",
     "playwright": "^1.60.0",
+    "postcss": "^8.5.15",
+    "tailwindcss": "^3.4.17",
+    "vite": "^8.0.14",
     "wrangler": "^4.95.0"
+  },
+  "dependencies": {
+    "@lucide/vue": "^1.17.0",
+    "frappe-ui": "^0.1.278",
+    "vue": "^3.5.35"
   }
 }

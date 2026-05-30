@@ -1,5 +1,5 @@
 // ──────────────────────────────────────────────────────────────────────────────
-// Frappe WASM Playground — Initialization Script
+// Frappe Playground — Initialization Script
 // ──────────────────────────────────────────────────────────────────────────────
 
 async function initPlayground() {

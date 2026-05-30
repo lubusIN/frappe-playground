@@ -1,5 +1,5 @@
 // ──────────────────────────────────────────────────────────────────────────────
-// Frappe WASM Playground — Service Worker (Network Request Interceptor)
+// Frappe Playground — Service Worker (Network Request Interceptor)
 // ──────────────────────────────────────────────────────────────────────────────
 
 self.addEventListener("install", () => self.skipWaiting());

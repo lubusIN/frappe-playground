@@ -18,14 +18,21 @@ The playground consists of three main components:
    ```
    *Note: This creates the `.tar.gz` bundles inside the `storage/` directory.*
 
-2. **Start the local server**:
-   Start the Express server which serves the static files and Pyodide:
+2. **Start the local dev server**:
+   Start Vite, which serves the shell app with hot reload plus the Pyodide runtime files from `public/`:
    ```bash
+   npm run dev
+   ```
+
+3. **Preview the built app**:
+   Build and preview the production output:
+   ```bash
+   npm run build
    npm start
    ```
 
-3. **Open the App**:
-   Navigate to `http://localhost:8000/`.
+4. **Open the App**:
+   Navigate to `http://localhost:5173/` in dev, or `http://localhost:8000/` when using `npm start`.
 
 ## Testing the Playground
 
@@ -47,7 +54,7 @@ The project includes a suite of reusable Playwright scripts in the `tests/` dire
 
 ### 🚀 Running the Tests & Debug Tools
 
-Ensure your local server (`npm run dev`) is running, then use NPM to execute the scripts:
+Ensure your local server (`npm run dev` or `npm start`) is running, then use NPM to execute the scripts:
 
 **Automated Flows**
 ```bash

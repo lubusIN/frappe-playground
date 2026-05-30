@@ -23,11 +23,22 @@ async function waitForPlaygroundBoot(page) {
 
     const iframe = page.locator('#frappe-desk');
     await expect(iframe).toBeVisible({ timeout: 120000 });
+    await dismissIntroDialogIfShown(page);
 
     const instanceId = await page.evaluate(() => sessionStorage.getItem('frappe_playground_instance_id'));
     expect(instanceId).toBeTruthy();
 
     return { iframe, instanceId };
+}
+
+async function dismissIntroDialogIfShown(page) {
+    const introAction = page.getByRole('button', { name: 'I understand' });
+
+    try {
+        await introAction.click({ timeout: 5000 });
+    } catch (_) {
+        // The dialog is only expected in the shell UI and may already be closed.
+    }
 }
 
 async function getFrappeFrame(page) {
@@ -163,6 +174,7 @@ module.exports = {
     completeSetupWizardIfShown,
     expectStableDesk,
     getFrappeFrame,
+    dismissIntroDialogIfShown,
     loginAsAdministrator,
     readDeskState,
     waitForPlaygroundBoot,

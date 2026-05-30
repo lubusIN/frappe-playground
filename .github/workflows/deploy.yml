@@ -18,6 +18,15 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v6
 
+      - name: Setup Node.js
+        uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install frontend dependencies
+        run: npm ci
+
       - name: Bundle Pyodide and Wheels
         run: bash scripts/bundle.sh
 
@@ -26,6 +35,9 @@ jobs:
 
       - name: Prepare Publish Directory
         run: bash scripts/prepare.sh
+
+      - name: Build Frontend Shell
+        run: npm run build
 
       - name: Check Cloudflare Limits
         id: check_limits

@@ -9,6 +9,7 @@ echo "Preparing Cloudflare Pages deploy for ${PROJECT_NAME} (${BRANCH_NAME})..."
 bash scripts/bundle.sh
 bash scripts/build.sh
 bash scripts/prepare.sh
+npm run build
 bash scripts/check-limits.sh public
 
 echo "Deploying to Cloudflare Pages..."
