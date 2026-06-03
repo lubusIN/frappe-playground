@@ -148,6 +148,13 @@ async function initPlayground() {
       booting.value = false
       frameSrc.value = scopedFrameUrl('/')
       startAddressSync()
+      return
+    }
+
+    if (event.data?.type === 'ERROR') {
+      ready.value = false
+      booting.value = false
+      setBootLog(event.data.message)
     }
   }
 
@@ -167,7 +174,7 @@ onBeforeUnmount(() => {
 
 <template>
   <main
-    class="grid h-screen w-screen overflow-hidden bg-[#0a0a0a]"
+    class="grid h-screen w-screen overflow-hidden bg-[#0a0a0a] supports-[height:100dvh]:h-dvh"
     :class="
       ready
         ? 'grid-rows-[44px_minmax(0,1fr)] max-sm:grid-rows-[84px_minmax(0,1fr)]'

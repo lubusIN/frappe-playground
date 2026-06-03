@@ -1,19 +1,20 @@
 {
-  "name": "frappe-wasm-playground",
+  "name": "frappe-playground",
   "version": "1.0.0",
-  "description": "Frappe WASM Playground — Run Frappe Framework in the browser via Pyodide",
+  "description": "Run Frappe Framework in the browser via Pyodide",
   "scripts": {
     "dev": "vite --host 0.0.0.0",
+    "dev:preview": "vite preview --host 0.0.0.0",
+    "start": "npm run dev:preview",
     "build": "vite build",
-    "start": "vite preview --host 0.0.0.0",
     "build:runtime": "bash scripts/build.sh",
-    "bundle": "bash scripts/bundle.sh",
+    "deploy:prepare": "bash scripts/prepare-deploy.sh",
+    "predeploy": "npm run deploy:prepare",
     "deploy": "bash scripts/deploy.sh",
-    "test": "playwright test",
+    "test": "npm run test:e2e",
     "test:e2e": "playwright test tests/e2e",
     "debug:vfs": "node tests/debug/inspect_vfs.js",
-    "debug:memory": "node tests/debug/inspect_memory.js",
-    "check-limits": "bash scripts/check-limits.sh"
+    "debug:memory": "node tests/debug/inspect_memory.js"
   },
   "devDependencies": {
     "@playwright/test": "^1.60.0",

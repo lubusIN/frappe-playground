@@ -7,7 +7,9 @@ self.addEventListener("activate", (event) => event.waitUntil(clients.claim()));
 
 const instances = new Map();
 const clientScopes = new Map();
-const STATIC_PATH_PREFIXES = ["/storage", "/assets", "/wheels", "/pyodide", "/python"];
+const STATIC_PATH_PREFIXES = ["/storage", "/assets", "/pyodide", "/python"];
+const NODE_MODULES_ASSET_PREFIX = "/assets/frappe/node_modules/";
+const DEPLOY_SAFE_NODE_MODULES_ASSET_PREFIX = "/assets/frappe/runtime_modules/";
 const BACKEND_READY_TIMEOUT_MS = 90000;
 const BACKEND_READY_POLL_MS = 100;
 
@@ -37,6 +39,14 @@ function queryWithoutScope(url) {
 
 function isStaticPath(pathname) {
     return STATIC_PATH_PREFIXES.some(prefix => pathname.startsWith(prefix));
+}
+
+function remapStaticPath(pathname) {
+    if (pathname.startsWith(NODE_MODULES_ASSET_PREFIX)) {
+        return pathname.replace(NODE_MODULES_ASSET_PREFIX, DEPLOY_SAFE_NODE_MODULES_ASSET_PREFIX);
+    }
+
+    return pathname;
 }
 
 self.addEventListener("message", (event) => {
@@ -89,16 +99,19 @@ async function handleFetch(event) {
     }
 
     if (isStaticPath(requestPath)) {
-        if (!scopedPath && !scopeFromUrl(url)) return fetch(event.request);
-
         const strippedUrl = new URL(event.request.url);
-        strippedUrl.pathname = requestPath;
+        strippedUrl.pathname = remapStaticPath(requestPath);
         strippedUrl.searchParams.delete("__scope");
         const requestOptions = {
             method: event.request.method,
             headers: event.request.headers,
             credentials: event.request.credentials
         };
+
+        if (!scopedPath && !scopeFromUrl(url) && strippedUrl.href === event.request.url) {
+            return fetch(event.request);
+        }
+
         return fetch(strippedUrl.href, requestOptions);
     }
     

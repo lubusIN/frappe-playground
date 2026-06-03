@@ -1,5 +1,5 @@
 // ──────────────────────────────────────────────────────────────────────────────
-// Frappe WASM Playground — Configuration Constants
+// Frappe Playground — Configuration Constants
 // ──────────────────────────────────────────────────────────────────────────────
 
 export const SITE_CONFIG = {

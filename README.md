@@ -1,4 +1,4 @@
-# Frappe WASM Playground
+# Frappe Playground
 
 A playground project bringing the entire Frappe Framework (both frontend and backend) to the browser using Pyodide and WebAssembly (WASM). This allows Frappe to run completely offline in a local Service Worker, without needing a traditional Python backend server.
 
@@ -14,7 +14,7 @@ The playground consists of three main components:
 1. **Build the runtime bundle**:
    Run the build script to compile the Python environment using Docker:
    ```bash
-   ./scripts/build.sh
+   npm run build:runtime
    ```
    *Note: This creates the `.tar.gz` bundles inside the `storage/` directory.*
 
@@ -28,11 +28,11 @@ The playground consists of three main components:
    Build and preview the production output:
    ```bash
    npm run build
-   npm start
+   npm run dev:preview
    ```
 
 4. **Open the App**:
-   Navigate to `http://localhost:5173/` in dev, or `http://localhost:8000/` when using `npm start`.
+   Navigate to `http://localhost:5173/` in dev, or `http://localhost:8000/` when using `npm run dev:preview`.
 
 ## Testing the Playground
 
@@ -54,7 +54,7 @@ The project includes a suite of reusable Playwright scripts in the `tests/` dire
 
 ### 🚀 Running the Tests & Debug Tools
 
-Ensure your local server (`npm run dev` or `npm start`) is running, then use NPM to execute the scripts:
+Ensure your local server (`npm run dev` or `npm run dev:preview`) is running, then use NPM to execute the scripts:
 
 **Automated Flows**
 ```bash

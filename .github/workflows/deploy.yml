@@ -27,21 +27,9 @@ jobs:
       - name: Install frontend dependencies
         run: npm ci
 
-      - name: Bundle Pyodide and Wheels
-        run: bash scripts/bundle.sh
-
-      - name: Build Frappe Runtime
-        run: bash scripts/build.sh
-
-      - name: Prepare Publish Directory
-        run: bash scripts/prepare.sh
-
-      - name: Build Frontend Shell
-        run: npm run build
-
-      - name: Check Cloudflare Limits
+      - name: Prepare Deploy Assets
         id: check_limits
-        run: bash scripts/check-limits.sh public
+        run: npm run deploy:prepare
 
       - name: Publish to Cloudflare Pages
         id: deploy

@@ -19,16 +19,6 @@ const SITE_NAME = "site1";
 const SITE_DB_DIR = `${SITE_ROOT}/${SITE_NAME}/db`;
 const SITE_DB_PATH = `${SITE_DB_DIR}/${SITE_NAME}.db`;
 const ASSETS_JSON_PATH = `${SITE_ROOT}/assets/assets.json`;
-const LOCAL_WHEELS = [
-    {
-        url: `${ORIGIN}/wheels/docopt-0.6.2-py2.py3-none-any.whl`,
-        fsPath: "/home/pyodide/docopt-0.6.2-py2.py3-none-any.whl",
-    },
-    {
-        url: `${ORIGIN}/wheels/num2words-0.5.14-py3-none-any.whl`,
-        fsPath: "/home/pyodide/num2words-0.5.14-py3-none-any.whl",
-    },
-];
 const STATIC_SITE_FILES = {
     [`${SITE_ROOT}/apps.txt`]: "frappe\n",
     [`${SITE_ROOT}/currentsite.txt`]: `${SITE_NAME}\n`,
@@ -86,19 +76,6 @@ function ensureDirectories(paths) {
         } catch (_) {
             // Directory already exists.
         }
-    }
-}
-
-async function installLocalWheels() {
-    const wheelFiles = await Promise.all(LOCAL_WHEELS.map(wheel => fetchBinary(wheel.url)));
-
-    LOCAL_WHEELS.forEach((wheel, index) => {
-        pyodide.FS.writeFile(wheel.fsPath, wheelFiles[index]);
-    });
-
-    const micropip = pyodide.pyimport("micropip");
-    for (const wheel of LOCAL_WHEELS) {
-        await micropip.install(`emfs://${wheel.fsPath}`);
     }
 }
 
@@ -297,7 +274,6 @@ async function fetchAndMountFilesystem() {
     self.postMessage({ type: "LOG", message: "Mounting virtual filesystem..." });
     pyodide.FS.mkdir("/home/pyodide/frappe_env");
     pyodide.unpackArchive(codeArr, "gztar", { extractDir: "/home/pyodide/frappe_env" });
-    await installLocalWheels();
 
     // Create Bench directory structure
     ensureDirectories(BENCH_DIRECTORIES);
@@ -362,6 +338,12 @@ self.onmessage = async (event) => {
             fromServiceWorkerPort.postMessage({ type: "READY" });
         } catch (err) {
             console.error("Failed to boot Pyodide:", err);
+            self.postMessage({
+                type: "ERROR",
+                message: err?.message
+                    ? `Frappe runtime failed to start: ${err.message}`
+                    : "Frappe runtime failed to start.",
+            });
             return;
         }
 

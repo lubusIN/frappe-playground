@@ -1,7 +1,7 @@
 const { chromium } = require('playwright');
 
 /**
- * Boots the Frappe WASM playground, optionally logs in, and returns the Playwright browser and page objects.
+ * Boots the Frappe playground, optionally logs in, and returns the Playwright browser and page objects.
  * @param {boolean} login - Whether to automatically log in before returning.
  */
 async function bootPlayground(login = false) {

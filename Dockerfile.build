@@ -11,6 +11,8 @@ RUN apt-get update && apt-get install -y \
 
 WORKDIR /workspace
 
+COPY scripts/export-runtime-assets.py /workspace/scripts/export-runtime-assets.py
+
 # 2. Pre-download pure-Python dependencies
 RUN mkdir -p /workspace/dependencies
 RUN pip download \
@@ -18,6 +20,11 @@ RUN pip download \
     --only-binary=:all: \
     --dest /workspace/dependencies \
     jinja2 werkzeug click markdown itsdangerous
+RUN pip wheel \
+    --no-deps \
+    --wheel-dir /workspace/dependencies \
+    docopt==0.6.2 \
+    num2words==0.5.14
 
 # 3. Clone and clean Frappe 16 Core
 RUN git clone --branch version-16 --depth 1 https://github.com/frappe/frappe.git /workspace/frappe_src \
@@ -51,9 +58,11 @@ RUN bench init --frappe-branch version-16 --skip-redis-config-generation  --pyth
     && bench new-site playground.local --db-type sqlite --admin-password admin
 USER root
 # 6. Expose entry point compilation commands
-CMD find /workspace/test-bench/apps -name "node_modules" -type d -prune -exec rm -rf '{}' + && \
-    cp -r /workspace/test-bench/env/lib/python3.14/site-packages/pypika /workspace/archive_root/ && \
+CMD cp -r /workspace/test-bench/env/lib/python3.14/site-packages/pypika /workspace/archive_root/ && \
     tar -czf /output/frappe_runtime.tar.gz -C /workspace/archive_root . && \
-    tar --exclude="node_modules" --exclude="scss" --exclude="less" -czhf /output/assets.tar.gz -C /workspace/test-bench/sites assets && \
+    rm -rf /workspace/assets_export && \
+    python /workspace/scripts/export-runtime-assets.py /workspace/test-bench/sites /workspace/assets_export && \
+    find /workspace/test-bench/apps -name "node_modules" -type d -prune -exec rm -rf '{}' + && \
+    tar -czhf /output/assets.tar.gz -C /workspace/assets_export assets && \
     cp /workspace/test-bench/sites/playground.local/db/*.db /output/site1.db && \
     echo "🎉 Compilation Complete! Assets copied out of container successfully."

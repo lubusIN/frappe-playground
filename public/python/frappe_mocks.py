@@ -22,6 +22,19 @@ def create_mock(name, **kwargs):
 class DummyClass:
     pass
 
+class DummyRedisConnection:
+    def __init__(self, *a, **k):
+        pass
+
+    def register_connect_callback(self, callback):
+        self._connect_callback = callback
+
+    def send_command(self, *a, **k):
+        pass
+
+    def read_response(self, *a, **k):
+        return None
+
 class _OmniMock:
     """Returns 0 for any attribute access — used for MySQLdb constant tables."""
     def __getattr__(self, name):
@@ -124,7 +137,12 @@ class DummyRedisClass:
                 return wrapper
         return Pipeline(self)
 
-create_mock("redis", Connection=DummyClass, from_url=lambda *a, **k: DummyRedisClass())
+create_mock(
+    "redis",
+    Connection=DummyRedisConnection,
+    UnixDomainSocketConnection=DummyRedisConnection,
+    from_url=lambda *a, **k: DummyRedisClass(),
+)
 exc_mod = create_mock("redis.exceptions", BusyLoadingError=Exception, ConnectionError=Exception, ResponseError=Exception)
 sys.modules["redis"].Redis = DummyRedisClass
 sys.modules["redis"].exceptions = exc_mod
