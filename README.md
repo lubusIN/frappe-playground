@@ -1,73 +1,136 @@
 # Frappe Playground
 
-A playground project bringing the entire Frappe Framework (both frontend and backend) to the browser using Pyodide and WebAssembly (WASM). This allows Frappe to run completely offline in a local Service Worker, without needing a traditional Python backend server.
+Run the Frappe Framework in the browser with Pyodide and WebAssembly. The playground serves a Vue shell, boots Frappe inside a Web Worker, and routes same-origin Frappe requests through a Service Worker into Python WSGI. Runtime state is kept in the browser, so a tab can reload without needing a traditional Python server.
 
 ## Overview
 
-The playground consists of three main components:
-1. **The Backend Worker (`public/worker.js`)**: A Service Worker that initializes Pyodide, mounts the virtual file system, loads the Frappe Python source code, and intercepts HTTP requests to act as the WSGI server.
-2. **The Frontend App**: Standard Frappe frontend assets that communicate with the Service Worker via intercepted network requests.
-3. **The Build System (`Dockerfile.build`, `scripts/build.sh`)**: Scripts to compile the Python environment, download Frappe 16 source, and bundle everything into a flat archive ready for the browser.
+The playground has four main pieces:
+
+1. **Vue shell (`src/`)**: Renders the loading screen, top bar, and Frappe Desk iframe. Vite builds this into `public/frontend/`.
+2. **Service Worker (`public/sw.js`)**: Intercepts scoped browser requests, serves static files, mocks Socket.IO enough for Desk to settle, and forwards backend requests to the active Python worker.
+3. **Pyodide worker (`public/worker.js`)**: Loads Pyodide, installs Python packages, mounts the Frappe runtime archive and starter SQLite database, applies browser-specific mocks, and handles WSGI requests.
+4. **Runtime build (`Dockerfile.build`, `scripts/build.sh`)**: Builds the Frappe runtime, database, and Frappe browser assets into `storage/`. `scripts/prepare.sh` copies those generated assets into `public/storage/` and `public/assets/` for local preview or deploy.
+
+The app must be served from `localhost` or HTTPS with cross-origin isolation headers:
+
+```text
+Cross-Origin-Opener-Policy: same-origin
+Cross-Origin-Embedder-Policy: require-corp
+Access-Control-Allow-Origin: *
+```
+
+Vite sets these headers during local development and preview. Cloudflare Pages uses `public/_headers`.
 
 ## Getting Started
 
-1. **Build the runtime bundle**:
-   Run the build script to compile the Python environment using Docker:
-   ```bash
-   npm run build:runtime
-   ```
-   *Note: This creates the `.tar.gz` bundles inside the `storage/` directory.*
+Install dependencies:
 
-2. **Start the local dev server**:
-   Start Vite, which serves the shell app with hot reload plus the Pyodide runtime files from `public/`:
-   ```bash
-   npm run dev
-   ```
-
-3. **Preview the built app**:
-   Build and preview the production output:
-   ```bash
-   npm run build
-   npm run dev:preview
-   ```
-
-4. **Open the App**:
-   Navigate to `http://localhost:5173/` in dev, or `http://localhost:8000/` when using `npm run dev:preview`.
-
-## Testing the Playground
-
-The project includes a suite of reusable Playwright scripts in the `tests/` directory to automate checking the health of the WASM environment and inspecting its internal state.
-
-### 📂 Directory Structure
-
-```text
-└── tests/
-    ├── e2e/                 # Automated user flows
-    │   ├── boot.spec.js     # Tests if Pyodide boots without 500 errors
-    │   ├── login.spec.js    # Tests the authentication flow
-    │   └── desk.spec.js     # Tests full Desk/Setup Wizard load + captures a screenshot
-    │
-    └── debug/               # Developer inspection tools
-        ├── inspect_vfs.js   # Read files from Pyodide's virtual filesystem on the fly
-        └── inspect_memory.js# Read the Service Worker's active cookie jar
+```bash
+npm install
 ```
 
-### 🚀 Running the Tests & Debug Tools
+Build the browser runtime with Docker:
 
-Ensure your local server (`npm run dev` or `npm run dev:preview`) is running, then use NPM to execute the scripts:
+```bash
+npm run build:runtime
+```
 
-**Automated Flows**
+Copy the generated runtime and Frappe assets into `public/`:
+
+```bash
+bash scripts/prepare.sh
+```
+
+Start the local Vite dev server:
+
+```bash
+npm run dev
+```
+
+Open `http://localhost:5173/`.
+
+For a production-style local preview, build the Vue shell and start Vite preview:
+
+```bash
+npm run build
+npm run dev:preview
+```
+
+Open `http://localhost:8000/`.
+
+To run the complete deploy preparation flow in one command:
+
+```bash
+npm run deploy:prepare
+```
+
+This rebuilds the runtime, prepares `public/`, builds the frontend shell, and checks published asset limits.
+
+## Directory Structure
+
+```text
+frappe-playground/
+|-- src/                    # Vue shell loaded by Vite
+|-- public/
+|   |-- sw.js               # Service Worker request router
+|   |-- worker.js           # Pyodide + Frappe runtime worker
+|   |-- config.js           # Runtime package and site configuration
+|   |-- python/             # Browser-specific Python helpers and mocks
+|   |-- assets/             # Generated Frappe browser assets
+|   |-- frontend/           # Generated Vue shell assets
+|   `-- storage/            # Generated runtime archive and starter database
+|-- scripts/
+|   |-- build.sh            # Docker runtime build
+|   |-- prepare.sh          # Copies generated runtime assets into public/
+|   `-- prepare-deploy.sh   # Full deploy preparation flow
+|-- tests/
+|   |-- e2e/                # Playwright browser flows
+|   `-- debug/              # Runtime inspection helpers
+|-- Dockerfile.build
+|-- vite.config.mjs
+`-- playwright.config.js
+```
+
+Generated directories such as `storage/`, `public/assets/`, `public/frontend/`, and `public/storage/` are intentionally ignored by Git.
+
+## Testing
+
+The Playwright suite uses `http://localhost:8000` as its base URL. After building the frontend with `npm run build` or `npm run deploy:prepare`, run the production preview before executing tests:
+
+```bash
+npm run dev:preview
+```
+
+In another terminal:
+
 ```bash
 npm run test
 ```
 
-**Debugging Tools**
+The e2e tests cover boot, login, setup wizard completion, Desk stability, scoped reload behavior, and the mobile shell.
+
+Debug helpers can inspect the running Pyodide environment:
+
 ```bash
-# Inspect a specific file inside the Pyodide environment
+# Inspect a file inside the Pyodide virtual filesystem
 npm run debug:vfs /home/pyodide/bench/sites/site1/site_config.json
 
-# Dump the cookie jar to inspect active sessions
+# Dump the active in-browser cookie jar
 npm run debug:memory
 ```
 
-> **Note:** Because these scripts use standard Playwright APIs (`page.goto`, `page.evaluate`), they can be easily extended to click through the Setup Wizard, interact with Doctypes, or assert specific UI states just like testing a real Frappe server.
+## Deployment
+
+Build the deployable `public/` tree without publishing:
+
+```bash
+npm run deploy:prepare
+```
+
+Deploy to Cloudflare Pages:
+
+```bash
+npm run deploy
+```
+
+`npm run deploy` also runs `predeploy`, which prepares the runtime and frontend before publishing with `scripts/deploy.sh`.
