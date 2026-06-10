@@ -3,7 +3,7 @@
 // ──────────────────────────────────────────────────────────────────────────────
 import { PYTHON_PACKAGES, BENCH_DIRECTORIES, SITE_CONFIG } from "./config.js";
 
-const PYODIDE_BASE_URL = "https://cdn.jsdelivr.net/pyodide/dev/full/";
+const PYODIDE_BASE_URL = "https://cdn.jsdelivr.net/pyodide/v314.0.0/full/";
 
 let pyodide;
 let fromServiceWorkerPort;
