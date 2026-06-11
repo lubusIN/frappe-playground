@@ -166,7 +166,12 @@ async function handleFetch(event) {
     }
     
 
-    if (!scope) return fetch(event.request);
+    if (!scope) {
+        if (event.request.destination === 'iframe') {
+            return new Response("<script>window.top.location.reload();</script>", { headers: { "Content-Type": "text/html" } });
+        }
+        return fetch(event.request);
+    }
 
     // Mock Socket.io so the frontend connects successfully and stops spamming errors.
     if (requestPath.startsWith("/socket.io/")) {
@@ -219,7 +224,7 @@ async function callPythonHandler(req, scope, requestPath, query) {
     };
 
     if (req.method !== "GET" && req.method !== "HEAD") {
-        payload.body = await req.text();
+        payload.body = await req.arrayBuffer();
     }
 
     return new Promise((resolve) => {

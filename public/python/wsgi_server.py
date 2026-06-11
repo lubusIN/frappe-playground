@@ -36,6 +36,21 @@ def handle_request(req):
         except Exception as e:
             return {"status": "500 Internal Server Error", "headers": [], "body": str(e).encode("utf-8")}
 
+    elif req["path"].startswith("/files/"):
+        try:
+            import mimetypes
+            file_path = "/home/pyodide/bench/sites/site1/public" + req["path"]
+            with open(file_path, "rb") as f:
+                content = f.read()
+            mime_type, _ = mimetypes.guess_type(file_path)
+            return {
+                "status": 200, 
+                "headers": [("Content-Type", mime_type or "application/octet-stream")], 
+                "body": content
+            }
+        except FileNotFoundError:
+            return {"status": 404, "headers": [], "body": b"File not found in MEMFS"}
+
     # 2. Re-init Frappe environment variables per request
     os.chdir("/home/pyodide/bench/sites")
     os.environ["SITES_PATH"] = "/home/pyodide/bench/sites"
@@ -67,7 +82,6 @@ def handle_request(req):
         "HTTP_COOKIE": _all_cookies,
         "wsgi.version": (1, 0),
         "wsgi.url_scheme": "http",
-        "wsgi.input": io.BytesIO(req.get("body", "").encode("utf-8")),
         "wsgi.errors": sys.stderr,
         "wsgi.multithread": False,
         "wsgi.multiprocess": False,
@@ -79,9 +93,19 @@ def handle_request(req):
         if key not in environ:
             environ[key] = str(v)
 
+    body_data = req.get("body", b"")
+    if isinstance(body_data, str):
+        body_data = body_data.encode("utf-8")
+    elif hasattr(body_data, "to_py"):
+        body_data = bytes(body_data.to_py())
+    elif not isinstance(body_data, bytes):
+        body_data = bytes(body_data)
+
+    environ["wsgi.input"] = io.BytesIO(body_data)
+
     if req["method"] in ["POST", "PUT", "PATCH"]:
         environ["CONTENT_TYPE"] = str(req["headers"].get("content-type", "application/x-www-form-urlencoded"))
-        environ["CONTENT_LENGTH"] = str(len(req.get("body", "")))
+        environ["CONTENT_LENGTH"] = str(len(body_data))
 
     _status = "500 Internal Server Error"
     _headers = []

@@ -13,10 +13,20 @@ async function initPlayground() {
     }
 
     // 1. Register the Service Worker to intercept all network requests for routing to Python WSGI
+    let isInitialLoad = !navigator.serviceWorker.controller;
+    navigator.serviceWorker.addEventListener('controllerchange', () => {
+        if (isInitialLoad) {
+            isInitialLoad = false;
+        } else {
+            console.log("[Playground] Service Worker updated! Auto-reloading to apply changes...");
+            window.location.reload();
+        }
+    });
+
     const swRegistration = await navigator.serviceWorker.register('/sw.js');
     if (!navigator.serviceWorker.controller) {
         // Wait until the service worker claims the client before proceeding
-        await new Promise(resolve => navigator.serviceWorker.addEventListener('controllerchange', resolve));
+        await new Promise(resolve => navigator.serviceWorker.addEventListener('controllerchange', resolve, { once: true }));
     }
     
     // 2. Spawn the Web Worker that runs the Pyodide Python Sandbox
@@ -25,11 +35,23 @@ async function initPlayground() {
     // 3. Establish a direct MessageChannel for high-performance communication
     function setupChannel(clientId = null) {
         const channel = new MessageChannel();
-        navigator.serviceWorker.controller.postMessage({ 
-            type: 'INIT_CHANNEL', 
-            scope: instanceId,
-            clientId: clientId 
-        }, [channel.port1]);
+        
+        const sendInit = (sw) => {
+            if (sw) {
+                sw.postMessage({ 
+                    type: 'INIT_CHANNEL', 
+                    scope: instanceId,
+                    clientId: clientId 
+                }, [channel.port1]);
+            }
+        };
+
+        if (navigator.serviceWorker.controller) {
+            sendInit(navigator.serviceWorker.controller);
+        } else {
+            navigator.serviceWorker.ready.then(reg => sendInit(reg.active));
+        }
+        
         pyWorker.postMessage({ type: 'INIT_CHANNEL', freshSession, scope: instanceId }, [channel.port2]);
     }
     setupChannel();
