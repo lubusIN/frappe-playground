@@ -23,19 +23,25 @@ async function initPlayground() {
     const pyWorker = new Worker('worker.js', { type: 'module' });
     
     // 3. Establish a direct MessageChannel for high-performance communication
-    function setupChannel() {
+    function setupChannel(clientId = null) {
         const channel = new MessageChannel();
-        navigator.serviceWorker.controller.postMessage({ type: 'INIT_CHANNEL', scope: instanceId }, [channel.port1]);
+        navigator.serviceWorker.controller.postMessage({ 
+            type: 'INIT_CHANNEL', 
+            scope: instanceId,
+            clientId: clientId 
+        }, [channel.port1]);
         pyWorker.postMessage({ type: 'INIT_CHANNEL', freshSession, scope: instanceId }, [channel.port2]);
     }
     setupChannel();
 
-    navigator.serviceWorker.addEventListener('message', (event) => {
+    window.swRecoveryChannel = new BroadcastChannel('sw-recovery');
+    window.swRecoveryChannel.onmessage = (event) => {
+        console.log("[Playground] Received BroadcastChannel message:", event.data);
         if (event.data && event.data.type === 'REQUEST_INIT_CHANNEL') {
-            console.log("[Playground] SW requested channel re-init (likely woke from sleep). Re-establishing...");
+            console.log("[Playground] SW requested channel re-init (via BroadcastChannel). Re-establishing...");
             setupChannel();
         }
-    });
+    };
 
     // 4. Listen for the Web Worker to finish its complex python bootstrap sequence
     pyWorker.onmessage = (e) => {

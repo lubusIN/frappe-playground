@@ -69,12 +69,14 @@ function remapStaticPath(pathname) {
 self.addEventListener("message", (event) => {
     if (event.data && event.data.type === "INIT_CHANNEL") {
         const scope = event.data.scope;
+        const clientId = event.data.clientId;
         const instance = {
             port: event.ports[0],
             ready: false,
         };
 
         instances.set(scope, instance);
+        if (clientId) clientScopes.set(clientId, scope);
 
         instance.port.onmessage = (msgEvent) => {
             if (msgEvent.data.type === "READY") {
@@ -120,20 +122,20 @@ async function handleFetch(event) {
         || (shouldRecoverScopeForNavigation(event.request, requestPath) && onlyActiveScope());
 
     if (instances.size === 0) {
-        // Service Worker likely woke up from sleep and lost in-memory state.
-        // Broadcast to clients to re-establish the MessageChannel.
-        const clientsList = await clients.matchAll({ includeUncontrolled: true, type: "window" });
-        for (const client of clientsList) {
-            client.postMessage({ type: 'REQUEST_INIT_CHANNEL' });
-        }
+        console.log("[SW] Instances empty! Broadcasting REQUEST_INIT_CHANNEL via BroadcastChannel...");
+        const channel = new BroadcastChannel('sw-recovery');
+        channel.postMessage({ type: 'REQUEST_INIT_CHANNEL' });
+        
         // Wait up to 1s for main page to respond with INIT_CHANNEL
         for (let i = 0; i < 20; i++) {
             await new Promise(resolve => setTimeout(resolve, 50));
             if (instances.size > 0) {
+                console.log("[SW] Recovered instance!");
                 if (!scope) scope = onlyActiveScope();
                 break;
             }
         }
+        if (instances.size === 0) console.log("[SW] Failed to recover instances after 1s!");
     }
 
     if (scope) {
