@@ -77,18 +77,7 @@ class DummyQueue:
         self.count = len(self.jobs)
         return job
 
-class DummyRedisConnection:
-    def __init__(self, *a, **k):
-        pass
 
-    def register_connect_callback(self, callback):
-        self._connect_callback = callback
-
-    def send_command(self, *a, **k):
-        pass
-
-    def read_response(self, *a, **k):
-        return None
 
 class _OmniMock:
     """Returns 0 for any attribute access — used for MySQLdb constant tables."""
@@ -101,106 +90,49 @@ OmniMock = _OmniMock()
 
 # ── Redis Mocks ─────────────────────────────────────────────────────
 
-_dummy_redis_store = {}
+import fakeredis
+import redis
 
-class DummyRedisClass:
+# Patch Connection class so that Frappe's register_connect_callback works without errors
+if not hasattr(redis.Connection, "register_connect_callback"):
+    def _register_connect_callback(self, callback):
+        self._connect_callback = callback
+    redis.Connection.register_connect_callback = _register_connect_callback
+    if hasattr(redis, "UnixDomainSocketConnection"):
+        redis.UnixDomainSocketConnection.register_connect_callback = _register_connect_callback
+
+class FakeRedisWrapper(fakeredis.FakeRedis):
+    def __init__(self, *args, **kwargs):
+        kwargs.pop("connection_class", None)
+        kwargs.pop("_invalidator_id", None)
+        super().__init__(*args, **kwargs)
+
     @classmethod
-    def from_url(cls, *a, **k):
-        return cls()
+    def from_url(cls, *args, **kwargs):
+        kwargs.pop("connection_class", None)
+        kwargs.pop("_invalidator_id", None)
+        return super().from_url(*args, **kwargs)
 
-    def ping(self, *a, **k):
+redis.Redis = FakeRedisWrapper
+redis.from_url = FakeRedisWrapper.from_url
+
+# Prevent threading crashes in Pyodide when Frappe tries to run the Redis invalidator thread
+class DummyThread:
+    def __init__(self, *args, **kwargs):
+        self.daemon = True
+    def start(self):
+        pass
+    def join(self, timeout=None):
+        pass
+    def is_alive(self):
         return True
 
-    def publish(self, channel, message, *a, **k):
-        return 0
+import redis.client
+if hasattr(redis.client, "PubSub"):
+    def dummy_run_in_thread(self, *args, **kwargs):
+        return DummyThread()
+    redis.client.PubSub.run_in_thread = dummy_run_in_thread
 
-    def get(self, key, *a, **k):
-        return _dummy_redis_store.get(key)
-        
-    def set(self, key, value, *a, **k):
-        _dummy_redis_store[key] = value
-        
-    def delete(self, *keys):
-        for k in keys:
-            _dummy_redis_store.pop(k, None)
-            
-    def hget(self, name, key, *a, **k):
-        return _dummy_redis_store.get(name, {}).get(key)
-        
-    def hset(self, name, key, value, *a, **k):
-        if name not in _dummy_redis_store:
-            _dummy_redis_store[name] = {}
-        _dummy_redis_store[name][key] = value
-        
-    def hdel(self, name, *keys):
-        if name in _dummy_redis_store:
-            for k in keys:
-                _dummy_redis_store[name].pop(k, None)
-                
-    def hgetall(self, name, *a, **k):
-        return _dummy_redis_store.get(name, {})
-        
-    def sismember(self, name, value, *a, **k):
-        return value in _dummy_redis_store.get(name, set())
-        
-    def sadd(self, name, *values):
-        if name not in _dummy_redis_store:
-            _dummy_redis_store[name] = set()
-        _dummy_redis_store[name].update(values)
-        return len(values)
-        
-    def srem(self, name, *values):
-        if name in _dummy_redis_store:
-            for v in values:
-                _dummy_redis_store[name].discard(v)
-        return len(values)
-        
-    def smembers(self, name, *a, **k):
-        return _dummy_redis_store.get(name, set())
-        
-    def lpush(self, name, *values):
-        if name not in _dummy_redis_store:
-            _dummy_redis_store[name] = []
-        for v in values:
-            _dummy_redis_store[name].insert(0, v)
-            
-    def rpush(self, name, *values):
-        if name not in _dummy_redis_store:
-            _dummy_redis_store[name] = []
-        _dummy_redis_store[name].extend(values)
-        
-    def lrange(self, name, start, end, *a, **k):
-        lst = _dummy_redis_store.get(name, [])
-        if end == -1 or end is None:
-            return lst[start:]
-        return lst[start:end+1]
-        
-    def pipeline(self, *a, **k):
-        class Pipeline:
-            def __init__(self, redis):
-                self.redis = redis
-                self.calls = []
-            def execute(self):
-                res = []
-                for fn, args, kwargs in self.calls:
-                    res.append(fn(*args, **kwargs))
-                return res
-            def __getattr__(self, name):
-                def wrapper(*a, **k):
-                    self.calls.append((getattr(self.redis, name), a, k))
-                    return self
-                return wrapper
-        return Pipeline(self)
-
-create_mock(
-    "redis",
-    Connection=DummyRedisConnection,
-    UnixDomainSocketConnection=DummyRedisConnection,
-    from_url=lambda *a, **k: DummyRedisClass(),
-)
-exc_mod = create_mock("redis.exceptions", BusyLoadingError=Exception, ConnectionError=Exception, ResponseError=Exception)
-sys.modules["redis"].Redis = DummyRedisClass
-sys.modules["redis"].exceptions = exc_mod
 create_mock("redis.commands.search", Search=DummyClass)
 create_mock("redis.commands", search=sys.modules["redis.commands.search"])
 
@@ -297,6 +229,7 @@ rq_mod.worker = create_mock("rq.worker",
     WorkerStatus=DummyClass
 )
 rq_mod.worker_pool = create_mock("rq.worker_pool", WorkerPool=DummyClass)
+rq_mod.command = create_mock("rq.command", send_stop_job_command=lambda *a, **k: None)
 
 # ── Telemetry Mock ──────────────────────────────────────────────────
 

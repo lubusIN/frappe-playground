@@ -77,7 +77,8 @@ export const PYTHON_PACKAGES = [
     "python-dateutil",
     "pdfkit",
     "PyMySQL",
-    "whoosh"
+    "whoosh",
+    "fakeredis"
 ];
 
 
