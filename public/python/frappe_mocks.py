@@ -19,6 +19,10 @@ def create_mock(name, **kwargs):
     sys.modules[name] = m
     return m
 
+def create_exception_mock(name):
+    """Returns a dynamically generated Exception subclass to safely mock module errors."""
+    return type(name, (Exception,), {})
+
 class AbsorbingMeta(type):
     def __getattr__(cls, name):
         if name.startswith("__") and name.endswith("__"):
@@ -41,14 +45,6 @@ class AbsorbingMock(metaclass=AbsorbingMeta):
     @classmethod
     def __class_getitem__(cls, item): return cls
 
-class DummyCallback:
-    def __init__(self, func=None, *a, **k):
-        self.func = func
-
-    def __call__(self, *a, **k):
-        if self.func:
-            return self.func(*a, **k)
-
 class AutoMockModule(ModuleType):
     """Dynamically mocks module attributes, yielding exceptions for Errors and AbsorbingMocks for everything else."""
     def __init__(self, name):
@@ -59,9 +55,7 @@ class AutoMockModule(ModuleType):
         if name in ('__file__', '__path__', '__spec__', '__loader__'):
             raise AttributeError
         if name.endswith("Error") or name.endswith("Exception"):
-            # Return a dynamically created Exception class rather than base Exception
-            # This prevents `except HttpError:` from inadvertently swallowing legit TypeErrors/ValueErrors!
-            return type(name, (Exception,), {})
+            return create_exception_mock(name)
         return AbsorbingMock()
 
 class AutoMockFinder:
@@ -81,71 +75,21 @@ class AutoMockFinder:
                             if name in ('__file__', '__path__', '__spec__', '__loader__'):
                                 raise AttributeError
                             if name.endswith("Error") or name.endswith("Exception"):
-                                return type(name, (Exception,), {})
+                                return create_exception_mock(name)
                             return AbsorbingMock()
                         module.__getattr__ = _getattr
                 return importlib.machinery.ModuleSpec(fullname, AutoMockLoader())
         return None
 
-class DummyJobStatus:
-    QUEUED = "queued"
-    STARTED = "started"
-    FINISHED = "finished"
-    FAILED = "failed"
+# ── Base DB Exceptions ──────────────────────────────────────────────
 
-class DummyJob:
-    def __init__(self, id=None, kwargs=None, status=DummyJobStatus.FINISHED, *a, **k):
-        self.id = id
-        self.kwargs = kwargs or {}
-        self._status = status
-
-    def get_status(self, refresh=False):
-        return self._status
-
-    def delete(self):
-        return None
-
-    @classmethod
-    def fetch(cls, *a, **k):
-        raise sys.modules["rq.exceptions"].NoSuchJobError()
-
-    @classmethod
-    def fetch_many(cls, *a, **k):
-        return []
-
-class DummyQueue:
-    def __init__(self, name="default", connection=None, is_async=True, *a, **k):
-        self.name = name
-        self.connection = connection
-        self.is_async = is_async
-        self.jobs = []
-        self.count = 0
-        self.failed_job_registry = AbsorbingMock()
-        self.failed_job_registry.get_job_ids = lambda *a, **k: []
-
-    @classmethod
-    def all(cls, connection=None, *a, **k):
-        return []
-
-    def enqueue_call(self, func, kwargs=None, job_id=None, *a, **k):
-        kwargs = kwargs or {}
-        job = DummyJob(id=job_id, kwargs=kwargs, status=DummyJobStatus.FINISHED)
-        self.jobs.append(job)
-        self.count = len(self.jobs)
-        return job
-
-
-
-# OmniMock is needed instead of AbsorbingMock specifically for MySQLdb constant tables
-# (e.g. MySQLdb.constants.ER or FIELD_TYPE) which require `0` for numeric comparisons in Frappe.
-class _OmniMock:
-    """Returns 0 for any attribute access — used for MySQLdb constant tables."""
-    def __getattr__(self, name):
-        return 0
-    def __call__(self, *a, **k):
-        return self
-
-OmniMock = _OmniMock()
+db_exc = {
+    name: create_exception_mock(name) for name in [
+        "Error", "Warning", "InterfaceError", "DatabaseError", "DataError",
+        "OperationalError", "IntegrityError", "InternalError", "ProgrammingError",
+        "NotSupportedError"
+    ]
+}
 
 # ── Redis Mocks ─────────────────────────────────────────────────────
 
@@ -217,16 +161,19 @@ if hasattr(redis.client, "PubSub"):
 create_mock("redis.commands.search", Search=AbsorbingMock)
 create_mock("redis.commands", search=sys.modules["redis.commands.search"])
 
-db_exc = {
-    name: type(name, (Exception,), {}) for name in [
-        "Error", "Warning", "InterfaceError", "DatabaseError", "DataError",
-        "OperationalError", "IntegrityError", "InternalError", "ProgrammingError",
-        "NotSupportedError"
-    ]
-}
-
 # ── MySQL Mocks ─────────────────────────────────────────────────────
 # (Even though we use sqlite, Frappe unconditionally imports MySQLdb in some places)
+
+# OmniMock is needed instead of AbsorbingMock specifically for MySQLdb constant tables
+# (e.g. MySQLdb.constants.ER or FIELD_TYPE) which require `0` for numeric comparisons in Frappe.
+class _OmniMock:
+    """Returns 0 for any attribute access — used for MySQLdb constant tables."""
+    def __getattr__(self, name):
+        return 0
+    def __call__(self, *a, **k):
+        return self
+
+OmniMock = _OmniMock()
 
 create_mock("MySQLdb", **db_exc)
 create_mock("MySQLdb._mysql", escape_string=lambda *a, **k: b"")
@@ -236,14 +183,15 @@ create_mock("MySQLdb.cursors", SSCursor=AbsorbingMock)
 
 # ── OS / Process Mocks ──────────────────────────────────────────────
 
-create_mock("psutil")
 class DummyProcess:
     def __init__(self, *a, **k): pass
     def terminate(self): pass
     def kill(self): pass
+
+create_mock("psutil")
 sys.modules["psutil"].Process = DummyProcess
-sys.modules["psutil"].AccessDenied = type("AccessDenied", (Exception,), {})
-sys.modules["psutil"].NoSuchProcess = type("NoSuchProcess", (Exception,), {})
+sys.modules["psutil"].AccessDenied = create_exception_mock("AccessDenied")
+sys.modules["psutil"].NoSuchProcess = create_exception_mock("NoSuchProcess")
 
 # Frappe relies on pwd/grp for unix user checks which don't exist in Pyodide
 create_mock("pwd", getpwuid=lambda x: AbsorbingMock())
@@ -283,6 +231,53 @@ create_mock("psycopg2.errors")
 
 # ── RQ (Redis Queue) Mocks ──────────────────────────────────────────
 
+class DummyCallback:
+    def __init__(self, func=None, *a, **k):
+        self.func = func
+    def __call__(self, *a, **k):
+        if self.func: return self.func(*a, **k)
+
+class DummyJobStatus:
+    QUEUED = "queued"
+    STARTED = "started"
+    FINISHED = "finished"
+    FAILED = "failed"
+
+class DummyJob:
+    def __init__(self, id=None, kwargs=None, status=DummyJobStatus.FINISHED, *a, **k):
+        self.id = id
+        self.kwargs = kwargs or {}
+        self._status = status
+    def get_status(self, refresh=False):
+        return self._status
+    def delete(self):
+        return None
+    @classmethod
+    def fetch(cls, *a, **k):
+        raise sys.modules["rq.exceptions"].NoSuchJobError()
+    @classmethod
+    def fetch_many(cls, *a, **k):
+        return []
+
+class DummyQueue:
+    def __init__(self, name="default", connection=None, is_async=True, *a, **k):
+        self.name = name
+        self.connection = connection
+        self.is_async = is_async
+        self.jobs = []
+        self.count = 0
+        self.failed_job_registry = AbsorbingMock()
+        self.failed_job_registry.get_job_ids = lambda *a, **k: []
+    @classmethod
+    def all(cls, connection=None, *a, **k):
+        return []
+    def enqueue_call(self, func, kwargs=None, job_id=None, *a, **k):
+        kwargs = kwargs or {}
+        job = DummyJob(id=job_id, kwargs=kwargs, status=DummyJobStatus.FINISHED)
+        self.jobs.append(job)
+        self.count = len(self.jobs)
+        return job
+
 class DummyDequeueStrategy:
     DEFAULT = None
 
@@ -292,16 +287,14 @@ rq_mod = create_mock("rq",
 )
 rq_mod.defaults = create_mock("rq.defaults", DEFAULT_WORKER_TTL=420)
 rq_mod.exceptions = create_mock("rq.exceptions",
-    InvalidJobOperation=type("InvalidJobOperation", (Exception,), {}),
-    NoSuchJobError=type("NoSuchJobError", (Exception,), {})
+    InvalidJobOperation=create_exception_mock("InvalidJobOperation"),
+    NoSuchJobError=create_exception_mock("NoSuchJobError")
 )
 rq_mod.job = create_mock("rq.job", Job=DummyJob, JobStatus=DummyJobStatus)
-rq_mod.logutils = create_mock("rq.logutils",
-    setup_loghandlers=lambda *a, **k: None
-)
-rq_mod.timeouts = create_mock("rq.timeouts", JobTimeoutException=type("JobTimeoutException", (Exception,), {}))
+rq_mod.logutils = create_mock("rq.logutils", setup_loghandlers=lambda *a, **k: None)
+rq_mod.timeouts = create_mock("rq.timeouts", JobTimeoutException=create_exception_mock("JobTimeoutException"))
 rq_mod.worker = create_mock("rq.worker",
-    DequeueStrategy=DummyDequeueStrategy, StopRequested=type("StopRequested", (Exception,), {}),
+    DequeueStrategy=DummyDequeueStrategy, StopRequested=create_exception_mock("StopRequested"),
     WorkerStatus=AbsorbingMock
 )
 rq_mod.worker_pool = create_mock("rq.worker_pool", WorkerPool=AbsorbingMock)
