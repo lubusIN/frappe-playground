@@ -15,9 +15,8 @@ unless they expose a concrete Frappe integration constraint.
 
 ## Reference Scope
 
-- The generated runtime currently contains **Frappe 16.20.0**.
-- `Dockerfile.build` builds from the moving `version-16` branch and does not pin a
-  commit. These notes therefore describe the checked runtime artifact, not every
+- The generated runtime currently contains **Frappe 16.23.0**.
+- `Dockerfile.build` builds from a pinned tag (`v16.23.0`) via a build argument. These notes therefore describe the checked runtime artifact, not every
   version of Frappe 16.
 - Local behavior is covered by the repository's Playwright flows, including
   boot, login, Setup Wizard, Desk, file upload, and scoped reloads.

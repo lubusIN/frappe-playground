@@ -1,5 +1,7 @@
 FROM python:3.14-slim
 
+ARG FRAPPE_VERSION=v16.23.0
+
 # 1. Install system dependencies and node components
 RUN apt-get update && apt-get install -y \
     git curl unzip tar build-essential libffi-dev pkg-config cron default-libmysqlclient-dev \
@@ -26,8 +28,8 @@ RUN pip wheel \
     docopt==0.6.2 \
     num2words==0.5.14
 
-# 3. Clone and clean Frappe 16 Core
-RUN git clone --branch version-16 --depth 1 https://github.com/frappe/frappe.git /workspace/frappe_src \
+# 3. Clone and clean Frappe Core
+RUN git clone --branch ${FRAPPE_VERSION} --depth 1 https://github.com/frappe/frappe.git /workspace/frappe_src \
     && cd /workspace/frappe_src \
     && rm -rf .git .github tests playbooks cypress frappe/tests frappe/commands frappe/coverage frappe/docs \
     && find . -name "node_modules" -type d -prune -exec rm -rf '{}' + \
@@ -53,7 +55,7 @@ RUN pip install frappe-bench \
     && chmod +x /usr/local/bin/uv
 RUN useradd -ms /bin/bash frappe && chown -R frappe:frappe /workspace
 USER frappe
-RUN bench init --frappe-branch version-16 --skip-redis-config-generation  --python python3 test-bench \
+RUN bench init --frappe-branch ${FRAPPE_VERSION} --skip-redis-config-generation  --python python3 test-bench \
     && cd test-bench \
     && bench new-site playground.local --db-type sqlite --admin-password admin
 USER root
