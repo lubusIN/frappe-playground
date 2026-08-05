@@ -10,12 +10,12 @@
     <g :clip-path="`url(#${clipId})`">
       <path
         d="M19.9624 0.763672H5.83963C3.31294 0.763672 1.26465 2.81189 1.26465 5.33849V19.4608C1.26465 21.9874 3.31294 24.0356 5.83963 24.0356H19.9624C22.4891 24.0356 24.5374 21.9874 24.5374 19.4608V5.33849C24.5374 2.81189 22.4891 0.763672 19.9624 0.763672Z"
-        fill="#383838"
+        fill="currentColor"
       />
-      <path d="M9.17773 7.97852H16.625" stroke="white" stroke-width="2.10048" />
+      <path d="M9.17773 7.97852H16.625" class="stroke-white dark:stroke-gray-900" stroke-width="2.10048" />
       <path
         d="M10.2246 17.8705V12.9834H16.0428"
-        stroke="white"
+        class="stroke-white dark:stroke-gray-900"
         stroke-width="2.10048"
       />
     </g>
@@ -39,7 +39,7 @@ const props = defineProps({
   size: {
     type: String,
     default: 'md',
-    validator: value => ['md', 'lg'].includes(value),
+    validator: value => ['md', 'lg', 'xl'].includes(value),
   },
   clipId: {
     type: String,
@@ -47,5 +47,9 @@ const props = defineProps({
   },
 })
 
-const sizeClass = computed(() => (props.size === 'lg' ? 'h-10 w-10' : 'h-6 w-6'))
+const sizeClass = computed(() => {
+  if (props.size === 'xl') return 'h-14 w-14'
+  if (props.size === 'lg') return 'h-10 w-10'
+  return 'h-6 w-6'
+})
 </script>

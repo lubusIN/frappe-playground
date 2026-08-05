@@ -1,5 +1,5 @@
 <script setup>
-import { computed, nextTick, onBeforeUnmount, ref } from 'vue'
+import { computed, nextTick, onBeforeUnmount, ref, watchEffect } from 'vue'
 import IntroDialog from './components/IntroDialog.vue'
 import LoadingScreen from './components/LoadingScreen.vue'
 import TopBar from './components/TopBar.vue'
@@ -8,7 +8,13 @@ import { SITE_CONFIG } from '../public/config.js'
 const sessionKey = 'frappe_playground_instance_id'
 const ready = ref(false)
 const booting = ref(false)
-const bootLog = ref('Waiting for the browser runtime...')
+const bootSteps = ref([
+  { label: 'Booting Service Worker', status: 'pending' },
+  { label: 'Loading Python Runtime', status: 'pending' },
+  { label: 'Fetching Frappe Core', status: 'pending' },
+  { label: 'Initializing Database', status: 'pending' },
+  { label: 'Starting Frappe', status: 'pending' },
+])
 const address = ref('/')
 const frameSrc = ref('')
 const iframeRef = ref(null)
@@ -19,7 +25,17 @@ let addressTimer = 0
 let pyWorker = null
 let hasPrefilledLogin = false
 
+const isDark = ref(false)
 
+watchEffect(() => {
+  if (isDark.value) {
+    document.documentElement.classList.add('dark')
+    document.documentElement.setAttribute('data-theme', 'dark')
+  } else {
+    document.documentElement.classList.remove('dark')
+    document.documentElement.setAttribute('data-theme', 'light')
+  }
+})
 function getOrCreateInstanceId() {
   let id = sessionStorage.getItem(sessionKey)
   const freshSession = !id
@@ -34,8 +50,30 @@ function getOrCreateInstanceId() {
   return { id, freshSession }
 }
 
+function updateStep(index, status) {
+  for (let i = 0; i < index; i++) {
+    bootSteps.value[i].status = 'done'
+  }
+  if (bootSteps.value[index].status !== 'done' || status === 'done') {
+    bootSteps.value[index].status = status
+  }
+}
+
 function setBootLog(message) {
-  bootLog.value = message || bootLog.value
+  if (!message) return
+  const m = message.toLowerCase()
+  if (m.includes('service worker')) {
+    updateStep(0, 'active')
+  } else if (m.includes('pyodide') || m.includes('python') || m.includes('core packages')) {
+    updateStep(1, 'active')
+  } else if (m.includes('fetching frappe') || m.includes('virtual filesystem')) {
+    updateStep(2, 'active')
+  } else if (m.includes('database')) {
+    updateStep(3, 'active')
+  } else if (m.includes('configuring python') || m.includes('frappe booted')) {
+    updateStep(4, 'active')
+    if (m.includes('booted successfully')) updateStep(4, 'done')
+  }
 }
 
 function normalizeAddress(value) {
@@ -208,10 +246,13 @@ async function initPlayground() {
     }
 
     if (event.data?.type === 'READY') {
-      ready.value = true
-      booting.value = false
-      frameSrc.value = scopedFrameUrl('/')
-      startAddressSync()
+      updateStep(4, 'done')
+      setTimeout(() => {
+        ready.value = true
+        booting.value = false
+        frameSrc.value = scopedFrameUrl('/')
+        startAddressSync()
+      }, 1500)
       return
     }
 
@@ -238,7 +279,7 @@ onBeforeUnmount(() => {
 
 <template>
   <main
-    class="grid h-screen w-screen overflow-hidden bg-[#0a0a0a] supports-[height:100dvh]:h-dvh"
+    class="grid h-screen w-screen overflow-hidden bg-gray-50 dark:bg-gray-900 supports-[height:100dvh]:h-dvh"
     :class="
       ready
         ? 'grid-rows-[44px_minmax(0,1fr)] max-sm:grid-rows-[84px_minmax(0,1fr)]'
@@ -249,17 +290,25 @@ onBeforeUnmount(() => {
       v-show="ready"
       v-model:address="address"
       :ready="ready"
+      :is-dark="isDark"
       @navigate="navigateFrame"
       @reload="reloadFrame"
+      @toggle-theme="isDark = !isDark"
     />
 
-    <LoadingScreen v-show="!ready" :booting="booting" :message="bootLog" />
+    <LoadingScreen 
+      v-show="!ready" 
+      :booting="booting" 
+      :steps="bootSteps"
+      :is-dark="isDark"
+      @toggle-theme="isDark = !isDark"
+    />
 
     <iframe
       id="frappe-desk"
       ref="iframeRef"
       :src="frameSrc"
-      class="h-full min-h-0 w-full border-0 bg-white"
+      class="h-full min-h-0 w-full border-0 bg-white dark:bg-gray-900"
       :class="ready ? 'block' : 'hidden'"
       title="Frappe Desk"
       @load="syncAddressFromFrame"
