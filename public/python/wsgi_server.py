@@ -13,6 +13,7 @@ class FrappeWSGIHandler:
     def __init__(self):
         self.bench_sites_path = os.environ.get("BENCH_SITES_PATH", "/home/pyodide/bench/sites")
         self.default_site = os.environ.get("FRAPPE_DEFAULT_SITE", "site1")
+        self.cookie_jar = {}
         self.initialize_environment()
 
     def get_site_db_path(self, site_name):
@@ -29,17 +30,6 @@ class FrappeWSGIHandler:
 
         def bypass_csrf(*args, **kwargs): return True
         frappe.auth.validate_csrf_token = bypass_csrf
-
-        # Allow site_config (frappe.conf) to override System Settings (e.g. login_with_email_link: 0)
-        import frappe.core.doctype.system_settings.system_settings as _sys_settings_mod
-        if not hasattr(_sys_settings_mod, "_orig_get_system_settings"):
-            _sys_settings_mod._orig_get_system_settings = _sys_settings_mod.get_system_settings
-            def _get_system_settings_override(key: str):
-                if hasattr(frappe, "conf") and frappe.conf and key in frappe.conf:
-                    return frappe.conf.get(key)
-                return _sys_settings_mod._orig_get_system_settings(key)
-            _sys_settings_mod.get_system_settings = _get_system_settings_override
-            frappe.get_system_settings = _get_system_settings_override
 
     def serve_static_file(self, req, site_name):
         """Serve a static file directly from Pyodide's MEMFS."""
@@ -68,8 +58,7 @@ class FrappeWSGIHandler:
         _browser_cookies = req.get("headers", {}).get("cookie", "") or ""
         _parsed = SimpleCookie(_browser_cookies)
         
-        global _cookie_jar
-        for k, v in _cookie_jar.items():
+        for k, v in self.cookie_jar.items():
             _parsed[k] = v
             
         _all_cookies = "; ".join(f"{k}={m.value}" for k, m in _parsed.items())
@@ -131,15 +120,14 @@ class FrappeWSGIHandler:
         try:
             result_iter = application(environ, start_response)
             
-            # Extract returned Set-Cookie headers into the global cookie jar for persistence across reloads
-            global _cookie_jar
+            # Extract returned Set-Cookie headers into the instance cookie jar for persistence across reloads
             for k, v in _headers:
                 if k.lower() == "set-cookie":
                     parts = v.split(";")
                     if parts:
                         kv = parts[0].split("=", 1)
                         if len(kv) == 2:
-                            _cookie_jar[kv[0].strip()] = kv[1].strip()
+                            self.cookie_jar[kv[0].strip()] = kv[1].strip()
 
             # Pyodide cannot return generator/iterable wrappers across the JS boundary easily,
             # so we must exhaust the WSGI iterable and join the byte chunks manually here.
@@ -215,7 +203,6 @@ class FrappeWSGIHandler:
             "body": body_bytes
         }
 
-_cookie_jar = {}
 
 # Instantiate the global handler
 _handler = FrappeWSGIHandler()

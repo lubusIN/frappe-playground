@@ -3,6 +3,7 @@ import { computed, nextTick, onBeforeUnmount, ref } from 'vue'
 import IntroDialog from './components/IntroDialog.vue'
 import LoadingScreen from './components/LoadingScreen.vue'
 import TopBar from './components/TopBar.vue'
+import { SITE_CONFIG } from '../public/config.js'
 
 const sessionKey = 'frappe_playground_instance_id'
 const ready = ref(false)
@@ -16,6 +17,7 @@ const showIntroDialog = ref(true)
 
 let addressTimer = 0
 let pyWorker = null
+let hasPrefilledLogin = false
 
 
 function getOrCreateInstanceId() {
@@ -62,6 +64,8 @@ function scopedFrameUrl(value) {
 }
 
 function prefillLoginIfApplicable() {
+  if (hasPrefilledLogin || !SITE_CONFIG.prefill_login_credentials) return
+
   try {
     const win = iframeRef.value?.contentWindow
     const doc = win?.document
@@ -70,18 +74,17 @@ function prefillLoginIfApplicable() {
     const usr = doc.querySelector('#login_email')
     const pwd = doc.querySelector('#login_password')
     if (usr && pwd) {
-      if (!usr.value || usr.value !== 'Administrator') {
-        usr.value = 'Administrator'
-        usr.setAttribute('value', 'Administrator')
-        usr.dispatchEvent(new Event('input', { bubbles: true }))
-        usr.dispatchEvent(new Event('change', { bubbles: true }))
-      }
-      if (!pwd.value || pwd.value !== 'admin') {
-        pwd.value = 'admin'
-        pwd.setAttribute('value', 'admin')
-        pwd.dispatchEvent(new Event('input', { bubbles: true }))
-        pwd.dispatchEvent(new Event('change', { bubbles: true }))
-      }
+      hasPrefilledLogin = true
+      
+      usr.value = SITE_CONFIG.prefill_login_user
+      usr.setAttribute('value', SITE_CONFIG.prefill_login_user)
+      usr.dispatchEvent(new Event('input', { bubbles: true }))
+      usr.dispatchEvent(new Event('change', { bubbles: true }))
+      
+      pwd.value = SITE_CONFIG.prefill_login_pwd
+      pwd.setAttribute('value', SITE_CONFIG.prefill_login_pwd)
+      pwd.dispatchEvent(new Event('input', { bubbles: true }))
+      pwd.dispatchEvent(new Event('change', { bubbles: true }))
     }
   } catch (_) {
     // ignore cross-origin or transient access errors
