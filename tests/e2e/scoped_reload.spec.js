@@ -13,7 +13,7 @@ test('iframe and main page reload keep the same scoped runtime', async ({ page, 
     await page.goto('/');
     await expect(page.locator('#loading-screen')).toBeHidden({ timeout: 600000 });
 
-    const firstInstanceId = await page.evaluate(() => sessionStorage.getItem('frappe_playground_instance_id'));
+    const firstInstanceId = await page.evaluate(() => localStorage.getItem('frappe_playground_instance_id'));
     const iframe = page.locator('#frappe-desk');
 
     // Wait for the iframe to be fully loaded and visible
@@ -38,7 +38,7 @@ test('iframe and main page reload keep the same scoped runtime', async ({ page, 
     await expect(page.locator('#loading-screen')).toBeHidden({ timeout: 600000 });
     console.log('Loading screen hidden!');
 
-    const reloadedInstanceId = await page.evaluate(() => sessionStorage.getItem('frappe_playground_instance_id'));
+    const reloadedInstanceId = await page.evaluate(() => localStorage.getItem('frappe_playground_instance_id'));
     await expect(page.locator('#frappe-desk')).toHaveAttribute('src', new RegExp(`^/\\?__scope=${firstInstanceId}$`));
     expect(reloadedInstanceId).toBe(firstInstanceId);
 });

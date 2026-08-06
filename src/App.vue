@@ -9,11 +9,11 @@ const sessionKey = 'frappe_playground_instance_id'
 const ready = ref(false)
 const booting = ref(false)
 const bootSteps = ref([
-  { label: 'Booting Service Worker', status: 'pending' },
-  { label: 'Loading Python Runtime', status: 'pending' },
-  { label: 'Fetching Frappe Core', status: 'pending' },
-  { label: 'Initializing Database', status: 'pending' },
-  { label: 'Starting Frappe', status: 'pending' },
+  { label: 'Booting Service Worker', status: 'pending', startTime: null, elapsed: null },
+  { label: 'Loading Python Runtime', status: 'pending', startTime: null, elapsed: null },
+  { label: 'Fetching Frappe Core', status: 'pending', startTime: null, elapsed: null },
+  { label: 'Initializing Database', status: 'pending', startTime: null, elapsed: null },
+  { label: 'Starting Frappe', status: 'pending', startTime: null, elapsed: null },
 ])
 const address = ref('/')
 const frameSrc = ref('')
@@ -27,25 +27,40 @@ let hasPrefilledLogin = false
 
 
 function getOrCreateInstanceId() {
-  let id = sessionStorage.getItem(sessionKey)
+  let id = localStorage.getItem(sessionKey)
   const freshSession = !id
 
   if (!id) {
     id = crypto.randomUUID
       ? crypto.randomUUID()
       : `${Date.now()}-${Math.random().toString(16).slice(2)}`
-    sessionStorage.setItem(sessionKey, id)
+    localStorage.setItem(sessionKey, id)
   }
 
   return { id, freshSession }
 }
 
 function updateStep(index, status) {
+  const now = performance.now()
   for (let i = 0; i < index; i++) {
-    bootSteps.value[i].status = 'done'
+    if (bootSteps.value[i].status !== 'done') {
+      bootSteps.value[i].status = 'done'
+      if (bootSteps.value[i].startTime) {
+        bootSteps.value[i].elapsed = now - bootSteps.value[i].startTime
+      }
+    }
   }
-  if (bootSteps.value[index].status !== 'done' || status === 'done') {
-    bootSteps.value[index].status = status
+
+  const step = bootSteps.value[index]
+  if (step.status !== 'done' || status === 'done') {
+    if (status === 'active' && step.status !== 'active') {
+      step.startTime = now
+    } else if (status === 'done' && step.status !== 'done') {
+      if (step.startTime) {
+        step.elapsed = now - step.startTime
+      }
+    }
+    step.status = status
   }
 }
 
@@ -54,15 +69,15 @@ function setBootLog(message) {
   const m = message.toLowerCase()
   if (m.includes('service worker')) {
     updateStep(0, 'active')
+  } else if (m.includes('configuring python') || m.includes('frappe booted')) {
+    updateStep(4, 'active')
+    if (m.includes('booted successfully')) updateStep(4, 'done')
   } else if (m.includes('pyodide') || m.includes('python') || m.includes('core packages')) {
     updateStep(1, 'active')
   } else if (m.includes('fetching frappe') || m.includes('virtual filesystem')) {
     updateStep(2, 'active')
   } else if (m.includes('database')) {
     updateStep(3, 'active')
-  } else if (m.includes('configuring python') || m.includes('frappe booted')) {
-    updateStep(4, 'active')
-    if (m.includes('booted successfully')) updateStep(4, 'done')
   }
 }
 
@@ -157,6 +172,7 @@ async function initPlayground() {
   }
 
   booting.value = true
+  bootSteps.value[0].startTime = performance.now()
   setBootLog('Starting service worker...')
 
   const session = getOrCreateInstanceId()
@@ -175,6 +191,10 @@ async function initPlayground() {
   const swRegistration = await navigator.serviceWorker.register('/sw.js')
 
   if (!navigator.serviceWorker.controller) {
+    if (swRegistration.active) {
+      swRegistration.active.postMessage({ type: 'CLAIM_CLIENTS' })
+    }
+    
     setBootLog('Connecting service worker...')
     await new Promise(resolve => {
       navigator.serviceWorker.addEventListener('controllerchange', resolve, {
@@ -189,7 +209,7 @@ async function initPlayground() {
       : 'Activating service worker...',
   )
 
-  pyWorker = new Worker('/worker.js', { type: 'module' })
+  pyWorker = new Worker(`/worker.js?scope=${session.id}&fresh=${session.freshSession}`, { type: 'module' })
 
   function setupChannel() {
     const sendInit = (sw) => {
@@ -228,6 +248,13 @@ async function initPlayground() {
       setupChannel()
     }
   }
+
+  document.addEventListener("visibilitychange", () => {
+    if (document.visibilityState === "visible") {
+      // Proactively ensure the SW is connected when the tab wakes up
+      setupChannel();
+    }
+  });
 
   pyWorker.onmessage = event => {
     if (event.data?.type === 'LOG') {

@@ -16,6 +16,71 @@ const DEPLOY_SAFE_NODE_MODULES_ASSET_PREFIX = "/assets/frappe/runtime_modules/";
 const BACKEND_READY_TIMEOUT_MS = 90000;
 const BACKEND_READY_POLL_MS = 100;
 
+function hashString(str) {
+    let hash = 5381;
+    for (let i = 0; i < str.length; i++) {
+        hash = (hash * 33) ^ str.charCodeAt(i);
+    }
+    return (hash >>> 0).toString(16);
+}
+
+let currentCacheName = null;
+let initCachePromise = null;
+
+async function getCacheName() {
+    if (currentCacheName) return currentCacheName;
+    if (!initCachePromise) {
+        initCachePromise = (async () => {
+            try {
+                const res = await fetch(`/assets/assets.json?t=${Date.now()}`);
+                const text = await res.text();
+                const hash = hashString(text);
+                currentCacheName = `frappe-assets-${hash}`;
+                
+                // Cleanup old caches
+                const keys = await caches.keys();
+                for (const key of keys) {
+                    if (key.startsWith('frappe-assets-') && key !== currentCacheName) {
+                        console.log(`[SW] Deleting old cache: ${key}`);
+                        await caches.delete(key);
+                    }
+                }
+            } catch (err) {
+                console.warn("[SW] Failed to fetch assets.json for cache naming, falling back.", err);
+                currentCacheName = 'frappe-assets-fallback';
+            }
+        })();
+    }
+    await initCachePromise;
+    return currentCacheName;
+}
+
+async function handleStaticCache(request, strippedUrl = null) {
+    const cacheName = await getCacheName();
+    const cache = await caches.open(cacheName);
+    const urlToCache = strippedUrl || request.url;
+    
+    let response = await cache.match(urlToCache);
+    if (response) {
+        return response;
+    }
+    
+    const requestOptions = {
+        method: request.method,
+        headers: request.headers,
+        credentials: request.credentials
+    };
+    
+    response = strippedUrl ? await fetch(strippedUrl, requestOptions) : await fetch(request);
+    
+    if (response.ok || response.type === 'opaque') {
+        cache.put(urlToCache, response.clone());
+    }
+    
+    return response;
+}
+
+
 
 
 function getInstance(scope) {
@@ -61,6 +126,11 @@ self.addEventListener("message", (event) => {
         }
         return;
     }
+    
+    if (event.data && event.data.type === "CLAIM_CLIENTS") {
+        self.clients.claim();
+        return;
+    }
 
     if (event.data && event.data.type === "INIT_CHANNEL") {
         const scope = event.data.scope;
@@ -85,12 +155,19 @@ self.addEventListener("message", (event) => {
 });
 
 self.addEventListener("fetch", (event) => {
-    if (event.request.url.startsWith(self.location.origin)) {
-        const url = new URL(event.request.url);
+    const url = new URL(event.request.url);
 
+    // Cache Pyodide CDN assets
+    if (url.origin === 'https://cdn.jsdelivr.net' && url.pathname.startsWith('/pyodide/')) {
+        event.respondWith(handleStaticCache(event.request));
+        return;
+    }
+
+    if (event.request.url.startsWith(self.location.origin)) {
         if (!scopeFromUrl(url) && isStaticPath(url.pathname)) {
             // We must still intercept if it's a node_modules path that needs remapping
             if (!url.pathname.startsWith(NODE_MODULES_ASSET_PREFIX)) {
+                event.respondWith(handleStaticCache(event.request));
                 return;
             }
         }
@@ -104,6 +181,12 @@ async function handleFetch(event) {
 
     // Only intercept same-origin requests
     if (url.origin !== self.location.origin) return fetch(event.request);
+    
+    // Fast-path for Vite and Vue development assets to prevent them from triggering recovery
+    const requestPath = url.pathname;
+    if (requestPath.startsWith("/@vite/") || requestPath.startsWith("/@fs/") || requestPath.startsWith("/src/") || requestPath.startsWith("/node_modules/")) {
+        return fetch(event.request);
+    }
 
     const isShellNavigation = event.request.mode === 'navigate' && url.pathname === '/';
 
@@ -114,31 +197,11 @@ async function handleFetch(event) {
 
     const clientUrl = event.clientId ? await getClientUrl(event.clientId) : null;
     const clientScope = clientUrl ? scopeFromUrl(clientUrl) : null;
-    const requestPath = url.pathname;
     
     let scope = scopeFromUrl(url)
         || clientScopes.get(event.clientId)
         || clientScope
         || (event.request.mode === 'navigate' && !isShellNavigation && !isStaticPath(requestPath) && onlyActiveScope());
-
-    if (instances.size === 0) {
-        console.log("[SW] Instances empty! Broadcasting REQUEST_INIT_CHANNEL via BroadcastChannel...");
-        const channel = new BroadcastChannel('sw-recovery');
-        channel.postMessage({ type: 'REQUEST_INIT_CHANNEL' });
-        
-        // Wait up to 5s for main page to respond with INIT_CHANNEL
-        let retries = 0;
-        while (retries < 50) {
-            await new Promise(resolve => setTimeout(resolve, 100));
-            if (instances.size > 0) {
-                console.log("[SW] Recovered instance!");
-                if (!scope) scope = onlyActiveScope();
-                break;
-            }
-            retries++;
-        }
-        if (instances.size === 0) console.log("[SW] Failed to recover instances after 5s!");
-    }
 
     if (scope) {
         if (event.clientId) {
@@ -154,23 +217,32 @@ async function handleFetch(event) {
         const strippedUrl = new URL(event.request.url);
         strippedUrl.pathname = remapStaticPath(requestPath);
         strippedUrl.searchParams.delete("__scope");
-        const requestOptions = {
-            method: event.request.method,
-            headers: event.request.headers,
-            credentials: event.request.credentials
-        };
-
+        
         if (!scopeFromUrl(url) && strippedUrl.href === event.request.url) {
-            return fetch(event.request);
+            return handleStaticCache(event.request);
         }
 
-        return fetch(strippedUrl.href, requestOptions);
+        return handleStaticCache(event.request, strippedUrl.href);
     }
     
     if (!scope) {
         console.log(`[SW] Fetching natively: ${event.request.url}`);
         return fetch(event.request);
     }
+
+    if (instances.size === 0) {
+        console.log("[SW] Instances empty! Broadcasting REQUEST_INIT_CHANNEL via BroadcastChannel...");
+        const channel = new BroadcastChannel('sw-recovery');
+        channel.postMessage({ type: 'REQUEST_INIT_CHANNEL' });
+        
+        // Wait gracefully until instance is recovered (no timeout, so inactive tabs don't crash requests)
+        while (instances.size === 0) {
+            await new Promise(resolve => setTimeout(resolve, 500));
+        }
+        console.log("[SW] Recovered instance!");
+        if (!scope) scope = onlyActiveScope();
+    }
+
 
     console.log(`[SW] Waiting for instance ready for scope: ${scope}`);
     const isReady = await waitForInstanceReady(scope);

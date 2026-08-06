@@ -3,13 +3,42 @@
 // ──────────────────────────────────────────────────────────────────────────────
 import { PYTHON_PACKAGES, BENCH_DIRECTORIES, SITE_CONFIG } from "./config.js";
 
+function hashString(str) {
+    let hash = 5381;
+    for (let i = 0; i < str.length; i++) {
+        hash = (hash * 33) ^ str.charCodeAt(i);
+    }
+    return (hash >>> 0).toString(16);
+}
+
 const PYODIDE_BASE_URL = "https://cdn.jsdelivr.net/pyodide/v314.0.0/full/";
 
 let pyodide;
 let fromServiceWorkerPort;
-let isFreshSession = true;
-let instanceScope = "default";
+const urlParams = new URLSearchParams(self.location.search);
+let isFreshSession = urlParams.get('fresh') === 'true';
+let instanceScope = urlParams.get('scope') || "default";
 let persistedCookieJarJson = null;
+let preloadedDbPromise = preloadDbFromIDB();
+
+async function preloadDbFromIDB() {
+    try {
+        const db = await openIDB();
+        const tx = db.transaction("files", "readonly");
+        const store = tx.objectStore("files");
+        const siteDbReq = store.get("site1.db");
+        const cookieJarReq = store.get("cookie_jar.json");
+        const [siteDb, cookieJar] = await Promise.all([
+            requestToPromise(siteDbReq),
+            requestToPromise(cookieJarReq),
+        ]);
+        db.close();
+        return { siteDb, cookieJar };
+    } catch (err) {
+        console.warn("[Worker] Failed to preload state from IDB:", err);
+        return null;
+    }
+}
 
 // Static runtime files are served from /storage; browser assets are served from /assets.
 const ORIGIN = self.location.origin;
@@ -82,7 +111,9 @@ function ensureDirectories(paths) {
 
 async function saveStateToIDB(dbPath, cookieJarJson = "{}") {
     try {
-        const data = pyodide.FS.readFile(dbPath);
+        const fileView = pyodide.FS.readFile(dbPath);
+        // We MUST .slice() to create a new ArrayBuffer! Otherwise IndexedDB clones the entire 2GB WASM memory buffer.
+        const data = fileView.slice();
         const db = await openIDB();
 
         await new Promise((resolve, reject) => {
@@ -106,33 +137,22 @@ async function saveStateToIDB(dbPath, cookieJarJson = "{}") {
 }
 
 async function loadStateFromIDB(dbPath) {
+    if (!preloadedDbPromise) return false;
+    const data = await preloadedDbPromise;
+    
+    if (!data || !data.siteDb) {
+        console.log("[Worker] IDB is empty");
+        return false;
+    }
+
     try {
-        const db = await openIDB();
-        const tx = db.transaction("files", "readonly");
-        const store = tx.objectStore("files");
-        const siteDbReq = store.get("site1.db");
-        const cookieJarReq = store.get("cookie_jar.json");
-        const [siteDb, cookieJar] = await Promise.all([
-            requestToPromise(siteDbReq),
-            requestToPromise(cookieJarReq),
-        ]);
-
-        db.close();
-
-        if (!siteDb) {
-            console.log("[Worker] IDB is empty");
-            return false;
+        pyodide.FS.writeFile(dbPath, data.siteDb);
+        if (typeof data.cookieJar === "string") {
+            persistedCookieJarJson = data.cookieJar;
         }
-
-        pyodide.FS.writeFile(dbPath, siteDb);
-
-        if (typeof cookieJar === "string") {
-            persistedCookieJarJson = cookieJar;
-        }
-
         return true;
     } catch (err) {
-        console.warn("[Worker] Failed to load state from IDB:", err);
+        console.warn("[Worker] Failed to restore preloaded state:", err);
         return false;
     }
 }
@@ -288,14 +308,47 @@ async function loadPyodideLoaderFromCdn() {
 
 async function fetchAndMountFilesystem() {
     self.postMessage({ type: "LOG", message: "Fetching Frappe runtime..." });
-    const [codeArr, assetsJson] = await Promise.all([
-        fetchBinary(`${STORAGE_ENDPOINT}/frappe_runtime.tar.gz`),
-        fetchText(`${ASSETS_ENDPOINT}/assets.json`),
-    ]);
-
+    
+    // First, fetch the current robust hash
+    const res = await fetch(`${ASSETS_ENDPOINT}/assets.json?t=${Date.now()}`);
+    const assetsText = await res.text();
+    const currentHash = hashString(assetsText);
+    
     self.postMessage({ type: "LOG", message: "Mounting virtual filesystem..." });
     pyodide.FS.mkdir("/home/pyodide/frappe_env");
-    pyodide.unpackArchive(codeArr, "gztar", { extractDir: "/home/pyodide/frappe_env" });
+    pyodide.FS.mount(pyodide.FS.filesystems.IDBFS, {}, "/home/pyodide/frappe_env");
+    
+    // Sync IDBFS to memory
+    await new Promise((resolve, reject) => {
+        pyodide.FS.syncfs(true, (err) => err ? reject(err) : resolve());
+    });
+    
+    let needsExtract = true;
+    try {
+        const cachedHash = pyodide.FS.readFile("/home/pyodide/frappe_env/version.txt", { encoding: "utf8" });
+        if (cachedHash === currentHash) {
+            needsExtract = false;
+            self.postMessage({ type: "LOG", message: "Restored virtual environment from IDBFS!" });
+            console.log("[Worker] Restored virtual environment from IDBFS. Skipping extraction.");
+        } else {
+            console.log(`[Worker] Hash mismatch! Cached: ${cachedHash}, Current: ${currentHash}`);
+        }
+    } catch (_) {
+        console.log("[Worker] No valid version.txt found in IDBFS.");
+    }
+    
+    if (needsExtract) {
+        self.postMessage({ type: "LOG", message: "Extracting fresh virtual filesystem..." });
+        const codeArr = await fetchBinary(`${STORAGE_ENDPOINT}/frappe_runtime.tar.gz`);
+        pyodide.unpackArchive(codeArr, "gztar", { extractDir: "/home/pyodide/frappe_env" });
+        
+        pyodide.FS.writeFile("/home/pyodide/frappe_env/version.txt", currentHash);
+        
+        // Sync memory to IDBFS
+        await new Promise((resolve, reject) => {
+            pyodide.FS.syncfs(false, (err) => err ? reject(err) : resolve());
+        });
+    }
 
     // Create Bench directory structure
     ensureDirectories(BENCH_DIRECTORIES);
@@ -307,7 +360,9 @@ async function fetchAndMountFilesystem() {
     
     if (!isFreshSession) {
         self.postMessage({ type: "LOG", message: "Restoring isolated database..." });
+        console.time("loadStateFromIDB");
         dataLoaded = await loadStateFromIDB(SITE_DB_PATH);
+        console.timeEnd("loadStateFromIDB");
     }
     
     if (isFreshSession || !dataLoaded) {
@@ -317,14 +372,17 @@ async function fetchAndMountFilesystem() {
 
         await resetFreshSiteSetupState(SITE_DB_PATH);
         
-        // Save the seed immediately to IndexedDB
+        console.time("saveInitialStateToIDB");
         await saveStateToIDB(SITE_DB_PATH);
+        console.timeEnd("saveInitialStateToIDB");
     } else {
+        console.time("repairCompletedSiteDefaults");
         await repairCompletedSiteDefaults(SITE_DB_PATH);
+        console.timeEnd("repairCompletedSiteDefaults");
     }
     
     // Write config files (these are static and always come from the server)
-    pyodide.FS.writeFile(ASSETS_JSON_PATH, assetsJson);
+    pyodide.FS.writeFile(ASSETS_JSON_PATH, assetsText);
     for (const [path, contents] of Object.entries(STATIC_SITE_FILES)) {
         pyodide.FS.writeFile(path, contents);
     }

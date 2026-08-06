@@ -25,7 +25,7 @@ async function waitForPlaygroundBoot(page) {
     await expect(iframe).toBeVisible({ timeout: 120000 });
     await dismissIntroDialogIfShown(page);
 
-    const instanceId = await page.evaluate(() => sessionStorage.getItem('frappe_playground_instance_id'));
+    const instanceId = await page.evaluate(() => localStorage.getItem('frappe_playground_instance_id'));
     expect(instanceId).toBeTruthy();
 
     return { iframe, instanceId };
