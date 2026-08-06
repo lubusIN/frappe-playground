@@ -6,6 +6,7 @@ storage/
 public/assets/
 public/frontend/
 public/storage/
+public/index.html
 
 # Downloaded Pyodide distribution (bundle script)
 public/pyodide/

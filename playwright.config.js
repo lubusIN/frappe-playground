@@ -11,7 +11,8 @@ module.exports = defineConfig({
   reporter: [['html', { outputFolder: './tests/results' }]],
   use: {
     baseURL: 'http://localhost:8000',
-    trace: 'on-first-retry',
+    trace: 'on',
+    screenshot: 'on',
   },
 
   projects: [

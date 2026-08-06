@@ -74,9 +74,9 @@ async function readDeskState(page) {
         hasLogin: Boolean(document.querySelector('#login_email')),
         hasNestedPlayground: Boolean(document.querySelector('#frappe-desk')),
         hasSetupWizard: Boolean(document.querySelector('.slides-wrapper')),
-        homePage: window.frappe?.boot?.home_page,
+        homePage: window.frappe?.boot?.sysdefaults?.home_page || window.frappe?.boot?.home_page,
         route: window.frappe?.get_route?.(),
-        setupComplete: window.frappe?.boot?.setup_complete,
+        setupComplete: window.frappe?.boot?.sysdefaults?.setup_complete || window.frappe?.boot?.setup_complete,
     }));
 }
 

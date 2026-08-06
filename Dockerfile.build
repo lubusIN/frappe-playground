@@ -1,6 +1,6 @@
 FROM python:3.14-slim
 
-ARG FRAPPE_VERSION=v16.23.0
+ARG FRAPPE_VERSION=v16.30.0
 
 # 1. Install system dependencies and node components
 RUN apt-get update && apt-get install -y \
