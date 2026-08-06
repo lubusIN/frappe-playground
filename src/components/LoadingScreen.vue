@@ -1,5 +1,5 @@
 <template>
-  <section id="loading-screen" class="relative flex min-h-screen flex-col items-center pt-10 sm:pt-16 bg-surface-gray-2 p-6">
+  <section id="loading-screen" class="relative flex min-h-screen supports-[height:100dvh]:min-h-[100dvh] flex-col items-center pt-10 sm:pt-16 bg-surface-gray-2 p-6">
     <div class="grid w-full max-w-[420px] justify-items-center gap-2.5 text-center">
       <BrandIcon clip-id="frappe-loading-brand-clip" size="xl" class="mb-1.5 text-ink-gray-9" />
       <div class="mt-4 flex w-full max-w-[320px] flex-col gap-3 rounded-xl bg-surface-base p-5 text-left shadow-sm">
