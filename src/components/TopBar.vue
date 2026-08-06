@@ -43,7 +43,7 @@
 </template>
 
 <script setup>
-import { Button } from 'frappe-ui/components/Button'
+import { Button } from 'frappe-ui'
 import { RotateCw } from '@lucide/vue'
 import BrandWordmark from './BrandWordmark.vue'
 

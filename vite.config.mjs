@@ -113,6 +113,12 @@ export default defineConfig({
   optimizeDeps: {
     // Frappe UI source imports feather-icons as a CJS default. Pre-bundle it
     // so Vite serves an ESM interop wrapper instead of the raw UMD file.
-    include: ['feather-icons'],
+    include: [
+      'feather-icons', 
+      'debug', 
+      'highlight.js', 
+      'highlight.js/lib/core', 
+      'interactjs'
+    ],
   },
 })

@@ -11,14 +11,14 @@
           This playground runs entirely in your browser. Changes made here are temporary and will be lost when this tab
           is closed or reloaded.
         </p>
-        <div v-if="SITE_CONFIG.prefill_login_credentials" class="mt-4 rounded-md border border-gray-200 dark:border-gray-800 bg-gray-50 dark:bg-gray-800/50 p-3 text-sm leading-5 text-gray-600 dark:text-gray-400">
+        <div v-if="SITE_CONFIG.prefill_login_credentials" class="mt-4 rounded-md border border-gray-200 bg-gray-50 p-3 text-sm leading-5 text-gray-600">
           <span class="font-medium text-gray-900 dark:text-gray-100">Default Credentials:</span>
-          <div class="mt-2 flex flex-col items-start gap-2">
-            <Badge variant="subtle" theme="blue" size="lg" class="font-mono">
+          <div class="mt-2 flex items-start gap-2">
+            <Badge variant="outline" theme="blue" size="lg" class="font-mono">
               <template #prefix><User class="h-3 w-3" /></template>
               {{ SITE_CONFIG.prefill_login_user }}
             </Badge>
-            <Badge variant="subtle" theme="blue" size="lg" class="font-mono">
+            <Badge variant="outline" theme="blue" size="lg" class="font-mono">
               <template #prefix><Key class="h-3 w-3" /></template>
               {{ SITE_CONFIG.prefill_login_pwd }}
             </Badge>
@@ -40,9 +40,7 @@
 </template>
 
 <script setup>
-import { Button } from 'frappe-ui/components/Button'
-import { Dialog } from 'frappe-ui/components/Dialog'
-import { Badge } from 'frappe-ui/components/Badge'
+import { Button, Dialog, Badge } from 'frappe-ui'
 import { User, Key } from '@lucide/vue'
 import { SITE_CONFIG } from '../../public/config.js'
 

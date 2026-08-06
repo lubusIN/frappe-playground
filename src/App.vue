@@ -269,7 +269,7 @@ async function initPlayground() {
         booting.value = false
         frameSrc.value = scopedFrameUrl('/')
         startAddressSync()
-      }, 1500)
+      }, 2000)
       return
     }
 
