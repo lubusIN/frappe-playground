@@ -1,5 +1,5 @@
 <script setup>
-import { computed, nextTick, onBeforeUnmount, ref, watchEffect } from 'vue'
+import { nextTick, onBeforeUnmount, ref } from 'vue'
 import IntroDialog from './components/IntroDialog.vue'
 import LoadingScreen from './components/LoadingScreen.vue'
 import TopBar from './components/TopBar.vue'
@@ -25,17 +25,7 @@ let addressTimer = 0
 let pyWorker = null
 let hasPrefilledLogin = false
 
-const isDark = ref(false)
 
-watchEffect(() => {
-  if (isDark.value) {
-    document.documentElement.classList.add('dark')
-    document.documentElement.setAttribute('data-theme', 'dark')
-  } else {
-    document.documentElement.classList.remove('dark')
-    document.documentElement.setAttribute('data-theme', 'light')
-  }
-})
 function getOrCreateInstanceId() {
   let id = sessionStorage.getItem(sessionKey)
   const freshSession = !id
@@ -290,18 +280,14 @@ onBeforeUnmount(() => {
       v-show="ready"
       v-model:address="address"
       :ready="ready"
-      :is-dark="isDark"
       @navigate="navigateFrame"
       @reload="reloadFrame"
-      @toggle-theme="isDark = !isDark"
     />
 
     <LoadingScreen 
       v-show="!ready" 
       :booting="booting" 
       :steps="bootSteps"
-      :is-dark="isDark"
-      @toggle-theme="isDark = !isDark"
     />
 
     <iframe
