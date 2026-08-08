@@ -126,6 +126,20 @@ Run only the fast protocol contract tests with:
 npm run test:contract
 ```
 
+Validate runtime hashes, required publish files, worker imports, and source/output boundaries with:
+
+```bash
+npm run verify:build
+```
+
+Exercise a clean publish build, including stale-output detection, with:
+
+```bash
+npm run test:clean-build
+```
+
+CI runs the fast tests, clean-build verification, and the complete Chromium Playwright project before publishing.
+
 ## Deployment
 
 Build the deployable `dist/` tree without publishing:
