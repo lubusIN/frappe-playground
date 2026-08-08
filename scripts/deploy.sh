@@ -6,12 +6,12 @@ BRANCH_NAME="${CLOUDFLARE_PAGES_BRANCH:-$(git rev-parse --abbrev-ref HEAD 2>/dev
 
 echo "Deploying to Cloudflare Pages..."
 if [ -n "${CLOUDFLARE_ACCOUNT_ID:-}" ]; then
-  npx wrangler pages deploy public \
+  npx wrangler pages deploy dist \
     --project-name="${PROJECT_NAME}" \
     --branch="${BRANCH_NAME}" \
     --account-id="${CLOUDFLARE_ACCOUNT_ID}"
 else
-  npx wrangler pages deploy public \
+  npx wrangler pages deploy dist \
     --project-name="${PROJECT_NAME}" \
     --branch="${BRANCH_NAME}"
 fi

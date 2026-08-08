@@ -105,7 +105,7 @@ Short list for an upstream GitHub issue:
 
 ## Module Mocking Inventory
 
-`public/python/frappe_mocks.py` modifies Python imports before loading Frappe.
+`runtime/python/frappe_mocks.py` modifies Python imports before loading Frappe.
 The mocks do not all mean the same thing:
 
 - some provide working local substitutes for services Frappe actively uses;
@@ -251,7 +251,7 @@ but those modules are not required for ordinary boot. Their mocks allow an
 integration module to import if a hook, DocType, or route reaches it. The actual
 integration cannot work because calls are absorbed.
 
-`sentry-sdk` is already installed by `public/config.js`, but the auto-mocker
+`sentry-sdk` is already installed by `playground-server/src/config.js`, but the auto-mocker
 shadows it. Frappe's web setup imports Sentry only when related environment
 variables are configured; error-reporting helpers can also import it on demand.
 The reason for overriding the installed package has not been demonstrated.

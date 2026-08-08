@@ -3,7 +3,7 @@ import { nextTick, onBeforeUnmount, ref } from 'vue'
 import IntroDialog from './components/IntroDialog.vue'
 import LoadingScreen from './components/LoadingScreen.vue'
 import TopBar from './components/TopBar.vue'
-import { SITE_CONFIG } from '../public/config.js'
+import { SITE_CONFIG } from '../playground-server/src/config.js'
 
 const sessionKey = 'frappe_playground_instance_id'
 const ready = ref(false)
