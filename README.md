@@ -13,10 +13,10 @@ Run the Frappe Framework in the browser with Pyodide and WebAssembly. The playgr
 
 The playground has four main pieces:
 
-1. **Vue shell (`src/`)**: Renders the loading screen, top bar, and Frappe Desk iframe. Vite builds this into `public/frontend/`.
-2. **Service Worker (`public/sw.js`)**: Intercepts scoped browser requests, serves static files, mocks Socket.IO enough for Desk to settle, and forwards backend requests to the active Python worker.
-3. **Pyodide worker (`public/worker.js`)**: Loads Pyodide, installs Python packages, mounts the Frappe runtime archive and starter SQLite database, applies browser-specific mocks, and handles WSGI requests.
-4. **Runtime build (`Dockerfile.build`, `scripts/build.sh`)**: Builds the Frappe runtime, database, and Frappe browser assets into `storage/`. `scripts/prepare.sh` copies those generated assets into `public/storage/` and `public/assets/` for local preview or deploy.
+1. **Vue shell (`src/`)**: Renders the loading screen, top bar, and Frappe Desk iframe. Vite builds it into `dist/frontend/`.
+2. **Service Worker (`service-worker/src/`)**: Intercepts scoped browser requests, serves static files, mocks Socket.IO enough for Desk to settle, and forwards backend requests to the active Python worker.
+3. **Pyodide server (`playground-server/src/`)**: Loads Pyodide, installs Python packages, mounts the Frappe runtime archive and starter SQLite database, applies browser-specific mocks, and handles WSGI requests.
+4. **Runtime build (`Dockerfile.build`, `runtime/`, `scripts/build.sh`)**: Builds intermediate Frappe runtime artifacts into `artifacts/runtime/`. The application build assembles those artifacts and all authored browser sources into the clean `dist/` publish directory.
 
 The app must be served from `localhost` or HTTPS with cross-origin isolation headers:
 
@@ -27,7 +27,7 @@ Cross-Origin-Resource-Policy: same-origin
 Access-Control-Allow-Origin: *
 ```
 
-Vite sets these headers during local development and preview. Cloudflare Pages uses `public/_headers`.
+Vite sets these headers during local development and preview. Cloudflare Pages uses the authored `public/_headers` file copied into `dist/` during assembly.
 
 ### Default Credentials
 
@@ -47,12 +47,6 @@ Build the browser runtime with Docker:
 
 ```bash
 npm run build:runtime
-```
-
-Copy the generated runtime and Frappe assets into `public/`:
-
-```bash
-bash scripts/prepare.sh
 ```
 
 Start the local Vite dev server:
@@ -78,27 +72,25 @@ To run the complete deploy preparation flow in one command:
 npm run deploy:prepare
 ```
 
-This rebuilds the runtime, prepares `public/`, builds the frontend shell, and checks published asset limits.
+This rebuilds the runtime artifacts, builds the frontend shell into a clean `dist/`, assembles the authored runtime files, and checks published asset limits.
 
 ## Directory Structure
 
 ```text
 frappe-playground/
-|-- src/                    # Vue shell loaded by Vite
-|-- public/
-|   |-- sw.js               # Service Worker request router
-|   |-- worker.js           # Pyodide + Frappe runtime worker
-|   |-- config.js           # Runtime package and site configuration
-|   |-- python/             # Browser-specific Python helpers and mocks
-|   |-- assets/             # Generated Frappe browser assets
-|   |-- frontend/           # Generated Vue shell assets
-|   `-- storage/            # Generated runtime archive and starter database
+|-- src/                    # Vue shell source loaded by Vite
+|-- service-worker/src/     # Authored Service Worker source
+|-- playground-server/src/ # Authored Pyodide server source and configuration
+|-- runtime/python/         # Authored browser-specific Python helpers and mocks
+|-- public/                 # Authored static hosting files only
+|-- artifacts/runtime/      # Generated intermediate runtime artifacts
+|-- dist/                   # Generated deployable application
 |-- scripts/
 |   |-- build.sh            # Docker runtime build
 |   |-- check-limits.sh     # Asset size limit verification
 |   |-- deploy.sh           # Cloudflare Pages deployment
 |   |-- export-runtime-assets.py # Frappe asset exporter for build
-|   |-- prepare.sh          # Copies generated runtime assets into public/
+|   |-- prepare.sh          # Assembles runtime and authored files into dist/
 |   `-- prepare-deploy.sh   # Full deploy preparation flow
 |-- tests/
 |   `-- e2e/                # Playwright browser flows
@@ -107,11 +99,11 @@ frappe-playground/
 `-- playwright.config.js
 ```
 
-Generated directories such as `storage/`, `public/assets/`, `public/frontend/`, and `public/storage/` are intentionally ignored by Git.
+`artifacts/` and `dist/` are generated and intentionally ignored by Git. Authored source files never live in either directory.
 
 ## Testing
 
-The Playwright suite uses `http://localhost:8000` as its base URL. After building the frontend with `npm run build` or `npm run deploy:prepare`, run the production preview before executing tests:
+The Playwright suite uses `http://localhost:8000` as its base URL. After assembling `dist/` with `npm run build` or `npm run deploy:prepare`, run the production preview before executing tests:
 
 ```bash
 npm start
@@ -127,7 +119,7 @@ The e2e tests cover boot, login, setup wizard completion, Desk stability, scoped
 
 ## Deployment
 
-Build the deployable `public/` tree without publishing:
+Build the deployable `dist/` tree without publishing:
 
 ```bash
 npm run deploy:prepare

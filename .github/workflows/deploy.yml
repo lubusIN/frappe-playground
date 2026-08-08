@@ -38,7 +38,7 @@ jobs:
         with:
           apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-          command: pages deploy public --project-name=frappe-playground
+          command: pages deploy dist --project-name=frappe-playground
           gitHubToken: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Add deployment URL to summary

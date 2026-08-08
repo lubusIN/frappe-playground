@@ -6,7 +6,7 @@
     "dev": "vite --host 0.0.0.0",
     "dev:preview": "vite preview --host 0.0.0.0",
     "start": "npm run dev:preview",
-    "build": "vite build",
+    "build": "vite build && bash scripts/prepare.sh",
     "build:runtime": "bash scripts/build.sh",
     "deploy:prepare": "bash scripts/prepare-deploy.sh",
     "predeploy": "npm run deploy:prepare",

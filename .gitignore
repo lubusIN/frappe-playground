@@ -1,7 +1,11 @@
 # Dependencies
 node_modules/
 
-# Generated build artifacts (Docker build output)
+# Generated build artifacts
+artifacts/
+dist/
+
+# Legacy generated locations (safe to remove after migration)
 storage/
 public/assets/
 public/frontend/

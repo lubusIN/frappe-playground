@@ -14,7 +14,7 @@ MAX_FILE_SIZE_BYTES=$((MAX_FILE_SIZE_MB * 1024 * 1024))
 if [ "$#" -gt 0 ]; then
   DIRS_TO_CHECK=("$@")
 else
-  DIRS_TO_CHECK=("public")
+  DIRS_TO_CHECK=("dist")
 fi
 
 TOTAL_FILES=0

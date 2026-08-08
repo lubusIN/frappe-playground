@@ -6,8 +6,11 @@ import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 
 const projectRoot = path.dirname(fileURLToPath(import.meta.url))
-const publicDir = path.join(projectRoot, 'public')
-const frontendAssetsDir = path.join(publicDir, 'frontend')
+const authoredStaticDir = path.join(projectRoot, 'public')
+const serviceWorkerSourceDir = path.join(projectRoot, 'service-worker/src')
+const serverSourceDir = path.join(projectRoot, 'playground-server/src')
+const pythonSourceDir = path.join(projectRoot, 'runtime/python')
+const runtimeArtifactsDir = path.join(projectRoot, 'artifacts/runtime')
 const isolationHeaders = {
   'Cross-Origin-Opener-Policy': 'same-origin',
   'Cross-Origin-Embedder-Policy': 'require-corp',
@@ -15,7 +18,37 @@ const isolationHeaders = {
   'Access-Control-Allow-Origin': '*',
 }
 
-function publicFileMiddleware(req, res, next) {
+const exactDevFiles = new Map([
+  ['/sw.js', path.join(serviceWorkerSourceDir, 'sw.js')],
+  ['/worker.js', path.join(serverSourceDir, 'worker.js')],
+  ['/config.js', path.join(serverSourceDir, 'config.js')],
+  ['/_headers', path.join(authoredStaticDir, '_headers')],
+  ['/_redirects', path.join(authoredStaticDir, '_redirects')],
+  ['/favicon.ico', path.join(authoredStaticDir, 'favicon.ico')],
+])
+
+const prefixedDevFiles = [
+  ['/python/', pythonSourceDir],
+  ['/storage/', runtimeArtifactsDir],
+  ['/assets/', path.join(runtimeArtifactsDir, 'assets')],
+]
+
+function resolveDevFile(pathname) {
+  const exactFile = exactDevFiles.get(pathname)
+  if (exactFile) return exactFile
+
+  for (const [prefix, directory] of prefixedDevFiles) {
+    if (!pathname.startsWith(prefix)) continue
+
+    const relativePath = decodeURIComponent(pathname.slice(prefix.length))
+    const filePath = path.normalize(path.join(directory, relativePath))
+    if (filePath.startsWith(directory + path.sep)) return filePath
+  }
+
+  return null
+}
+
+function runtimeFileMiddleware(req, res, next) {
   const pathname = new URL(req.url || '/', 'http://localhost').pathname
 
   if (pathname === '/' || pathname === '/index.html') {
@@ -23,9 +56,8 @@ function publicFileMiddleware(req, res, next) {
     return
   }
 
-  const filePath = path.normalize(path.join(publicDir, decodeURIComponent(pathname)))
-
-  if (!filePath.startsWith(publicDir + path.sep)) {
+  const filePath = resolveDevFile(pathname)
+  if (!filePath) {
     next()
     return
   }
@@ -67,23 +99,21 @@ function contentTypeFor(filePath) {
 export default defineConfig({
   root: 'src',
   base: '/',
+  publicDir: false,
   plugins: [
     vue(),
     Icons({ compiler: 'vue3' }),
     {
       name: 'frappe-playground-frontend',
-      buildStart() {
-        fs.rmSync(frontendAssetsDir, { recursive: true, force: true })
-      },
       configureServer(server) {
-        server.middlewares.use(publicFileMiddleware)
+        server.middlewares.use(runtimeFileMiddleware)
       },
     },
   ],
   build: {
-    outDir: '../public',
+    outDir: '../dist',
     assetsDir: 'frontend',
-    emptyOutDir: false,
+    emptyOutDir: true,
     sourcemap: true,
     rollupOptions: {
       onwarn(warning, defaultHandler) {

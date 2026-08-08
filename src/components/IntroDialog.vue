@@ -42,7 +42,7 @@
 <script setup>
 import { Button, Dialog, Badge } from 'frappe-ui'
 import { User, Key } from '@lucide/vue'
-import { SITE_CONFIG } from '../../public/config.js'
+import { SITE_CONFIG } from '../../playground-server/src/config.js'
 
 const dialogTitle = 'Experimental Playground'
 
