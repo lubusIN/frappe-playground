@@ -9,6 +9,12 @@ module.exports = defineConfig({
   workers: 1,
   outputDir: './tests/results',
   reporter: [['html', { outputFolder: './tests/results' }]],
+  webServer: process.env.CI ? {
+    command: 'npm run dev:preview',
+    url: 'http://127.0.0.1:8000',
+    reuseExistingServer: false,
+    timeout: 120000,
+  } : undefined,
   use: {
     baseURL: process.env.PLAYWRIGHT_BASE_URL || 'http://localhost:8000',
     trace: 'on',

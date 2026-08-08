@@ -9,8 +9,10 @@ import {
   assertProtocolMessage,
   createBackendRequest,
   createBackendResponse,
+  createClaimClientsMessage,
   createClearOtherInstancesMessage,
   createInitChannelMessage,
+  createRecoveryRequestMessage,
   createRuntimeErrorMessage,
   createRuntimeLogMessage,
   createRuntimeReadyMessage,
@@ -21,8 +23,10 @@ import {
 
 test('control and runtime messages use the current protocol version', () => {
   const messages = [
+    createClaimClientsMessage(),
     createInitChannelMessage('instance-1', { freshSession: true }),
     createClearOtherInstancesMessage('instance-1'),
+    createRecoveryRequestMessage(),
     createRuntimeLogMessage('Loading Pyodide...', RuntimeStage.PYTHON),
     createRuntimeReadyMessage(),
     createRuntimeErrorMessage('Boot failed'),
@@ -32,8 +36,19 @@ test('control and runtime messages use the current protocol version', () => {
     assert.equal(value.protocolVersion, PROTOCOL_VERSION)
     assert.equal(isProtocolMessage(value), true)
   }
-  assert.equal(messages[0].type, ProtocolMessageType.INIT_CHANNEL)
-  assert.deepEqual(messages[0].payload, { scope: 'instance-1', freshSession: true })
+  assert.deepEqual(
+    new Set(messages.map(message => message.type)),
+    new Set([
+      ProtocolMessageType.CLAIM_CLIENTS,
+      ProtocolMessageType.INIT_CHANNEL,
+      ProtocolMessageType.CLEAR_OTHER_INSTANCES,
+      ProtocolMessageType.RECOVERY_REQUEST,
+      ProtocolMessageType.RUNTIME_LOG,
+      ProtocolMessageType.RUNTIME_READY,
+      ProtocolMessageType.RUNTIME_ERROR,
+    ]),
+  )
+  assert.deepEqual(messages[1].payload, { scope: 'instance-1', freshSession: true })
 })
 
 test('messages from another or missing protocol version are rejected', () => {
