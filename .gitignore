@@ -5,21 +5,8 @@ node_modules/
 artifacts/
 dist/
 
-# Legacy generated locations (safe to remove after migration)
-storage/
-public/assets/
-public/frontend/
-public/storage/
-public/index.html
-
-# Downloaded Pyodide distribution (bundle script)
-public/pyodide/
-
-# Downloaded dependency wheels (bundle script)
-public/wheels/
-
-# Intermediate Docker build directory
-build/
+# Legacy root-level intermediate Docker build directory
+/build/
 
 # OS
 .DS_Store

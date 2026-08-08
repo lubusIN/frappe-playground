@@ -4,7 +4,7 @@ export default {
   presets: [frappeUIPreset],
   darkMode: 'class',
   content: [
-    './src/**/*.{html,js,vue}',
+    './packages/client/src/**/*.{html,js,vue}',
     './node_modules/frappe-ui/src/**/*.{js,ts,vue}',
   ],
   theme: {

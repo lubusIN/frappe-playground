@@ -6,20 +6,20 @@ import {
   RuntimeStage,
   createRuntimeLogMessage,
   createRuntimeReadyMessage,
-} from '../../packages/protocol/src/index.js'
+} from '../../packages/protocol/src/messages.js'
 import {
   PlaygroundController,
   PlaygroundEventType,
-} from '../../src/playground/controller.js'
+} from '../../packages/client/src/playground/controller.js'
 import {
   normalizeAddress,
   scopedFrameUrl,
   stripScope,
-} from '../../src/playground/iframe-navigation.js'
+} from '../../packages/client/src/playground/iframe-navigation.js'
 import {
   PLAYGROUND_SESSION_KEY,
   getOrCreateInstanceSession,
-} from '../../src/playground/session.js'
+} from '../../packages/client/src/playground/session.js'
 
 function memoryStorage() {
   const values = new Map()
@@ -60,6 +60,7 @@ test('iframe navigation scopes backend URLs without exposing scope in the addres
 test('the controller owns lifecycle wiring and emits structured progress', async () => {
   const serviceWorkerMessages = []
   const workerMessages = []
+  let serviceWorkerUpdateChecks = 0
   const controllerWorker = {
     postMessage: (...args) => serviceWorkerMessages.push(args),
   }
@@ -68,7 +69,12 @@ test('the controller owns lifecycle wiring and emits structured progress', async
     addEventListener() {},
     removeEventListener() {},
     async register() {
-      return { active: controllerWorker }
+      return {
+        active: controllerWorker,
+        async update() {
+          serviceWorkerUpdateChecks += 1
+        },
+      }
     },
     ready: Promise.resolve({ active: controllerWorker }),
   }
@@ -127,6 +133,7 @@ test('the controller owns lifecycle wiring and emits structured progress', async
   controller.on(PlaygroundEventType.READY, event => ready.push(event))
 
   assert.deepEqual(await controller.start(), { id: 'instance-1', freshSession: true })
+  assert.equal(serviceWorkerUpdateChecks, 1)
   assert.equal(FakeWorker.instance.options.type, 'module')
   assert.match(FakeWorker.instance.url, /^\/worker\.js\?scope=instance-1&fresh=true$/)
   assert.equal(serviceWorkerMessages[0][0].type, ProtocolMessageType.INIT_CHANNEL)

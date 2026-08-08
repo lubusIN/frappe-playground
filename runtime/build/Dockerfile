@@ -1,0 +1,71 @@
+FROM python:3.14-slim
+
+ARG FRAPPE_VERSION=v16.30.0
+
+# 1. Install system dependencies and node components
+RUN apt-get update && apt-get install -y \
+    git curl unzip tar build-essential libffi-dev pkg-config cron default-libmysqlclient-dev \
+    && curl -fsSL https://deb.nodesource.com/setup_24.x | bash - \
+    && apt-get install -y nodejs \
+    && npm install -g yarn \
+    && yarn config set ignore-engines true \
+    && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /workspace
+
+COPY runtime/build/export-runtime-assets.py /workspace/scripts/export-runtime-assets.py
+
+# 2. Pre-download pure-Python dependencies
+RUN mkdir -p /workspace/dependencies
+RUN pip download \
+    --no-binary=:none: \
+    --only-binary=:all: \
+    --dest /workspace/dependencies \
+    jinja2 werkzeug click markdown itsdangerous
+RUN pip wheel \
+    --no-deps \
+    --wheel-dir /workspace/dependencies \
+    docopt==0.6.2 \
+    num2words==0.5.14
+
+# 3. Clone and clean Frappe Core
+RUN git clone --branch ${FRAPPE_VERSION} --depth 1 https://github.com/frappe/frappe.git /workspace/frappe_src \
+    && cd /workspace/frappe_src \
+    && rm -rf .git .github tests playbooks cypress frappe/tests frappe/commands frappe/coverage frappe/docs \
+    && find . -name "node_modules" -type d -prune -exec rm -rf '{}' + \
+    && find . -name "*.pyc" -delete \
+    && find . -name "__pycache__" -delete \
+    && find . -name "*.md" -delete \
+    && find . -name "*.json" -path "*/package.json" -delete
+
+# 4. Assemble the flat runtime archive directory
+RUN mkdir -p /workspace/archive_root \
+    && cp -r /workspace/frappe_src/frappe /workspace/archive_root/ \
+    && cp /workspace/dependencies/*.whl /workspace/archive_root/ 2>/dev/null || true \
+    && cd /workspace/archive_root \
+    && for wheel in *.whl; do unzip -q "$wheel" && rm "$wheel"; done \
+    && rm -rf *.dist-info
+
+# 5. Boot a temporary bench and pre-bake the SQLite DB file
+# Create uv wrapper
+RUN pip install frappe-bench \
+    && mv /usr/local/bin/uv /usr/local/bin/uv.real \
+    && echo '#!/bin/bash' > /usr/local/bin/uv \
+    && echo 'exec /usr/local/bin/uv.real "$@"' >> /usr/local/bin/uv \
+    && chmod +x /usr/local/bin/uv
+RUN useradd -ms /bin/bash frappe && chown -R frappe:frappe /workspace
+USER frappe
+RUN bench init --frappe-branch ${FRAPPE_VERSION} --skip-redis-config-generation  --python python3 test-bench \
+    && cd test-bench \
+    && bench new-site playground.local --db-type sqlite --admin-password admin \
+    && bench --site playground.local execute frappe.db.set_single_value --args "('System Settings', 'login_with_email_link', 0)"
+USER root
+# 6. Expose entry point compilation commands
+CMD cp -r /workspace/test-bench/env/lib/python3.14/site-packages/pypika /workspace/archive_root/ && \
+    tar -czf /output/frappe_runtime.tar.gz -C /workspace/archive_root . && \
+    rm -rf /workspace/assets_export && \
+    python /workspace/scripts/export-runtime-assets.py /workspace/test-bench/sites /workspace/assets_export && \
+    find /workspace/test-bench/apps -name "node_modules" -type d -prune -exec rm -rf '{}' + && \
+    tar -czhf /output/assets.tar.gz -C /workspace/assets_export assets && \
+    cp /workspace/test-bench/sites/playground.local/db/*.db /output/site1.db && \
+    echo "🎉 Compilation Complete! Assets copied out of container successfully."

@@ -30,6 +30,29 @@ async function listJavaScriptFiles(directory) {
   return files
 }
 
+function localModuleSpecifiers(source) {
+  const specifiers = []
+  const staticImportPattern = /(?:import|export)\s+(?:[^'";]*?\s+from\s+)?["']([^"']+)["']/g
+  const dynamicImportPattern = /import\s*\(\s*["']([^"']+)["']\s*\)/g
+
+  for (const pattern of [staticImportPattern, dynamicImportPattern]) {
+    for (const match of source.matchAll(pattern)) {
+      if (match[1].startsWith('/') || match[1].startsWith('.')) specifiers.push(match[1])
+    }
+  }
+  return specifiers
+}
+
+function resolvePublishedImport(distDir, importer, specifier) {
+  const target = specifier.startsWith('/')
+    ? path.resolve(distDir, `.${new URL(specifier, 'https://playground.local').pathname}`)
+    : path.resolve(path.dirname(importer), decodeURIComponent(specifier.split(/[?#]/, 1)[0]))
+  const relativeTarget = path.relative(distDir, target)
+
+  if (relativeTarget.startsWith('..') || path.isAbsolute(relativeTarget)) return null
+  return target
+}
+
 export async function verifyBuild({
   artifactsDir = defaultArtifactsDir,
   distDir = defaultDistDir,
@@ -78,19 +101,20 @@ export async function verifyBuild({
     'sw.js',
     'worker.js',
     'config.js',
-    'protocol/index.js',
+    'protocol/messages.js',
+    'protocol/request.js',
+    'protocol/version.js',
+    'runtime-config/packages.js',
+    'runtime-config/site.js',
     'generated/python-sources.js',
     'service-worker/backend-proxy.js',
     'service-worker/cache.js',
     'service-worker/instance-registry.js',
     'service-worker/routing.js',
-    'service-worker/socket-io.js',
-    'playground-server/database.js',
-    'playground-server/filesystem.js',
-    'playground-server/persistence.js',
-    'playground-server/python-bridge.js',
-    'playground-server/request-executor.js',
-    'playground-server/runtime-loader.js',
+    'server/filesystem.js',
+    'server/persistence.js',
+    'server/request-handler.js',
+    'server/boot.js',
   ]
   for (const file of requiredFiles) {
     if (!await exists(path.join(distDir, file))) errors.push(`Missing publish file: ${file}`)
@@ -102,7 +126,15 @@ export async function verifyBuild({
     errors.push('Vite did not clean stale publish output')
   }
 
-  const authoredRoots = ['sw.js', 'worker.js', 'service-worker', 'playground-server']
+  const authoredRoots = [
+    'sw.js',
+    'worker.js',
+    'config.js',
+    'protocol',
+    'runtime-config',
+    'service-worker',
+    'server',
+  ]
   const javascriptFiles = []
   for (const root of authoredRoots) {
     const rootPath = path.join(distDir, root)
@@ -111,13 +143,14 @@ export async function verifyBuild({
     if (metadata.isDirectory()) javascriptFiles.push(...await listJavaScriptFiles(rootPath))
     else javascriptFiles.push(rootPath)
   }
-  const absoluteImportPattern = /(?:from\s+|import\s*)["'](\/[^"']+)["']/g
   for (const file of javascriptFiles) {
     const source = await readFile(file, 'utf8')
-    for (const match of source.matchAll(absoluteImportPattern)) {
-      const pathname = new URL(match[1], 'https://playground.local').pathname
-      if (!await exists(path.join(distDir, pathname))) {
-        errors.push(`${path.relative(distDir, file)} imports missing ${pathname}`)
+    for (const specifier of localModuleSpecifiers(source)) {
+      const target = resolvePublishedImport(distDir, file, specifier)
+      if (!target) {
+        errors.push(`${path.relative(distDir, file)} imports outside publish root: ${specifier}`)
+      } else if (!await exists(target)) {
+        errors.push(`${path.relative(distDir, file)} imports missing ${specifier}`)
       }
     }
   }

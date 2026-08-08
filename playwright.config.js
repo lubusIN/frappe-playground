@@ -9,14 +9,14 @@ module.exports = defineConfig({
   workers: 1,
   outputDir: './tests/results',
   reporter: [['html', { outputFolder: './tests/results' }]],
-  webServer: process.env.CI ? {
-    command: 'npm run dev:preview',
-    url: 'http://127.0.0.1:8000',
+  webServer: process.env.PLAYWRIGHT_BASE_URL ? undefined : {
+    command: 'npm run test:serve',
+    url: 'http://127.0.0.1:8002',
     reuseExistingServer: false,
     timeout: 120000,
-  } : undefined,
+  },
   use: {
-    baseURL: process.env.PLAYWRIGHT_BASE_URL || 'http://localhost:8000',
+    baseURL: process.env.PLAYWRIGHT_BASE_URL || 'http://127.0.0.1:8002',
     trace: 'on',
     screenshot: 'on',
   },

@@ -13,7 +13,7 @@ test.describe('Service Worker Resiliency', () => {
 
         // Force the SW to lose its port by simulating a BroadcastChannel event
         await page.evaluate(async () => {
-            const { createRecoveryRequestMessage } = await import('/protocol/index.js');
+            const { createRecoveryRequestMessage } = await import('/protocol/messages.js');
             const bc = new BroadcastChannel('sw-recovery');
             bc.postMessage(createRecoveryRequestMessage());
         });

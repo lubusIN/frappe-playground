@@ -11,13 +11,13 @@ Run the Frappe Framework in the browser with Pyodide and WebAssembly. The playgr
 
 ## Overview
 
-The playground has four main pieces:
+The playground has five main pieces:
 
-1. **Vue shell (`src/`)**: Renders the loading screen, top bar, and Frappe Desk iframe. `src/playground/` owns runtime lifecycle, session identity, and iframe navigation independently of the Vue components. Vite builds the client into `dist/frontend/`.
-2. **Service Worker (`service-worker/src/`)**: A small event entry point delegates scoped routing, caching, instance registration, Socket.IO compatibility, and Python backend proxying to independently testable modules.
-3. **Pyodide server (`playground-server/src/`)**: A small worker entry point composes the Pyodide loader, filesystem installer, IndexedDB persistence, database lifecycle, Python bridge, and serial WSGI request executor. Browser-specific Python sources in `runtime/python/` are converted into a build-time JavaScript text module.
+1. **Vue shell (`packages/client/`)**: Renders the loading screen, top bar, and Frappe Desk iframe. `packages/client/src/playground/` owns client configuration, runtime lifecycle, session identity, and iframe navigation independently of the Vue components. It depends on the shared protocol, never on server or Service Worker implementation modules. Vite emits the shell assets into `dist/frontend/`.
+2. **Service Worker (`packages/service-worker/`)**: A small event entry point delegates scoped routing, caching, instance registration, Socket.IO compatibility, and Python backend proxying to independently testable modules.
+3. **Pyodide server (`packages/server/`)**: A small worker entry point composes the Pyodide loader, filesystem installer, IndexedDB persistence, database lifecycle, Python bridge, and serial WSGI request executor. Browser-specific Python sources in `runtime/python/` are converted into a build-time JavaScript text module.
 4. **Shared protocol (`packages/protocol/`)**: Defines the versioned messages exchanged by the shell, Service Worker, and Pyodide server.
-5. **Runtime build (`Dockerfile.build`, `runtime/`, `scripts/build.sh`)**: Builds intermediate Frappe runtime artifacts into `artifacts/runtime/`. The application build assembles those artifacts and all authored browser sources into the clean `dist/` publish directory.
+5. **Runtime build (`runtime/`, `scripts/build.sh`)**: Keeps Python helpers, runtime configuration, the Dockerfile, and asset exporter together, and builds intermediate Frappe runtime artifacts into `artifacts/runtime/`. The application build assembles those artifacts and all authored browser sources into the clean `dist/` publish directory.
 
 The app must be served from `localhost` or HTTPS with cross-origin isolation headers:
 
@@ -28,13 +28,13 @@ Cross-Origin-Resource-Policy: same-origin
 Access-Control-Allow-Origin: *
 ```
 
-Vite sets these headers during local development and preview. Cloudflare Pages uses the authored `public/_headers` file copied into `dist/` during assembly.
+Vite sets these headers during local development and preview. Cloudflare Pages uses the authored `static/_headers` file copied into `dist/` during assembly.
 
 ### Default Credentials
 
 The playground preconfigures a streamlined authentication flow for instant experimentation:
 
-The login form is automatically prefilled with username `Administrator` and password `admin` via the Vue shell (`src/App.vue`).
+The login form is automatically prefilled with username `Administrator` and password `admin` via client-owned configuration in `packages/client/src/playground/config.js`.
 
 ## Getting Started
 
@@ -79,44 +79,45 @@ This rebuilds the runtime artifacts, builds the frontend shell into a clean `dis
 
 ```text
 frappe-playground/
-|-- src/                    # Vue shell source loaded by Vite
-|-- service-worker/src/     # Authored Service Worker source
-|-- playground-server/src/ # Authored Pyodide server source and configuration
-|-- packages/protocol/      # Versioned cross-context message contract
-|-- runtime/python/         # Authored browser-specific Python helpers and mocks
-|-- public/                 # Authored static hosting files only
+|-- packages/
+|   |-- client/             # Vue shell and browser orchestration
+|   |-- protocol/src/       # Versioned cross-context message contracts
+|   |-- service-worker/src/ # Service Worker routing and proxy modules
+|   `-- server/src/         # Pyodide server modules
+|-- runtime/
+|   |-- python/             # Authored Python bridge helpers and mocks
+|   |-- config/             # Python package and site configuration
+|   `-- build/              # Dockerfile and runtime asset exporter
+|-- static/                 # Authored static hosting files only
 |-- artifacts/runtime/      # Generated intermediate runtime artifacts
 |-- dist/                   # Generated deployable application
 |-- scripts/
 |   |-- build.sh            # Docker runtime build
 |   |-- check-limits.sh     # Asset size limit verification
 |   |-- deploy.sh           # Cloudflare Pages deployment
-|   |-- export-runtime-assets.py # Frappe asset exporter for build
 |   |-- prepare.sh          # Assembles runtime and authored files into dist/
 |   `-- prepare-deploy.sh   # Full deploy preparation flow
 |-- tests/
+|   |-- unit/               # Focused module tests
 |   |-- contract/           # Fast protocol and MessageChannel tests
 |   `-- e2e/                # Playwright browser flows
-|-- Dockerfile.build
 |-- vite.config.mjs
 `-- playwright.config.js
 ```
 
 `artifacts/` and `dist/` are generated and intentionally ignored by Git. Authored source files never live in either directory.
 
+Application code may import shared contracts from `packages/`, but applications must not import implementation modules from sibling applications. Build scripts are responsible for mapping authored application entry points to their stable public URLs in `dist/`.
+
 ## Testing
 
-The Playwright suite uses `http://localhost:8000` as its base URL. After assembling `dist/` with `npm run build` or `npm run deploy:prepare`, run the production preview before executing tests:
-
-```bash
-npm start
-```
-
-In another terminal:
+The Playwright suite starts and owns an isolated production preview at `http://127.0.0.1:8002`, so an existing development server cannot affect test results. After assembling `dist/` with `npm run build` or `npm run deploy:prepare`, run:
 
 ```bash
 npm run test
 ```
+
+Set `PLAYWRIGHT_BASE_URL` to test an explicitly managed server instead.
 
 The e2e tests cover boot, login, setup wizard completion, Desk stability, scoped reload behavior, and the mobile shell.
 
@@ -126,7 +127,7 @@ Run only the fast protocol contract tests with:
 npm run test:contract
 ```
 
-Validate runtime hashes, required publish files, worker imports, and source/output boundaries with:
+Validate runtime hashes, required publish files, absolute and relative worker imports, and source/output boundaries with:
 
 ```bash
 npm run verify:build

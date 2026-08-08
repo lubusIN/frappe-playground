@@ -5,28 +5,26 @@ import {
   createBackendRequest,
   createBackendResponse,
   readBackendResponse,
-} from '../../packages/protocol/src/index.js'
-import { createBackendProxy } from '../../service-worker/src/backend-proxy.js'
-import { RuntimeAssetCache, hashString } from '../../service-worker/src/cache.js'
-import { InstanceRegistry } from '../../service-worker/src/instance-registry.js'
+} from '../../packages/protocol/src/request.js'
+import { createBackendProxy } from '../../packages/service-worker/src/backend-proxy.js'
+import { RuntimeAssetCache, hashString } from '../../packages/service-worker/src/cache.js'
+import { InstanceRegistry } from '../../packages/service-worker/src/instance-registry.js'
 import {
+  handleSocketIoRequest,
   isDevelopmentPath,
+  isSocketIoPath,
   isStaticPath,
   queryWithoutScope,
   scopeFromUrl,
   scopeRedirectLocation,
   staticRequestUrl,
-} from '../../service-worker/src/routing.js'
-import {
-  handleSocketIoRequest,
-  isSocketIoPath,
-} from '../../service-worker/src/socket-io.js'
+} from '../../packages/service-worker/src/routing.js'
 
 test('routing scopes backend requests and remaps deploy-safe static assets', () => {
   const backendUrl = new URL('https://playground.test/api/method/ping?x=1&__scope=tab-1')
   assert.equal(scopeFromUrl(backendUrl), 'tab-1')
   assert.equal(queryWithoutScope(backendUrl), 'x=1')
-  assert.equal(isStaticPath('/protocol/index.js'), true)
+  assert.equal(isStaticPath('/protocol/messages.js'), true)
   assert.equal(isStaticPath('/service-worker/routing.js'), true)
   assert.equal(isDevelopmentPath('/@vite/client'), true)
 
@@ -57,6 +55,19 @@ test('instance registry owns client associations, readiness, and cleanup', async
   assert.deepEqual(registry.clearExcept('tab-1'), ['tab-2'])
   assert.equal(registry.scopeForClient('client-2'), null)
   assert.equal(registry.onlyActiveScope(), 'tab-1')
+
+  let availabilityClock = 0
+  const emptyRegistry = new InstanceRegistry()
+  const available = emptyRegistry.waitUntilAvailable({
+    timeoutMs: 10,
+    pollMs: 1,
+    now: () => availabilityClock,
+    sleep: async () => {
+      availabilityClock += 1
+      emptyRegistry.register('recovered', { name: 'port' }, 'client')
+    },
+  })
+  assert.equal(await available, true)
 
   let clock = 0
   const ready = registry.waitUntilReady('tab-1', {

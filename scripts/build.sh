@@ -13,7 +13,7 @@ echo "🛠️  Building compilation image..."
 docker build \
     --build-arg "FRAPPE_VERSION=${FRAPPE_VERSION}" \
     -t frappe-playground \
-    -f "${PROJECT_ROOT}/Dockerfile.build" \
+    -f "${PROJECT_ROOT}/runtime/build/Dockerfile" \
     "${PROJECT_ROOT}"
 
 echo "📦 Extracting compiled production runtime targets..."
