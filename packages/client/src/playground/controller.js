@@ -8,6 +8,8 @@ import {
 } from '../../../protocol/src/messages.js'
 import { getOrCreateInstanceSession } from './session.js'
 
+const CURRENT_SERVICE_WORKER_URL = '/sw.js?v=2'
+
 export const PlaygroundEventType = Object.freeze({
   PROGRESS: 'progress',
   READY: 'ready',
@@ -17,9 +19,11 @@ export const PlaygroundEventType = Object.freeze({
 export class PlaygroundController {
   constructor(options = {}) {
     this.options = {
-      serviceWorkerUrl: '/sw.js',
+      serviceWorkerUrl: CURRENT_SERVICE_WORKER_URL,
       serverWorkerUrl: '/worker.js',
+      serverWorkerVersion: '2',
       recoveryChannelName: 'sw-recovery',
+      serviceWorkerUpgradeTimeoutMs: 30000,
       readyDelayMs: 2000,
       ...options,
     }
@@ -78,9 +82,12 @@ export class PlaygroundController {
       })
 
       let isInitialLoad = !serviceWorker.controller
+      let isUpgradingLegacyWorker = !isInitialLoad
+        && !this.isExpectedServiceWorker(serviceWorker.controller)
       this.handleControllerChange = () => {
-        if (isInitialLoad) {
+        if (isInitialLoad || isUpgradingLegacyWorker) {
           isInitialLoad = false
+          isUpgradingLegacyWorker = false
         } else if (!this.disposed && !this.reloadingForServiceWorkerUpdate) {
           this.reloadingForServiceWorkerUpdate = true
           console.log('[Playground] Service Worker updated! Auto-reloading to apply changes...')
@@ -95,13 +102,15 @@ export class PlaygroundController {
       this.registration = registration
       await this.checkForServiceWorkerUpdate()
 
-      if (!serviceWorker.controller) {
-        const controllerReady = new Promise(resolve => {
-          serviceWorker.addEventListener('controllerchange', resolve, { once: true })
-        })
+      if (!serviceWorker.controller || !this.isExpectedServiceWorker(serviceWorker.controller)) {
+        const controllerReady = this.waitForExpectedServiceWorker(serviceWorker)
+        registration.waiting?.postMessage(createClaimClientsMessage())
         registration.active?.postMessage(createClaimClientsMessage())
-        this.progress(RuntimeStage.SERVICE_WORKER, 'active', 'Connecting service worker...')
-        await controllerReady
+        this.progress(RuntimeStage.SERVICE_WORKER, 'active', 'Updating service worker...')
+        const upgraded = await controllerReady
+        if (upgraded === false) {
+          throw new Error('The service worker update did not activate. Reload the page to retry.')
+        }
       }
 
       this.progress(RuntimeStage.SERVICE_WORKER, 'done', 'Service worker connected.')
@@ -118,7 +127,11 @@ export class PlaygroundController {
 
   createWorker() {
     const { id, freshSession } = this.session
-    const query = new URLSearchParams({ scope: id, fresh: String(freshSession) })
+    const query = new URLSearchParams({
+      v: this.options.serverWorkerVersion,
+      scope: id,
+      fresh: String(freshSession),
+    })
     this.worker = new this.environment.WorkerClass(
       `${this.options.serverWorkerUrl}?${query}`,
       { type: 'module' },
@@ -204,6 +217,32 @@ export class PlaygroundController {
       // A transient update failure must not prevent the active worker from booting.
       console.warn('[Playground] Service Worker update check failed.', error)
     }
+  }
+
+  isExpectedServiceWorker(worker) {
+    if (!worker?.scriptURL) return true
+    const baseUrl = this.environment.location?.href || 'http://localhost/'
+    return worker.scriptURL === new URL(this.options.serviceWorkerUrl, baseUrl).href
+  }
+
+  waitForExpectedServiceWorker(serviceWorker) {
+    return new Promise(resolve => {
+      let timeout
+      const finish = result => {
+        serviceWorker.removeEventListener('controllerchange', handleControllerChange)
+        this.environment.clearTimeoutFn(timeout)
+        resolve(result)
+      }
+      const handleControllerChange = () => {
+        if (this.isExpectedServiceWorker(serviceWorker.controller)) finish(true)
+      }
+
+      serviceWorker.addEventListener('controllerchange', handleControllerChange)
+      timeout = this.environment.setTimeoutFn(
+        () => finish(false),
+        this.options.serviceWorkerUpgradeTimeoutMs,
+      )
+    })
   }
 
   emitError(error) {

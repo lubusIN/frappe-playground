@@ -135,7 +135,7 @@ test('the controller owns lifecycle wiring and emits structured progress', async
   assert.deepEqual(await controller.start(), { id: 'instance-1', freshSession: true })
   assert.equal(serviceWorkerUpdateChecks, 1)
   assert.equal(FakeWorker.instance.options.type, 'module')
-  assert.match(FakeWorker.instance.url, /^\/worker\.js\?scope=instance-1&fresh=true$/)
+  assert.match(FakeWorker.instance.url, /^\/worker\.js\?v=2&scope=instance-1&fresh=true$/)
   assert.equal(serviceWorkerMessages[0][0].type, ProtocolMessageType.INIT_CHANNEL)
   assert.equal(workerMessages[0][0].type, ProtocolMessageType.INIT_CHANNEL)
 
@@ -150,4 +150,32 @@ test('the controller owns lifecycle wiring and emits structured progress', async
   controller.dispose()
   assert.equal(FakeWorker.instance.terminated, true)
   assert.equal(documentListeners.size, 0)
+})
+
+test('the controller waits for the versioned worker when a legacy worker controls the page', async () => {
+  const listeners = new Set()
+  const serviceWorker = {
+    controller: { scriptURL: 'http://localhost:5173/sw.js' },
+    addEventListener(type, listener) {
+      if (type === 'controllerchange') listeners.add(listener)
+    },
+    removeEventListener(type, listener) {
+      if (type === 'controllerchange') listeners.delete(listener)
+    },
+  }
+  const controller = new PlaygroundController({
+    location: { href: 'http://localhost:5173/' },
+    setTimeoutFn: callback => setTimeout(callback, 100),
+    clearTimeoutFn: clearTimeout,
+  })
+
+  assert.equal(controller.options.serviceWorkerUrl, '/sw.js?v=2')
+  assert.equal(controller.isExpectedServiceWorker(serviceWorker.controller), false)
+
+  const ready = controller.waitForExpectedServiceWorker(serviceWorker)
+  serviceWorker.controller = { scriptURL: 'http://localhost:5173/sw.js?v=2' }
+  for (const listener of [...listeners]) listener()
+
+  assert.equal(await ready, true)
+  assert.equal(listeners.size, 0)
 })
