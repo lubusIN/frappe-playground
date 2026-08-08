@@ -4,6 +4,13 @@ import IntroDialog from './components/IntroDialog.vue'
 import LoadingScreen from './components/LoadingScreen.vue'
 import TopBar from './components/TopBar.vue'
 import { SITE_CONFIG } from '../playground-server/src/config.js'
+import {
+  ProtocolMessageType,
+  createClaimClientsMessage,
+  createClearOtherInstancesMessage,
+  createInitChannelMessage,
+  isProtocolMessage,
+} from '../packages/protocol/src/index.js'
 
 const sessionKey = 'frappe_playground_instance_id'
 const ready = ref(false)
@@ -188,11 +195,13 @@ async function initPlayground() {
     }
   })
 
-  const swRegistration = await navigator.serviceWorker.register('/sw.js')
+  const swRegistration = await navigator.serviceWorker.register('/sw.js', {
+    type: 'module',
+  })
 
   if (!navigator.serviceWorker.controller) {
     if (swRegistration.active) {
-      swRegistration.active.postMessage({ type: 'CLAIM_CLIENTS' })
+      swRegistration.active.postMessage(createClaimClientsMessage())
     }
     
     setBootLog('Connecting service worker...')
@@ -216,17 +225,15 @@ async function initPlayground() {
       if (sw) {
         const channel = new MessageChannel()
         
-        sw.postMessage({ type: 'INIT_CHANNEL', scope: session.id }, [channel.port1])
+        sw.postMessage(createInitChannelMessage(session.id), [channel.port1])
         if (session.freshSession) {
-          sw.postMessage({ type: 'CLEAR_OTHER_INSTANCES', scope: session.id })
+          sw.postMessage(createClearOtherInstancesMessage(session.id))
         }
         
         pyWorker.postMessage(
-          {
-            type: 'INIT_CHANNEL',
+          createInitChannelMessage(session.id, {
             freshSession: session.freshSession,
-            scope: session.id,
-          },
+          }),
           [channel.port2],
         )
       }
@@ -243,7 +250,7 @@ async function initPlayground() {
 
   window.swRecoveryChannel = new BroadcastChannel('sw-recovery')
   window.swRecoveryChannel.onmessage = event => {
-    if (event.data?.type === 'REQUEST_INIT_CHANNEL') {
+    if (isProtocolMessage(event.data, ProtocolMessageType.RECOVERY_REQUEST)) {
       console.log("[Playground] SW requested channel re-init (via BroadcastChannel). Re-establishing...")
       setupChannel()
     }
@@ -257,12 +264,12 @@ async function initPlayground() {
   });
 
   pyWorker.onmessage = event => {
-    if (event.data?.type === 'LOG') {
-      setBootLog(event.data.message)
+    if (isProtocolMessage(event.data, ProtocolMessageType.RUNTIME_LOG)) {
+      setBootLog(event.data.payload.message)
       return
     }
 
-    if (event.data?.type === 'READY') {
+    if (isProtocolMessage(event.data, ProtocolMessageType.RUNTIME_READY)) {
       updateStep(4, 'done')
       setTimeout(() => {
         ready.value = true
@@ -273,10 +280,10 @@ async function initPlayground() {
       return
     }
 
-    if (event.data?.type === 'ERROR') {
+    if (isProtocolMessage(event.data, ProtocolMessageType.RUNTIME_ERROR)) {
       ready.value = false
       booting.value = false
-      setBootLog(event.data.message)
+      setBootLog(event.data.payload.message)
     }
   }
 

@@ -16,7 +16,8 @@ The playground has four main pieces:
 1. **Vue shell (`src/`)**: Renders the loading screen, top bar, and Frappe Desk iframe. Vite builds it into `dist/frontend/`.
 2. **Service Worker (`service-worker/src/`)**: Intercepts scoped browser requests, serves static files, mocks Socket.IO enough for Desk to settle, and forwards backend requests to the active Python worker.
 3. **Pyodide server (`playground-server/src/`)**: Loads Pyodide, installs Python packages, mounts the Frappe runtime archive and starter SQLite database, applies browser-specific mocks, and handles WSGI requests.
-4. **Runtime build (`Dockerfile.build`, `runtime/`, `scripts/build.sh`)**: Builds intermediate Frappe runtime artifacts into `artifacts/runtime/`. The application build assembles those artifacts and all authored browser sources into the clean `dist/` publish directory.
+4. **Shared protocol (`packages/protocol/`)**: Defines the versioned messages exchanged by the shell, Service Worker, and Pyodide server.
+5. **Runtime build (`Dockerfile.build`, `runtime/`, `scripts/build.sh`)**: Builds intermediate Frappe runtime artifacts into `artifacts/runtime/`. The application build assembles those artifacts and all authored browser sources into the clean `dist/` publish directory.
 
 The app must be served from `localhost` or HTTPS with cross-origin isolation headers:
 
@@ -81,6 +82,7 @@ frappe-playground/
 |-- src/                    # Vue shell source loaded by Vite
 |-- service-worker/src/     # Authored Service Worker source
 |-- playground-server/src/ # Authored Pyodide server source and configuration
+|-- packages/protocol/      # Versioned cross-context message contract
 |-- runtime/python/         # Authored browser-specific Python helpers and mocks
 |-- public/                 # Authored static hosting files only
 |-- artifacts/runtime/      # Generated intermediate runtime artifacts
@@ -93,6 +95,7 @@ frappe-playground/
 |   |-- prepare.sh          # Assembles runtime and authored files into dist/
 |   `-- prepare-deploy.sh   # Full deploy preparation flow
 |-- tests/
+|   |-- contract/           # Fast protocol and MessageChannel tests
 |   `-- e2e/                # Playwright browser flows
 |-- Dockerfile.build
 |-- vite.config.mjs
@@ -116,6 +119,12 @@ npm run test
 ```
 
 The e2e tests cover boot, login, setup wizard completion, Desk stability, scoped reload behavior, and the mobile shell.
+
+Run only the fast protocol contract tests with:
+
+```bash
+npm run test:contract
+```
 
 ## Deployment
 

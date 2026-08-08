@@ -10,6 +10,7 @@ DIST_DIR="${PROJECT_ROOT}/dist"
 SERVER_SOURCE_DIR="${PROJECT_ROOT}/playground-server/src"
 SERVICE_WORKER_SOURCE_DIR="${PROJECT_ROOT}/service-worker/src"
 PYTHON_SOURCE_DIR="${PROJECT_ROOT}/runtime/python"
+PROTOCOL_SOURCE_DIR="${PROJECT_ROOT}/packages/protocol/src"
 
 if [ ! -f "${DIST_DIR}/index.html" ]; then
     echo "Missing client build: ${DIST_DIR}/index.html" >&2
@@ -21,9 +22,9 @@ if [ ! -f "${RUNTIME_ARTIFACTS_DIR}/manifest.json" ]; then
     exit 1
 fi
 
-rm -rf "${DIST_DIR}/assets" "${DIST_DIR}/storage" "${DIST_DIR}/python"
+rm -rf "${DIST_DIR}/assets" "${DIST_DIR}/storage" "${DIST_DIR}/python" "${DIST_DIR}/protocol"
 rm -f "${DIST_DIR}/sw.js" "${DIST_DIR}/worker.js" "${DIST_DIR}/config.js"
-mkdir -p "${DIST_DIR}/storage" "${DIST_DIR}/python"
+mkdir -p "${DIST_DIR}/storage" "${DIST_DIR}/python" "${DIST_DIR}/protocol"
 
 # Runtime files are fetched by the Web Worker from /storage, excluding assets.
 find "${RUNTIME_ARTIFACTS_DIR}" -mindepth 1 -maxdepth 1 ! -name assets -exec cp -R {} "${DIST_DIR}/storage/" \;
@@ -35,6 +36,7 @@ cp -R "${RUNTIME_ARTIFACTS_DIR}/assets" "${DIST_DIR}/assets"
 cp "${SERVICE_WORKER_SOURCE_DIR}/sw.js" "${DIST_DIR}/sw.js"
 cp "${SERVER_SOURCE_DIR}/worker.js" "${SERVER_SOURCE_DIR}/config.js" "${DIST_DIR}/"
 cp "${PYTHON_SOURCE_DIR}/frappe_mocks.py" "${PYTHON_SOURCE_DIR}/wsgi_server.py" "${DIST_DIR}/python/"
+cp "${PROTOCOL_SOURCE_DIR}/index.js" "${DIST_DIR}/protocol/index.js"
 
 # Static hosting metadata is authored input, never a build destination.
 cp "${PROJECT_ROOT}/public/_headers" "${PROJECT_ROOT}/public/_redirects" "${PROJECT_ROOT}/public/favicon.ico" "${DIST_DIR}/"

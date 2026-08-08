@@ -1,6 +1,13 @@
 // ──────────────────────────────────────────────────────────────────────────────
 // Frappe Playground — Service Worker (Network Request Interceptor)
 // ──────────────────────────────────────────────────────────────────────────────
+import {
+    ProtocolMessageType,
+    createBackendRequest,
+    createRecoveryRequestMessage,
+    isProtocolMessage,
+    readBackendResponse,
+} from "/protocol/index.js";
 
 self.addEventListener("install", () => self.skipWaiting());
 self.addEventListener("activate", (event) => event.waitUntil(clients.claim()));
@@ -10,7 +17,7 @@ self.addEventListener("activate", (event) => event.waitUntil(clients.claim()));
 const instances = new Map();
 const clientScopes = new Map();
 const STATIC_PATHS = new Set(["/worker.js", "/config.js", "/sw.js"]);
-const STATIC_PATH_PREFIXES = ["/storage", "/assets", "/pyodide", "/python"];
+const STATIC_PATH_PREFIXES = ["/storage", "/assets", "/pyodide", "/python", "/protocol"];
 const NODE_MODULES_ASSET_PREFIX = "/assets/frappe/node_modules/";
 const DEPLOY_SAFE_NODE_MODULES_ASSET_PREFIX = "/assets/frappe/runtime_modules/";
 const BACKEND_READY_TIMEOUT_MS = 90000;
@@ -116,8 +123,8 @@ function remapStaticPath(pathname) {
 }
 
 self.addEventListener("message", (event) => {
-    if (event.data && event.data.type === "CLEAR_OTHER_INSTANCES") {
-        const keepScope = event.data.scope;
+    if (isProtocolMessage(event.data, ProtocolMessageType.CLEAR_OTHER_INSTANCES)) {
+        const keepScope = event.data.payload.scope;
         for (const scope of instances.keys()) {
             if (scope !== keepScope) {
                 instances.delete(scope);
@@ -127,13 +134,13 @@ self.addEventListener("message", (event) => {
         return;
     }
     
-    if (event.data && event.data.type === "CLAIM_CLIENTS") {
+    if (isProtocolMessage(event.data, ProtocolMessageType.CLAIM_CLIENTS)) {
         self.clients.claim();
         return;
     }
 
-    if (event.data && event.data.type === "INIT_CHANNEL") {
-        const scope = event.data.scope;
+    if (isProtocolMessage(event.data, ProtocolMessageType.INIT_CHANNEL)) {
+        const scope = event.data.payload.scope;
         const clientId = event.source ? event.source.id : event.data.clientId;
         const instance = {
             port: event.ports[0],
@@ -146,7 +153,7 @@ self.addEventListener("message", (event) => {
         if (clientId) clientScopes.set(clientId, scope);
 
         instance.port.onmessage = (msgEvent) => {
-            if (msgEvent.data.type === "READY") {
+            if (isProtocolMessage(msgEvent.data, ProtocolMessageType.RUNTIME_READY)) {
                 console.log(`[SW] Received READY from worker: ${scope}`);
                 instance.ready = true;
             }
@@ -233,7 +240,7 @@ async function handleFetch(event) {
     if (instances.size === 0) {
         console.log("[SW] Instances empty! Broadcasting REQUEST_INIT_CHANNEL via BroadcastChannel...");
         const channel = new BroadcastChannel('sw-recovery');
-        channel.postMessage({ type: 'REQUEST_INIT_CHANNEL' });
+        channel.postMessage(createRecoveryRequestMessage());
         
         // Wait gracefully until instance is recovered (no timeout, so inactive tabs don't crash requests)
         while (instances.size === 0) {
@@ -285,7 +292,7 @@ async function callPythonHandler(req, scope, requestPath, query) {
         return new Response("Service Worker not fully initialized for this tab", { status: 503 });
     }
 
-    const payload = {
+    const request = {
         method: req.method,
         path: requestPath,
         query,
@@ -293,14 +300,16 @@ async function callPythonHandler(req, scope, requestPath, query) {
     };
 
     if (req.method !== "GET" && req.method !== "HEAD") {
-        payload.body = await req.arrayBuffer();
+        request.body = await req.arrayBuffer();
     }
+
+    const payload = createBackendRequest(request);
 
     return new Promise((resolve) => {
         const channel = new MessageChannel();
 
         channel.port1.onmessage = (msgEvent) => {
-            const { status, headers, body } = msgEvent.data;
+            const { status, headers, body } = readBackendResponse(msgEvent.data);
             const resHeaders = new Headers(headers);
 
             // Isolation headers required for iframe navigation under parent's COEP: require-corp

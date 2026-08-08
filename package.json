@@ -11,7 +11,8 @@
     "deploy:prepare": "bash scripts/prepare-deploy.sh",
     "predeploy": "npm run deploy:prepare",
     "deploy": "bash scripts/deploy.sh",
-    "test": "npm run test:e2e",
+    "test": "npm run test:contract && npm run test:e2e",
+    "test:contract": "node --test tests/contract/*.test.mjs",
     "test:e2e": "playwright test tests/e2e --project=chromium --project=webkit"
   },
   "devDependencies": {

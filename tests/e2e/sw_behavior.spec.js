@@ -12,9 +12,10 @@ test.describe('Service Worker Resiliency', () => {
         const { instanceId } = await waitForPlaygroundBoot(page);
 
         // Force the SW to lose its port by simulating a BroadcastChannel event
-        await page.evaluate(() => {
+        await page.evaluate(async () => {
+            const { createRecoveryRequestMessage } = await import('/protocol/index.js');
             const bc = new BroadcastChannel('sw-recovery');
-            bc.postMessage({ type: 'REQUEST_INIT_CHANNEL' });
+            bc.postMessage(createRecoveryRequestMessage());
         });
 
         // Wait a beat for the App.vue listener to handle it
