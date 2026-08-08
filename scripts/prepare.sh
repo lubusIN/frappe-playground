@@ -22,9 +22,9 @@ if [ ! -f "${RUNTIME_ARTIFACTS_DIR}/manifest.json" ]; then
     exit 1
 fi
 
-rm -rf "${DIST_DIR}/assets" "${DIST_DIR}/storage" "${DIST_DIR}/python" "${DIST_DIR}/protocol"
+rm -rf "${DIST_DIR}/assets" "${DIST_DIR}/storage" "${DIST_DIR}/python" "${DIST_DIR}/protocol" "${DIST_DIR}/service-worker"
 rm -f "${DIST_DIR}/sw.js" "${DIST_DIR}/worker.js" "${DIST_DIR}/config.js"
-mkdir -p "${DIST_DIR}/storage" "${DIST_DIR}/python" "${DIST_DIR}/protocol"
+mkdir -p "${DIST_DIR}/storage" "${DIST_DIR}/python" "${DIST_DIR}/protocol" "${DIST_DIR}/service-worker"
 
 # Runtime files are fetched by the Web Worker from /storage, excluding assets.
 find "${RUNTIME_ARTIFACTS_DIR}" -mindepth 1 -maxdepth 1 ! -name assets -exec cp -R {} "${DIST_DIR}/storage/" \;
@@ -34,6 +34,12 @@ cp -R "${RUNTIME_ARTIFACTS_DIR}/assets" "${DIST_DIR}/assets"
 
 # Authored browser runtime sources retain their stable public URLs.
 cp "${SERVICE_WORKER_SOURCE_DIR}/sw.js" "${DIST_DIR}/sw.js"
+cp "${SERVICE_WORKER_SOURCE_DIR}/backend-proxy.js" \
+   "${SERVICE_WORKER_SOURCE_DIR}/cache.js" \
+   "${SERVICE_WORKER_SOURCE_DIR}/instance-registry.js" \
+   "${SERVICE_WORKER_SOURCE_DIR}/routing.js" \
+   "${SERVICE_WORKER_SOURCE_DIR}/socket-io.js" \
+   "${DIST_DIR}/service-worker/"
 cp "${SERVER_SOURCE_DIR}/worker.js" "${SERVER_SOURCE_DIR}/config.js" "${DIST_DIR}/"
 cp "${PYTHON_SOURCE_DIR}/frappe_mocks.py" "${PYTHON_SOURCE_DIR}/wsgi_server.py" "${DIST_DIR}/python/"
 cp "${PROTOCOL_SOURCE_DIR}/index.js" "${DIST_DIR}/protocol/index.js"

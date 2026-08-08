@@ -31,6 +31,7 @@ const exactDevFiles = new Map([
 const prefixedDevFiles = [
   ['/python/', pythonSourceDir],
   ['/protocol/', protocolSourceDir],
+  ['/service-worker/', serviceWorkerSourceDir],
   ['/storage/', runtimeArtifactsDir],
   ['/assets/', path.join(runtimeArtifactsDir, 'assets')],
 ]
