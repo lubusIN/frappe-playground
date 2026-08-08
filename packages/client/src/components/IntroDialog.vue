@@ -1,17 +1,14 @@
 <template>
   <Dialog
-    :model-value="modelValue"
-    :options="{ size: 'md', title: dialogTitle }"
-    @update:model-value="$emit('update:modelValue', $event)"
+    :open="modelValue"
+    size="md"
+    :title="dialogTitle"
+    :message="dialogDescription"
+    @update:open="$emit('update:modelValue', $event)"
   >
-    <template #body>
-      <div class="p-5 text-left text-gray-900 dark:text-gray-100">
-        <h2 class="m-0 text-lg font-bold text-gray-900 dark:text-gray-100">{{ dialogTitle }}</h2>
-        <p class="m-0 mt-2 text-sm leading-6 text-gray-600 dark:text-gray-400">
-          This playground runs entirely in your browser. Changes made here are temporary and will be lost when this tab
-          is closed or reloaded.
-        </p>
-        <div v-if="LOGIN_DEMO.prefill" class="mt-4 rounded-md border border-gray-200 bg-gray-50 p-3 text-sm leading-5 text-gray-600">
+    <template #actions>
+      <div class="w-full text-left text-gray-900 dark:text-gray-100">
+        <div v-if="LOGIN_DEMO.prefill" class="rounded-md border border-gray-200 bg-gray-50 p-3 text-sm leading-5 text-gray-600">
           <span class="font-medium text-gray-900 dark:text-gray-100">Default Credentials:</span>
           <div class="mt-2 flex items-start gap-2">
             <Badge variant="outline" theme="blue" size="lg" class="font-mono">
@@ -45,6 +42,8 @@ import { User, Key } from '@lucide/vue'
 import { LOGIN_DEMO } from '../playground/config.js'
 
 const dialogTitle = 'Experimental Playground'
+const dialogDescription =
+  'This playground runs entirely in your browser. Changes made here are temporary and will be lost when this tab is closed or reloaded.'
 
 defineProps({
   modelValue: {
