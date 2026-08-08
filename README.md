@@ -13,7 +13,7 @@ Run the Frappe Framework in the browser with Pyodide and WebAssembly. The playgr
 
 The playground has four main pieces:
 
-1. **Vue shell (`src/`)**: Renders the loading screen, top bar, and Frappe Desk iframe. Vite builds it into `dist/frontend/`.
+1. **Vue shell (`src/`)**: Renders the loading screen, top bar, and Frappe Desk iframe. `src/playground/` owns runtime lifecycle, session identity, and iframe navigation independently of the Vue components. Vite builds the client into `dist/frontend/`.
 2. **Service Worker (`service-worker/src/`)**: Intercepts scoped browser requests, serves static files, mocks Socket.IO enough for Desk to settle, and forwards backend requests to the active Python worker.
 3. **Pyodide server (`playground-server/src/`)**: Loads Pyodide, installs Python packages, mounts the Frappe runtime archive and starter SQLite database, applies browser-specific mocks, and handles WSGI requests.
 4. **Shared protocol (`packages/protocol/`)**: Defines the versioned messages exchanged by the shell, Service Worker, and Pyodide server.

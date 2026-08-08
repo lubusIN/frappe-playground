@@ -4,13 +4,14 @@
 import { PYTHON_PACKAGES, BENCH_DIRECTORIES, SITE_CONFIG } from "./config.js";
 import {
     ProtocolMessageType,
+    RuntimeStage,
     createBackendResponse,
     createRuntimeErrorMessage,
     createRuntimeLogMessage,
     createRuntimeReadyMessage,
     isProtocolMessage,
     readBackendRequest,
-} from "/protocol/index.js";
+} from "/protocol/index.js?v=2";
 
 function hashString(str) {
     let hash = 5381;
@@ -64,8 +65,8 @@ const STATIC_SITE_FILES = {
     [`${SITE_ROOT}/${SITE_NAME}/site_config.json`]: JSON.stringify(SITE_CONFIG),
 };
 
-function logRuntime(message) {
-    self.postMessage(createRuntimeLogMessage(message));
+function logRuntime(message, stage, status = "active") {
+    self.postMessage(createRuntimeLogMessage(message, stage, status));
 }
 
 // ─── Custom IndexedDB Persistence ──────────────────────────────────
@@ -276,13 +277,13 @@ async function bootPython() {
     await fetchAndMountFilesystem();
     await configureFrappeEnvironment();
     
-    logRuntime("Frappe booted successfully!");
+    logRuntime("Frappe booted successfully!", RuntimeStage.FRAPPE, "done");
     console.log("[WORKER] bootPython complete. Sending READY to main thread.");
     self.postMessage(createRuntimeReadyMessage());
 }
 
 async function initPyodideAndPackages() {
-    logRuntime("Loading Pyodide...");
+    logRuntime("Loading Pyodide...", RuntimeStage.PYTHON);
     await loadPyodideLoaderFromCdn();
     pyodide = await loadPyodide({ indexURL: PYODIDE_BASE_URL });
 
@@ -294,10 +295,10 @@ async function initPyodideAndPackages() {
         warnings.filterwarnings("ignore", category=DeprecationWarning)
     `);
 
-    logRuntime("Loading core packages...");
+    logRuntime("Loading core packages...", RuntimeStage.PYTHON);
     await pyodide.loadPackage(["micropip", "cryptography", "tzdata"]);
 
-    logRuntime("Installing Python dependencies...");
+    logRuntime("Installing Python dependencies...", RuntimeStage.PYTHON);
     const micropip = pyodide.pyimport("micropip");
     await micropip.install(PYTHON_PACKAGES, { keep_going: true });
 }
@@ -320,14 +321,14 @@ async function loadPyodideLoaderFromCdn() {
 }
 
 async function fetchAndMountFilesystem() {
-    logRuntime("Fetching Frappe runtime...");
+    logRuntime("Fetching Frappe runtime...", RuntimeStage.RUNTIME);
     
     // First, fetch the current robust hash
     const res = await fetch(`${ASSETS_ENDPOINT}/assets.json?t=${Date.now()}`);
     const assetsText = await res.text();
     const currentHash = hashString(assetsText);
     
-    logRuntime("Mounting virtual filesystem...");
+    logRuntime("Mounting virtual filesystem...", RuntimeStage.RUNTIME);
     pyodide.FS.mkdir("/home/pyodide/frappe_env");
     pyodide.FS.mount(pyodide.FS.filesystems.IDBFS, {}, "/home/pyodide/frappe_env");
     
@@ -341,7 +342,7 @@ async function fetchAndMountFilesystem() {
         const cachedHash = pyodide.FS.readFile("/home/pyodide/frappe_env/version.txt", { encoding: "utf8" });
         if (cachedHash === currentHash) {
             needsExtract = false;
-            logRuntime("Restored virtual environment from IDBFS!");
+            logRuntime("Restored virtual environment from IDBFS!", RuntimeStage.RUNTIME);
             console.log("[Worker] Restored virtual environment from IDBFS. Skipping extraction.");
         } else {
             console.log(`[Worker] Hash mismatch! Cached: ${cachedHash}, Current: ${currentHash}`);
@@ -351,7 +352,7 @@ async function fetchAndMountFilesystem() {
     }
     
     if (needsExtract) {
-        logRuntime("Extracting fresh virtual filesystem...");
+        logRuntime("Extracting fresh virtual filesystem...", RuntimeStage.RUNTIME);
         const codeArr = await fetchBinary(`${STORAGE_ENDPOINT}/frappe_runtime.tar.gz`);
         pyodide.unpackArchive(codeArr, "gztar", { extractDir: "/home/pyodide/frappe_env" });
         
@@ -372,14 +373,14 @@ async function fetchAndMountFilesystem() {
     let dataLoaded = false;
     
     if (!isFreshSession) {
-        logRuntime("Restoring isolated database...");
+        logRuntime("Restoring isolated database...", RuntimeStage.DATABASE);
         console.time("loadStateFromIDB");
         dataLoaded = await loadStateFromIDB(SITE_DB_PATH);
         console.timeEnd("loadStateFromIDB");
     }
     
     if (isFreshSession || !dataLoaded) {
-        logRuntime("Seeding fresh database...");
+        logRuntime("Seeding fresh database...", RuntimeStage.DATABASE);
         const dbArr = await fetchBinary(`${STORAGE_ENDPOINT}/site1.db`);
         pyodide.FS.writeFile(SITE_DB_PATH, dbArr);
 
@@ -402,7 +403,7 @@ async function fetchAndMountFilesystem() {
 }
 
 async function configureFrappeEnvironment() {
-    logRuntime("Configuring Python environment...");
+    logRuntime("Configuring Python environment...", RuntimeStage.FRAPPE);
     
     const [mocksRes, wsgiRes] = await Promise.all([
         fetchOk("/python/frappe_mocks.py"),

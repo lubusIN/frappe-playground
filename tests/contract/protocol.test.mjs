@@ -5,6 +5,7 @@ import test from 'node:test'
 import {
   PROTOCOL_VERSION,
   ProtocolMessageType,
+  RuntimeStage,
   assertProtocolMessage,
   createBackendRequest,
   createBackendResponse,
@@ -22,7 +23,7 @@ test('control and runtime messages use the current protocol version', () => {
   const messages = [
     createInitChannelMessage('instance-1', { freshSession: true }),
     createClearOtherInstancesMessage('instance-1'),
-    createRuntimeLogMessage('Loading Pyodide...'),
+    createRuntimeLogMessage('Loading Pyodide...', RuntimeStage.PYTHON),
     createRuntimeReadyMessage(),
     createRuntimeErrorMessage('Boot failed'),
   ]
@@ -43,7 +44,7 @@ test('messages from another or missing protocol version are rejected', () => {
   )
   assert.throws(
     () => assertProtocolMessage({ protocolVersion: 99, type: ProtocolMessageType.RUNTIME_READY }),
-    /Expected protocol v1/,
+    new RegExp(`Expected protocol v${PROTOCOL_VERSION}`),
   )
 })
 
@@ -85,9 +86,12 @@ test('backend responses validate HTTP status codes', () => {
 test('protocol envelopes survive a MessageChannel structured clone', async () => {
   const channel = new MessageChannel()
   const received = new Promise(resolve => channel.port2.once('message', resolve))
-  channel.port1.postMessage(createRuntimeLogMessage('Starting Frappe'))
+  channel.port1.postMessage(createRuntimeLogMessage('Starting Frappe', RuntimeStage.FRAPPE))
 
-  assert.deepEqual(await received, createRuntimeLogMessage('Starting Frappe'))
+  assert.deepEqual(
+    await received,
+    createRuntimeLogMessage('Starting Frappe', RuntimeStage.FRAPPE),
+  )
   channel.port1.close()
   channel.port2.close()
 })

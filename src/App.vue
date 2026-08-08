@@ -1,18 +1,20 @@
 <script setup>
-import { nextTick, onBeforeUnmount, ref } from 'vue'
+import { nextTick, onBeforeUnmount, onMounted, ref } from 'vue'
+import { RuntimeStage } from '../packages/protocol/src/index.js'
+import { SITE_CONFIG } from '../playground-server/src/config.js'
 import IntroDialog from './components/IntroDialog.vue'
 import LoadingScreen from './components/LoadingScreen.vue'
 import TopBar from './components/TopBar.vue'
-import { SITE_CONFIG } from '../playground-server/src/config.js'
 import {
-  ProtocolMessageType,
-  createClaimClientsMessage,
-  createClearOtherInstancesMessage,
-  createInitChannelMessage,
-  isProtocolMessage,
-} from '../packages/protocol/src/index.js'
+  PlaygroundEventType,
+  createPlayground,
+} from './playground/controller.js'
+import {
+  normalizeAddress,
+  scopedFrameUrl,
+  stripScope,
+} from './playground/iframe-navigation.js'
 
-const sessionKey = 'frappe_playground_instance_id'
 const ready = ref(false)
 const booting = ref(false)
 const bootSteps = ref([
@@ -22,6 +24,13 @@ const bootSteps = ref([
   { label: 'Initializing Database', status: 'pending', startTime: null, elapsed: null },
   { label: 'Starting Frappe', status: 'pending', startTime: null, elapsed: null },
 ])
+const stageIndexes = new Map([
+  [RuntimeStage.SERVICE_WORKER, 0],
+  [RuntimeStage.PYTHON, 1],
+  [RuntimeStage.RUNTIME, 2],
+  [RuntimeStage.DATABASE, 3],
+  [RuntimeStage.FRAPPE, 4],
+])
 const address = ref('/')
 const frameSrc = ref('')
 const iframeRef = ref(null)
@@ -29,23 +38,8 @@ const instanceId = ref('')
 const showIntroDialog = ref(true)
 
 let addressTimer = 0
-let pyWorker = null
+let playground = null
 let hasPrefilledLogin = false
-
-
-function getOrCreateInstanceId() {
-  let id = localStorage.getItem(sessionKey)
-  const freshSession = !id
-
-  if (!id) {
-    id = crypto.randomUUID
-      ? crypto.randomUUID()
-      : `${Date.now()}-${Math.random().toString(16).slice(2)}`
-    localStorage.setItem(sessionKey, id)
-  }
-
-  return { id, freshSession }
-}
 
 function updateStep(index, status) {
   const now = performance.now()
@@ -62,82 +56,46 @@ function updateStep(index, status) {
   if (step.status !== 'done' || status === 'done') {
     if (status === 'active' && step.status !== 'active') {
       step.startTime = now
-    } else if (status === 'done' && step.status !== 'done') {
-      if (step.startTime) {
-        step.elapsed = now - step.startTime
-      }
+    } else if (status === 'done' && step.status !== 'done' && step.startTime) {
+      step.elapsed = now - step.startTime
     }
     step.status = status
   }
 }
 
-function setBootLog(message) {
-  if (!message) return
-  const m = message.toLowerCase()
-  if (m.includes('service worker')) {
-    updateStep(0, 'active')
-  } else if (m.includes('configuring python') || m.includes('frappe booted')) {
-    updateStep(4, 'active')
-    if (m.includes('booted successfully')) updateStep(4, 'done')
-  } else if (m.includes('pyodide') || m.includes('python') || m.includes('core packages')) {
-    updateStep(1, 'active')
-  } else if (m.includes('fetching frappe') || m.includes('virtual filesystem')) {
-    updateStep(2, 'active')
-  } else if (m.includes('database')) {
-    updateStep(3, 'active')
-  }
+function handleProgress({ stage, status }) {
+  const index = stageIndexes.get(stage)
+  if (index !== undefined) updateStep(index, status)
 }
 
-function normalizeAddress(value) {
-  const trimmed = String(value || '/').trim()
-  if (!trimmed) return '/'
-
-  try {
-    const parsed = new URL(trimmed, window.location.origin)
-    return `${parsed.pathname || '/'}${parsed.search}${parsed.hash}`
-  } catch (_) {
-    return trimmed.startsWith('/') ? trimmed : `/${trimmed}`
-  }
-}
-
-function stripScope(value) {
-  const parsed = new URL(value, window.location.origin)
-  parsed.searchParams.delete('__scope')
-  const search = parsed.searchParams.toString()
-  return `${parsed.pathname || '/'}${search ? `?${search}` : ''}${parsed.hash}`
-}
-
-function scopedFrameUrl(value) {
-  const parsed = new URL(normalizeAddress(value), window.location.origin)
-  parsed.searchParams.set('__scope', instanceId.value)
-  return `${parsed.pathname}${parsed.search}${parsed.hash}`
+function frameUrl(value) {
+  return scopedFrameUrl(value, instanceId.value)
 }
 
 function prefillLoginIfApplicable() {
   if (hasPrefilledLogin || !SITE_CONFIG.prefill_login_credentials) return
 
   try {
-    const win = iframeRef.value?.contentWindow
-    const doc = win?.document
+    const doc = iframeRef.value?.contentWindow?.document
     if (!doc) return
 
     const usr = doc.querySelector('#login_email')
     const pwd = doc.querySelector('#login_password')
     if (usr && pwd) {
       hasPrefilledLogin = true
-      
+
       usr.value = SITE_CONFIG.prefill_login_user
       usr.setAttribute('value', SITE_CONFIG.prefill_login_user)
       usr.dispatchEvent(new Event('input', { bubbles: true }))
       usr.dispatchEvent(new Event('change', { bubbles: true }))
-      
+
       pwd.value = SITE_CONFIG.prefill_login_pwd
       pwd.setAttribute('value', SITE_CONFIG.prefill_login_pwd)
       pwd.dispatchEvent(new Event('input', { bubbles: true }))
       pwd.dispatchEvent(new Event('change', { bubbles: true }))
     }
   } catch (_) {
-    // ignore cross-origin or transient access errors
+    // Ignore cross-origin or transient access errors.
   }
 }
 
@@ -147,18 +105,18 @@ function syncAddressFromFrame() {
     if (href) address.value = stripScope(href)
     prefillLoginIfApplicable()
   } catch (_) {
-    // The playground is expected to be same-origin, but ignore transient frame swaps.
+    // The playground is expected to be same-origin, but frame swaps are transient.
   }
 }
 
 function startAddressSync() {
-  window.clearInterval(addressTimer)
-  addressTimer = window.setInterval(syncAddressFromFrame, 500)
+  clearInterval(addressTimer)
+  addressTimer = setInterval(syncAddressFromFrame, 500)
 }
 
 function navigateFrame() {
   if (!ready.value) return
-  frameSrc.value = scopedFrameUrl(normalizeAddress(address.value))
+  frameSrc.value = frameUrl(normalizeAddress(address.value))
   nextTick(syncAddressFromFrame)
 }
 
@@ -168,136 +126,39 @@ function reloadFrame() {
   try {
     iframeRef.value?.contentWindow?.location.reload()
   } catch (_) {
-    frameSrc.value = scopedFrameUrl(normalizeAddress(address.value))
+    frameSrc.value = frameUrl(normalizeAddress(address.value))
   }
 }
 
 async function initPlayground() {
-  if (!('serviceWorker' in navigator)) {
-    setBootLog('Service workers are unavailable in this browser.')
-    return
-  }
-
   booting.value = true
-  bootSteps.value[0].startTime = performance.now()
-  setBootLog('Starting service worker...')
-
-  const session = getOrCreateInstanceId()
-  instanceId.value = session.id
-
-  let isInitialLoad = !navigator.serviceWorker.controller
-  navigator.serviceWorker.addEventListener('controllerchange', () => {
-    if (isInitialLoad) {
-      isInitialLoad = false
-    } else {
-      console.log("[Playground] Service Worker updated! Auto-reloading to apply changes...")
-      window.location.reload()
-    }
-  })
-
-  const swRegistration = await navigator.serviceWorker.register('/sw.js', {
-    type: 'module',
-  })
-
-  if (!navigator.serviceWorker.controller) {
-    if (swRegistration.active) {
-      swRegistration.active.postMessage(createClaimClientsMessage())
-    }
-    
-    setBootLog('Connecting service worker...')
-    await new Promise(resolve => {
-      navigator.serviceWorker.addEventListener('controllerchange', resolve, {
-        once: true,
-      })
-    })
-  }
-
-  setBootLog(
-    swRegistration.active
-      ? 'Preparing Python runtime...'
-      : 'Activating service worker...',
-  )
-
-  pyWorker = new Worker(`/worker.js?scope=${session.id}&fresh=${session.freshSession}`, { type: 'module' })
-
-  function setupChannel() {
-    const sendInit = (sw) => {
-      if (sw) {
-        const channel = new MessageChannel()
-        
-        sw.postMessage(createInitChannelMessage(session.id), [channel.port1])
-        if (session.freshSession) {
-          sw.postMessage(createClearOtherInstancesMessage(session.id))
-        }
-        
-        pyWorker.postMessage(
-          createInitChannelMessage(session.id, {
-            freshSession: session.freshSession,
-          }),
-          [channel.port2],
-        )
-      }
-    }
-
-    if (navigator.serviceWorker.controller) {
-      sendInit(navigator.serviceWorker.controller)
-    } else {
-      navigator.serviceWorker.ready.then(reg => sendInit(reg.active))
-    }
-  }
-
-  setupChannel()
-
-  window.swRecoveryChannel = new BroadcastChannel('sw-recovery')
-  window.swRecoveryChannel.onmessage = event => {
-    if (isProtocolMessage(event.data, ProtocolMessageType.RECOVERY_REQUEST)) {
-      console.log("[Playground] SW requested channel re-init (via BroadcastChannel). Re-establishing...")
-      setupChannel()
-    }
-  }
-
-  document.addEventListener("visibilitychange", () => {
-    if (document.visibilityState === "visible") {
-      // Proactively ensure the SW is connected when the tab wakes up
-      setupChannel();
-    }
-  });
-
-  pyWorker.onmessage = event => {
-    if (isProtocolMessage(event.data, ProtocolMessageType.RUNTIME_LOG)) {
-      setBootLog(event.data.payload.message)
-      return
-    }
-
-    if (isProtocolMessage(event.data, ProtocolMessageType.RUNTIME_READY)) {
-      updateStep(4, 'done')
-      setTimeout(() => {
-        ready.value = true
-        booting.value = false
-        frameSrc.value = scopedFrameUrl('/')
-        startAddressSync()
-      }, 2000)
-      return
-    }
-
-    if (isProtocolMessage(event.data, ProtocolMessageType.RUNTIME_ERROR)) {
-      ready.value = false
-      booting.value = false
-      setBootLog(event.data.payload.message)
-    }
-  }
-
-  pyWorker.onerror = error => {
+  playground = createPlayground()
+  playground.on(PlaygroundEventType.PROGRESS, handleProgress)
+  playground.on(PlaygroundEventType.READY, ({ instanceId: id }) => {
+    instanceId.value = id
+    ready.value = true
     booting.value = false
-    setBootLog(error.message || 'Frappe runtime failed to start.')
+    frameSrc.value = frameUrl('/')
+    startAddressSync()
+  })
+  playground.on(PlaygroundEventType.ERROR, () => {
+    ready.value = false
+    booting.value = false
+  })
+
+  try {
+    const session = await playground.start()
+    instanceId.value = session.id
+  } catch (_) {
+    // The controller emits the user-facing error state.
   }
 }
 
-window.addEventListener('load', initPlayground, { once: true })
+onMounted(initPlayground)
 
 onBeforeUnmount(() => {
-  window.clearInterval(addressTimer)
-  pyWorker?.terminate()
+  clearInterval(addressTimer)
+  playground?.dispose()
 })
 </script>
 
@@ -318,9 +179,9 @@ onBeforeUnmount(() => {
       @reload="reloadFrame"
     />
 
-    <LoadingScreen 
-      v-show="!ready" 
-      :booting="booting" 
+    <LoadingScreen
+      v-show="!ready"
+      :booting="booting"
       :steps="bootSteps"
     />
 
