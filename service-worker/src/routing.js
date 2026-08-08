@@ -7,7 +7,8 @@ const STATIC_PATH_PREFIXES = [
   '/storage',
   '/assets',
   '/pyodide',
-  '/python',
+  '/generated',
+  '/playground-server',
   '/protocol',
   '/service-worker',
 ]

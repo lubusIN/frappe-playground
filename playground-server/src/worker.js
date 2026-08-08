@@ -1,505 +1,139 @@
-// ──────────────────────────────────────────────────────────────────────────────
-// Frappe Playground — Web Worker (Pyodide Runtime Sandbox)
-// ──────────────────────────────────────────────────────────────────────────────
-import { PYTHON_PACKAGES, BENCH_DIRECTORIES, SITE_CONFIG } from "./config.js";
+// Frappe Playground — Pyodide server worker entry point
+import { FRAPPE_MOCKS_SOURCE, WSGI_SERVER_SOURCE } from '/generated/python-sources.js?v=1'
 import {
-    ProtocolMessageType,
-    RuntimeStage,
-    createBackendResponse,
-    createRuntimeErrorMessage,
-    createRuntimeLogMessage,
-    createRuntimeReadyMessage,
-    isProtocolMessage,
-    readBackendRequest,
-} from "/protocol/index.js?v=2";
+  ProtocolMessageType,
+  RuntimeStage,
+  createBackendResponse,
+  createRuntimeErrorMessage,
+  createRuntimeLogMessage,
+  createRuntimeReadyMessage,
+  isProtocolMessage,
+  readBackendRequest,
+} from '/protocol/index.js?v=2'
+import { checkpointDatabase, initializeSiteDatabase } from '/playground-server/database.js?v=1'
+import {
+  installRuntimeFilesystem,
+  writeSiteFiles,
+} from '/playground-server/filesystem.js?v=1'
+import { BrowserStateStore } from '/playground-server/persistence.js?v=1'
+import { PythonBridge } from '/playground-server/python-bridge.js?v=1'
+import { SerialRequestExecutor } from '/playground-server/request-executor.js?v=1'
+import { initializePyodide } from '/playground-server/runtime-loader.js?v=1'
+import { BENCH_DIRECTORIES, PYTHON_PACKAGES, SITE_CONFIG } from './config.js'
 
-function hashString(str) {
-    let hash = 5381;
-    for (let i = 0; i < str.length; i++) {
-        hash = (hash * 33) ^ str.charCodeAt(i);
-    }
-    return (hash >>> 0).toString(16);
+const origin = self.location.origin
+const storageEndpoint = `${origin}/storage`
+const assetsEndpoint = `${origin}/assets`
+const environmentRoot = '/home/pyodide/frappe_env'
+const siteRoot = '/home/pyodide/bench/sites'
+const siteName = 'site1'
+const siteDbPath = `${siteRoot}/${siteName}/db/${siteName}.db`
+const assetsJsonPath = `${siteRoot}/assets/assets.json`
+const staticSiteFiles = {
+  [`${siteRoot}/apps.txt`]: 'frappe\n',
+  [`${siteRoot}/currentsite.txt`]: `${siteName}\n`,
+  [`${siteRoot}/${siteName}/site_config.json`]: JSON.stringify(SITE_CONFIG),
 }
 
-const PYODIDE_BASE_URL = "https://cdn.jsdelivr.net/pyodide/v314.0.0/full/";
+const urlParams = new URLSearchParams(self.location.search)
+const instanceScope = urlParams.get('scope') || 'default'
+let freshSession = urlParams.get('fresh') === 'true'
+let pyodide = null
+let bootPromise = null
 
-let pyodide;
-let fromServiceWorkerPort;
-const urlParams = new URLSearchParams(self.location.search);
-let isFreshSession = urlParams.get('fresh') === 'true';
-let instanceScope = urlParams.get('scope') || "default";
-let persistedCookieJarJson = null;
-let preloadedDbPromise = preloadDbFromIDB();
+const stateStore = new BrowserStateStore({
+  indexedDB,
+  scope: instanceScope,
+  getFs: () => pyodide.FS,
+})
 
-async function preloadDbFromIDB() {
-    try {
-        const db = await openIDB();
-        const tx = db.transaction("files", "readonly");
-        const store = tx.objectStore("files");
-        const siteDbReq = store.get("site1.db");
-        const cookieJarReq = store.get("cookie_jar.json");
-        const [siteDb, cookieJar] = await Promise.all([
-            requestToPromise(siteDbReq),
-            requestToPromise(cookieJarReq),
-        ]);
-        db.close();
-        return { siteDb, cookieJar };
-    } catch (err) {
-        console.warn("[Worker] Failed to preload state from IDB:", err);
-        return null;
-    }
+function logRuntime(message, stage, status = 'active') {
+  self.postMessage(createRuntimeLogMessage(message, stage, status))
 }
-
-// Static runtime files are served from /storage; browser assets are served from /assets.
-const ORIGIN = self.location.origin;
-const STORAGE_ENDPOINT = `${ORIGIN}/storage`;
-const ASSETS_ENDPOINT = `${ORIGIN}/assets`;
-const SITE_ROOT = "/home/pyodide/bench/sites";
-const SITE_NAME = "site1";
-const SITE_DB_DIR = `${SITE_ROOT}/${SITE_NAME}/db`;
-const SITE_DB_PATH = `${SITE_DB_DIR}/${SITE_NAME}.db`;
-const ASSETS_JSON_PATH = `${SITE_ROOT}/assets/assets.json`;
-const STATIC_SITE_FILES = {
-    [`${SITE_ROOT}/apps.txt`]: "frappe\n",
-    [`${SITE_ROOT}/currentsite.txt`]: `${SITE_NAME}\n`,
-    [`${SITE_ROOT}/${SITE_NAME}/site_config.json`]: JSON.stringify(SITE_CONFIG),
-};
-
-function logRuntime(message, stage, status = "active") {
-    self.postMessage(createRuntimeLogMessage(message, stage, status));
-}
-
-// ─── Custom IndexedDB Persistence ──────────────────────────────────
-// We use a custom IndexedDB sync mechanism instead of Emscripten IDBFS because
-// it allows us to precisely control when and how the database is persisted,
-// avoiding race conditions and silent corruption issues with SQLite WAL mode.
-
-function openIDB() {
-    return new Promise((resolve, reject) => {
-        const dbName = `frappe_playground_db_${instanceScope}`;
-        const req = indexedDB.open(dbName, 1);
-        req.onupgradeneeded = () => {
-            if (!req.result.objectStoreNames.contains("files")) {
-                req.result.createObjectStore("files");
-            }
-        };
-        req.onsuccess = () => resolve(req.result);
-        req.onerror = () => reject(req.error);
-    });
-}
-
-function requestToPromise(req) {
-    return new Promise((resolve, reject) => {
-        req.onsuccess = () => resolve(req.result);
-        req.onerror = () => reject(req.error);
-    });
-}
-
-async function fetchOk(url) {
-    const response = await fetch(url);
-    if (!response.ok) {
-        throw new Error(`Failed to fetch ${url}: ${response.status} ${response.statusText}`);
-    }
-    return response;
-}
-
-async function fetchBinary(url) {
-    const response = await fetchOk(url);
-    return new Uint8Array(await response.arrayBuffer());
-}
-
-async function fetchText(url) {
-    const response = await fetchOk(url);
-    return response.text();
-}
-
-function ensureDirectories(paths) {
-    for (const path of paths) {
-        try {
-            pyodide.FS.mkdir(path);
-        } catch (_) {
-            // Directory already exists.
-        }
-    }
-}
-
-async function saveStateToIDB(dbPath, cookieJarJson = "{}") {
-    try {
-        const fileView = pyodide.FS.readFile(dbPath);
-        // We MUST .slice() to create a new ArrayBuffer! Otherwise IndexedDB clones the entire 2GB WASM memory buffer.
-        const data = fileView.slice();
-        const db = await openIDB();
-
-        await new Promise((resolve, reject) => {
-            const tx = db.transaction("files", "readwrite");
-            const store = tx.objectStore("files");
-
-            store.clear();
-            store.put(data, "site1.db");
-            store.put(cookieJarJson, "cookie_jar.json");
-            store.put(JSON.stringify({ savedAt: Date.now(), scope: instanceScope }), "manifest.json");
-
-            tx.oncomplete = () => {
-                db.close();
-                resolve();
-            };
-            tx.onerror = () => { db.close(); reject(tx.error); };
-        });
-    } catch (err) {
-        console.warn("[Worker] Failed to persist state to IDB:", err);
-    }
-}
-
-async function loadStateFromIDB(dbPath) {
-    if (!preloadedDbPromise) return false;
-    const data = await preloadedDbPromise;
-    
-    if (!data || !data.siteDb) {
-        console.log("[Worker] IDB is empty");
-        return false;
-    }
-
-    try {
-        pyodide.FS.writeFile(dbPath, data.siteDb);
-        if (typeof data.cookieJar === "string") {
-            persistedCookieJarJson = data.cookieJar;
-        }
-        return true;
-    } catch (err) {
-        console.warn("[Worker] Failed to restore preloaded state:", err);
-        return false;
-    }
-}
-
-function removeIfExists(path) {
-    try {
-        if (pyodide.FS.analyzePath(path).exists) {
-            pyodide.FS.unlink(path);
-        }
-    } catch (_) {
-        // Ignore transient SQLite sidecar cleanup errors.
-    }
-}
-
-async function checkpointDatabase(dbPath) {
-    await pyodide.runPythonAsync(`
-        import sqlite3
-        try:
-            conn = sqlite3.connect('${dbPath}')
-            conn.execute('PRAGMA wal_checkpoint(TRUNCATE)')
-            conn.close()
-        except Exception:
-            pass
-    `);
-
-    removeIfExists(`${dbPath}-wal`);
-    removeIfExists(`${dbPath}-shm`);
-}
-
-async function repairCompletedSiteDefaults(dbPath) {
-    await pyodide.runPythonAsync(`
-        import sqlite3
-
-        conn = sqlite3.connect('${dbPath}')
-        try:
-            app_setup_values = [
-                row[0]
-                for row in conn.execute(
-                    "select is_setup_complete from 'tabInstalled Application' where app_name in ('frappe', 'erpnext')"
-                ).fetchall()
-            ]
-            home_page = conn.execute(
-                "select defvalue from tabDefaultValue where parent='__default' and defkey='desktop:home_page'"
-            ).fetchone()
-
-            if app_setup_values and all(bool(value) for value in app_setup_values) and home_page and home_page[0] == "setup-wizard":
-                conn.execute(
-                    "update tabDefaultValue set defvalue='workspace' where parent='__default' and defkey='desktop:home_page'"
-                )
-                conn.commit()
-        finally:
-            conn.close()
-    `);
-}
-
-async function resetFreshSiteSetupState(dbPath) {
-    await pyodide.runPythonAsync(`
-        import sqlite3
-
-        conn = sqlite3.connect('${dbPath}')
-        try:
-            conn.execute(
-                "update tabSingles set value='0' where doctype='System Settings' and field='setup_complete'"
-            )
-            conn.execute("update 'tabInstalled Application' set is_setup_complete=0")
-
-            updated = conn.execute(
-                "update tabDefaultValue set defvalue='setup-wizard' where parent='__default' and defkey='desktop:home_page'"
-            ).rowcount
-            if not updated:
-                conn.execute(
-                    "insert into tabDefaultValue (name, parent, defkey, defvalue) values (?, '__default', 'desktop:home_page', 'setup-wizard')",
-                    ("__default:desktop:home_page",),
-                )
-
-            conn.commit()
-        finally:
-            conn.close()
-    `);
-}
-
-async function exportCookieJarJson() {
-    try {
-        return await pyodide.runPythonAsync(`
-            import json
-            json.dumps(globals().get("_cookie_jar", {}))
-        `);
-    } catch (_) {
-        return "{}";
-    }
-}
-
-async function restoreCookieJarFromIDB() {
-    if (!persistedCookieJarJson) return;
-
-    pyodide.globals.set("temp_cookie_json", persistedCookieJarJson);
-    await pyodide.runPythonAsync(`
-        import json
-        _cookie_jar = json.loads(temp_cookie_json)
-        del temp_cookie_json
-    `);
-}
-
-// ─── Boot Sequence ──────────────────────────────────────────────────────────
 
 async function bootPython() {
-    await initPyodideAndPackages();
-    await fetchAndMountFilesystem();
-    await configureFrappeEnvironment();
-    
-    logRuntime("Frappe booted successfully!", RuntimeStage.FRAPPE, "done");
-    console.log("[WORKER] bootPython complete. Sending READY to main thread.");
-    self.postMessage(createRuntimeReadyMessage());
+  pyodide = await initializePyodide({
+    globalScope: self,
+    fetchFn: (...args) => fetch(...args),
+    pythonPackages: PYTHON_PACKAGES,
+    log: message => logRuntime(message, RuntimeStage.PYTHON),
+  })
+
+  const assetsText = await installRuntimeFilesystem({
+    pyodide,
+    fetchFn: (...args) => fetch(...args),
+    assetsEndpoint,
+    storageEndpoint,
+    environmentRoot,
+    benchDirectories: BENCH_DIRECTORIES,
+    log: message => logRuntime(message, RuntimeStage.RUNTIME),
+  })
+
+  await initializeSiteDatabase({
+    pyodide,
+    fetchFn: (...args) => fetch(...args),
+    stateStore,
+    dbPath: siteDbPath,
+    storageEndpoint,
+    freshSession,
+    log: message => logRuntime(message, RuntimeStage.DATABASE),
+  })
+
+  pyodide.FS.writeFile(assetsJsonPath, assetsText)
+  writeSiteFiles(pyodide.FS, staticSiteFiles)
+
+  logRuntime('Configuring Python environment...', RuntimeStage.FRAPPE)
+  const bridge = new PythonBridge({
+    pyodide,
+    mocksSource: FRAPPE_MOCKS_SOURCE,
+    wsgiSource: WSGI_SERVER_SOURCE,
+    cookieJarJson: stateStore.cookieJarJson,
+  })
+  await bridge.configure()
+
+  logRuntime('Frappe booted successfully!', RuntimeStage.FRAPPE, 'done')
+  console.log('[WORKER] Pyodide server boot complete.')
+  self.postMessage(createRuntimeReadyMessage())
+  return bridge
 }
 
-async function initPyodideAndPackages() {
-    logRuntime("Loading Pyodide...", RuntimeStage.PYTHON);
-    await loadPyodideLoaderFromCdn();
-    pyodide = await loadPyodide({ indexURL: PYODIDE_BASE_URL });
-
-    // Globally suppress Python 3.12+ SyntaxWarnings (like whoosh's invalid escape sequences) 
-    // before any packages are installed or compiled.
-    await pyodide.runPythonAsync(`
-        import warnings
-        warnings.filterwarnings("ignore", category=SyntaxWarning)
-        warnings.filterwarnings("ignore", category=DeprecationWarning)
-    `);
-
-    logRuntime("Loading core packages...", RuntimeStage.PYTHON);
-    await pyodide.loadPackage(["micropip", "cryptography", "tzdata"]);
-
-    logRuntime("Installing Python dependencies...", RuntimeStage.PYTHON);
-    const micropip = pyodide.pyimport("micropip");
-    await micropip.install(PYTHON_PACKAGES, { keep_going: true });
+function createRequestExecutor(bridge) {
+  return new SerialRequestExecutor({
+    decodeRequest: readBackendRequest,
+    encodeResponse: createBackendResponse,
+    encodeError: error => createBackendResponse({
+      status: 500,
+      headers: { 'Content-Type': 'text/plain' },
+      body: `Worker error: ${error.message}\n${error.stack || ''}`,
+    }),
+    handleRequest: request => bridge.handleRequest(request),
+    persist: async () => {
+      await checkpointDatabase(pyodide, siteDbPath)
+      await stateStore.save(siteDbPath, await bridge.exportCookieJar())
+    },
+  })
 }
 
-async function loadPyodideLoaderFromCdn() {
-    if (self.loadPyodide) return;
+self.onmessage = async event => {
+  if (!isProtocolMessage(event.data, ProtocolMessageType.INIT_CHANNEL)) return
 
-    const loaderUrl = `${PYODIDE_BASE_URL}pyodide.js`;
-    const response = await fetch(loaderUrl, { mode: "cors" });
-    if (!response.ok) {
-        throw new Error(`Failed to fetch ${loaderUrl}: ${response.status} ${response.statusText}`);
-    }
+  const serviceWorkerPort = event.ports[0]
+  if (!bootPromise) {
+    freshSession = event.data.payload.freshSession !== false
+    bootPromise = bootPython()
+  }
 
-    const loaderSource = await response.text();
-    (0, eval)(`${loaderSource}\n//# sourceURL=${loaderUrl}`);
-
-    if (!self.loadPyodide) {
-        throw new Error("Pyodide CDN loader did not expose loadPyodide.");
-    }
+  try {
+    const bridge = await bootPromise
+    createRequestExecutor(bridge).attach(serviceWorkerPort)
+    serviceWorkerPort.postMessage(createRuntimeReadyMessage())
+  } catch (error) {
+    bootPromise = null
+    console.error('Failed to boot Pyodide:', error)
+    self.postMessage(createRuntimeErrorMessage(
+      error?.message
+        ? `Frappe runtime failed to start: ${error.message}`
+        : 'Frappe runtime failed to start.',
+    ))
+  }
 }
-
-async function fetchAndMountFilesystem() {
-    logRuntime("Fetching Frappe runtime...", RuntimeStage.RUNTIME);
-    
-    // First, fetch the current robust hash
-    const res = await fetch(`${ASSETS_ENDPOINT}/assets.json?t=${Date.now()}`);
-    const assetsText = await res.text();
-    const currentHash = hashString(assetsText);
-    
-    logRuntime("Mounting virtual filesystem...", RuntimeStage.RUNTIME);
-    pyodide.FS.mkdir("/home/pyodide/frappe_env");
-    pyodide.FS.mount(pyodide.FS.filesystems.IDBFS, {}, "/home/pyodide/frappe_env");
-    
-    // Sync IDBFS to memory
-    await new Promise((resolve, reject) => {
-        pyodide.FS.syncfs(true, (err) => err ? reject(err) : resolve());
-    });
-    
-    let needsExtract = true;
-    try {
-        const cachedHash = pyodide.FS.readFile("/home/pyodide/frappe_env/version.txt", { encoding: "utf8" });
-        if (cachedHash === currentHash) {
-            needsExtract = false;
-            logRuntime("Restored virtual environment from IDBFS!", RuntimeStage.RUNTIME);
-            console.log("[Worker] Restored virtual environment from IDBFS. Skipping extraction.");
-        } else {
-            console.log(`[Worker] Hash mismatch! Cached: ${cachedHash}, Current: ${currentHash}`);
-        }
-    } catch (_) {
-        console.log("[Worker] No valid version.txt found in IDBFS.");
-    }
-    
-    if (needsExtract) {
-        logRuntime("Extracting fresh virtual filesystem...", RuntimeStage.RUNTIME);
-        const codeArr = await fetchBinary(`${STORAGE_ENDPOINT}/frappe_runtime.tar.gz`);
-        pyodide.unpackArchive(codeArr, "gztar", { extractDir: "/home/pyodide/frappe_env" });
-        
-        pyodide.FS.writeFile("/home/pyodide/frappe_env/version.txt", currentHash);
-        
-        // Sync memory to IDBFS
-        await new Promise((resolve, reject) => {
-            pyodide.FS.syncfs(false, (err) => err ? reject(err) : resolve());
-        });
-    }
-
-    // Create Bench directory structure
-    ensureDirectories(BENCH_DIRECTORIES);
-
-    // ─── Database Persistence ───────────────────────────────────────────────
-    // Fresh tabs get a seed database. Reloads restore this tab's atomic snapshot.
-    
-    let dataLoaded = false;
-    
-    if (!isFreshSession) {
-        logRuntime("Restoring isolated database...", RuntimeStage.DATABASE);
-        console.time("loadStateFromIDB");
-        dataLoaded = await loadStateFromIDB(SITE_DB_PATH);
-        console.timeEnd("loadStateFromIDB");
-    }
-    
-    if (isFreshSession || !dataLoaded) {
-        logRuntime("Seeding fresh database...", RuntimeStage.DATABASE);
-        const dbArr = await fetchBinary(`${STORAGE_ENDPOINT}/site1.db`);
-        pyodide.FS.writeFile(SITE_DB_PATH, dbArr);
-
-        await resetFreshSiteSetupState(SITE_DB_PATH);
-        
-        console.time("saveInitialStateToIDB");
-        await saveStateToIDB(SITE_DB_PATH);
-        console.timeEnd("saveInitialStateToIDB");
-    } else {
-        console.time("repairCompletedSiteDefaults");
-        await repairCompletedSiteDefaults(SITE_DB_PATH);
-        console.timeEnd("repairCompletedSiteDefaults");
-    }
-    
-    // Write config files (these are static and always come from the server)
-    pyodide.FS.writeFile(ASSETS_JSON_PATH, assetsText);
-    for (const [path, contents] of Object.entries(STATIC_SITE_FILES)) {
-        pyodide.FS.writeFile(path, contents);
-    }
-}
-
-async function configureFrappeEnvironment() {
-    logRuntime("Configuring Python environment...", RuntimeStage.FRAPPE);
-    
-    const [mocksRes, wsgiRes] = await Promise.all([
-        fetchOk("/python/frappe_mocks.py"),
-        fetchOk("/python/wsgi_server.py"),
-    ]);
-
-    const mocksCode = await mocksRes.text();
-    const wsgiCode = await wsgiRes.text();
-
-    await pyodide.runPythonAsync(mocksCode);
-    await pyodide.runPythonAsync(wsgiCode);
-    await restoreCookieJarFromIDB();
-}
-
-// ─── WSGI Request Handler ───────────────────────────────────────────────────
-
-let bootPromise = null;
-
-self.onmessage = async (event) => {
-    if (isProtocolMessage(event.data, ProtocolMessageType.INIT_CHANNEL)) {
-        fromServiceWorkerPort = event.ports[0];
-        
-        if (!bootPromise) {
-            isFreshSession = event.data.payload.freshSession !== false;
-            instanceScope = event.data.payload.scope || "default";
-        }
-
-        const requestQueue = [];
-        let processing = false;
-
-        async function processQueue() {
-            if (processing || requestQueue.length === 0) return;
-            processing = true;
-
-            const { req, responsePort } = requestQueue.shift();
-
-            try {
-                const reqMap = new Map(Object.entries(req));
-                if (req.headers) {
-                    reqMap.set("headers", new Map(Object.entries(req.headers)));
-                }
-                const pyReq = pyodide.toPy(reqMap);
-                
-                pyodide.globals.set("current_req", pyReq);
-                const pyResponse = pyodide.runPython("handle_request(current_req)");
-                
-                const jsResponse = pyResponse.toJs({ dict_converter: Object.fromEntries });
-                
-                pyReq.destroy();
-                pyResponse.destroy();
-
-                const hasSetCookie = (jsResponse.headers || []).some(([name]) => name.toLowerCase() === "set-cookie");
-                const shouldPersist = !["GET", "HEAD", "OPTIONS"].includes(req.method) || hasSetCookie;
-
-                if (shouldPersist) {
-                    await checkpointDatabase(SITE_DB_PATH);
-                    await saveStateToIDB(SITE_DB_PATH, await exportCookieJarJson());
-                }
-                
-                console.log(`[Worker] Handled request: ${req.path} -> ${jsResponse.status}`);
-                responsePort.postMessage(createBackendResponse(jsResponse));
-            } catch (err) {
-                responsePort.postMessage(createBackendResponse({
-                    status: 500,
-                    headers: { "Content-Type": "text/plain" },
-                    body: `Worker error: ${err.message}\n${err.stack || ""}`,
-                }));
-            } finally {
-                processing = false;
-                setTimeout(processQueue, 0);
-            }
-        }
-
-        fromServiceWorkerPort.onmessage = (reqEvent) => {
-            requestQueue.push({
-                req: readBackendRequest(reqEvent.data),
-                responsePort: reqEvent.ports[0]
-            });
-            processQueue();
-        };
-
-        try {
-            if (!bootPromise) {
-                bootPromise = bootPython();
-            }
-            await bootPromise;
-            fromServiceWorkerPort.postMessage(createRuntimeReadyMessage());
-        } catch (err) {
-            bootPromise = null;
-            console.error("Failed to boot Pyodide:", err);
-            self.postMessage(createRuntimeErrorMessage(
-                err?.message
-                    ? `Frappe runtime failed to start: ${err.message}`
-                    : "Frappe runtime failed to start.",
-            ));
-            return;
-        }
-    }
-};
