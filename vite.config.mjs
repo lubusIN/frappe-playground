@@ -9,8 +9,8 @@ const projectRoot = path.dirname(fileURLToPath(import.meta.url))
 const authoredStaticDir = path.join(projectRoot, 'public')
 const serviceWorkerSourceDir = path.join(projectRoot, 'service-worker/src')
 const serverSourceDir = path.join(projectRoot, 'playground-server/src')
-const pythonSourceDir = path.join(projectRoot, 'runtime/python')
 const runtimeArtifactsDir = path.join(projectRoot, 'artifacts/runtime')
+const generatedSourceDir = path.join(projectRoot, 'artifacts/generated')
 const protocolSourceDir = path.join(projectRoot, 'packages/protocol/src')
 const isolationHeaders = {
   'Cross-Origin-Opener-Policy': 'same-origin',
@@ -29,7 +29,8 @@ const exactDevFiles = new Map([
 ])
 
 const prefixedDevFiles = [
-  ['/python/', pythonSourceDir],
+  ['/generated/', generatedSourceDir],
+  ['/playground-server/', serverSourceDir],
   ['/protocol/', protocolSourceDir],
   ['/service-worker/', serviceWorkerSourceDir],
   ['/storage/', runtimeArtifactsDir],

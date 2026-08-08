@@ -15,7 +15,7 @@ The playground has four main pieces:
 
 1. **Vue shell (`src/`)**: Renders the loading screen, top bar, and Frappe Desk iframe. `src/playground/` owns runtime lifecycle, session identity, and iframe navigation independently of the Vue components. Vite builds the client into `dist/frontend/`.
 2. **Service Worker (`service-worker/src/`)**: A small event entry point delegates scoped routing, caching, instance registration, Socket.IO compatibility, and Python backend proxying to independently testable modules.
-3. **Pyodide server (`playground-server/src/`)**: Loads Pyodide, installs Python packages, mounts the Frappe runtime archive and starter SQLite database, applies browser-specific mocks, and handles WSGI requests.
+3. **Pyodide server (`playground-server/src/`)**: A small worker entry point composes the Pyodide loader, filesystem installer, IndexedDB persistence, database lifecycle, Python bridge, and serial WSGI request executor. Browser-specific Python sources in `runtime/python/` are converted into a build-time JavaScript text module.
 4. **Shared protocol (`packages/protocol/`)**: Defines the versioned messages exchanged by the shell, Service Worker, and Pyodide server.
 5. **Runtime build (`Dockerfile.build`, `runtime/`, `scripts/build.sh`)**: Builds intermediate Frappe runtime artifacts into `artifacts/runtime/`. The application build assembles those artifacts and all authored browser sources into the clean `dist/` publish directory.
 

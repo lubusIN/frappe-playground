@@ -9,8 +9,8 @@ RUNTIME_ARTIFACTS_DIR="${PROJECT_ROOT}/artifacts/runtime"
 DIST_DIR="${PROJECT_ROOT}/dist"
 SERVER_SOURCE_DIR="${PROJECT_ROOT}/playground-server/src"
 SERVICE_WORKER_SOURCE_DIR="${PROJECT_ROOT}/service-worker/src"
-PYTHON_SOURCE_DIR="${PROJECT_ROOT}/runtime/python"
 PROTOCOL_SOURCE_DIR="${PROJECT_ROOT}/packages/protocol/src"
+GENERATED_SOURCE_DIR="${PROJECT_ROOT}/artifacts/generated"
 
 if [ ! -f "${DIST_DIR}/index.html" ]; then
     echo "Missing client build: ${DIST_DIR}/index.html" >&2
@@ -22,9 +22,9 @@ if [ ! -f "${RUNTIME_ARTIFACTS_DIR}/manifest.json" ]; then
     exit 1
 fi
 
-rm -rf "${DIST_DIR}/assets" "${DIST_DIR}/storage" "${DIST_DIR}/python" "${DIST_DIR}/protocol" "${DIST_DIR}/service-worker"
+rm -rf "${DIST_DIR}/assets" "${DIST_DIR}/storage" "${DIST_DIR}/python" "${DIST_DIR}/protocol" "${DIST_DIR}/service-worker" "${DIST_DIR}/playground-server" "${DIST_DIR}/generated"
 rm -f "${DIST_DIR}/sw.js" "${DIST_DIR}/worker.js" "${DIST_DIR}/config.js"
-mkdir -p "${DIST_DIR}/storage" "${DIST_DIR}/python" "${DIST_DIR}/protocol" "${DIST_DIR}/service-worker"
+mkdir -p "${DIST_DIR}/storage" "${DIST_DIR}/protocol" "${DIST_DIR}/service-worker" "${DIST_DIR}/playground-server" "${DIST_DIR}/generated"
 
 # Runtime files are fetched by the Web Worker from /storage, excluding assets.
 find "${RUNTIME_ARTIFACTS_DIR}" -mindepth 1 -maxdepth 1 ! -name assets -exec cp -R {} "${DIST_DIR}/storage/" \;
@@ -41,7 +41,14 @@ cp "${SERVICE_WORKER_SOURCE_DIR}/backend-proxy.js" \
    "${SERVICE_WORKER_SOURCE_DIR}/socket-io.js" \
    "${DIST_DIR}/service-worker/"
 cp "${SERVER_SOURCE_DIR}/worker.js" "${SERVER_SOURCE_DIR}/config.js" "${DIST_DIR}/"
-cp "${PYTHON_SOURCE_DIR}/frappe_mocks.py" "${PYTHON_SOURCE_DIR}/wsgi_server.py" "${DIST_DIR}/python/"
+cp "${SERVER_SOURCE_DIR}/database.js" \
+   "${SERVER_SOURCE_DIR}/filesystem.js" \
+   "${SERVER_SOURCE_DIR}/persistence.js" \
+   "${SERVER_SOURCE_DIR}/python-bridge.js" \
+   "${SERVER_SOURCE_DIR}/request-executor.js" \
+   "${SERVER_SOURCE_DIR}/runtime-loader.js" \
+   "${DIST_DIR}/playground-server/"
+cp "${GENERATED_SOURCE_DIR}/python-sources.js" "${DIST_DIR}/generated/python-sources.js"
 cp "${PROTOCOL_SOURCE_DIR}/index.js" "${DIST_DIR}/protocol/index.js"
 
 # Static hosting metadata is authored input, never a build destination.
