@@ -7,7 +7,7 @@ import {
     createRecoveryRequestMessage,
     isProtocolMessage,
     readBackendResponse,
-} from "/protocol/index.js";
+} from "/protocol/index.js?v=2";
 
 self.addEventListener("install", () => self.skipWaiting());
 self.addEventListener("activate", (event) => event.waitUntil(clients.claim()));

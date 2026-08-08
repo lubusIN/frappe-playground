@@ -1,4 +1,4 @@
-export const PROTOCOL_VERSION = 1
+export const PROTOCOL_VERSION = 2
 
 export const ProtocolMessageType = Object.freeze({
   CLAIM_CLIENTS: 'service-worker:claim-clients',
@@ -11,6 +11,17 @@ export const ProtocolMessageType = Object.freeze({
   BACKEND_REQUEST: 'backend:request',
   BACKEND_RESPONSE: 'backend:response',
 })
+
+export const RuntimeStage = Object.freeze({
+  SERVICE_WORKER: 'service-worker',
+  PYTHON: 'python',
+  RUNTIME: 'runtime',
+  DATABASE: 'database',
+  FRAPPE: 'frappe',
+})
+
+const runtimeStages = new Set(Object.values(RuntimeStage))
+const progressStatuses = new Set(['active', 'done'])
 
 function message(type, payload) {
   const result = { protocolVersion: PROTOCOL_VERSION, type }
@@ -70,9 +81,13 @@ export function createRecoveryRequestMessage() {
   return message(ProtocolMessageType.RECOVERY_REQUEST)
 }
 
-export function createRuntimeLogMessage(text) {
+export function createRuntimeLogMessage(text, stage, status = 'active') {
+  if (!runtimeStages.has(stage)) throw new TypeError('runtime stage is invalid')
+  if (!progressStatuses.has(status)) throw new TypeError('runtime progress status is invalid')
   return message(ProtocolMessageType.RUNTIME_LOG, {
     message: requireString(text, 'message'),
+    stage,
+    status,
   })
 }
 
