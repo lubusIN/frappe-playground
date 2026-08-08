@@ -6,12 +6,14 @@ import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 
 const projectRoot = path.dirname(fileURLToPath(import.meta.url))
-const authoredStaticDir = path.join(projectRoot, 'public')
-const serviceWorkerSourceDir = path.join(projectRoot, 'service-worker/src')
-const serverSourceDir = path.join(projectRoot, 'playground-server/src')
+const authoredStaticDir = path.join(projectRoot, 'static')
+const clientDir = path.join(projectRoot, 'packages/client')
+const serviceWorkerSourceDir = path.join(projectRoot, 'packages/service-worker/src')
+const serverSourceDir = path.join(projectRoot, 'packages/server/src')
 const runtimeArtifactsDir = path.join(projectRoot, 'artifacts/runtime')
 const generatedSourceDir = path.join(projectRoot, 'artifacts/generated')
 const protocolSourceDir = path.join(projectRoot, 'packages/protocol/src')
+const runtimeConfigDir = path.join(projectRoot, 'runtime/config')
 const isolationHeaders = {
   'Cross-Origin-Opener-Policy': 'same-origin',
   'Cross-Origin-Embedder-Policy': 'require-corp',
@@ -20,8 +22,8 @@ const isolationHeaders = {
 }
 
 const exactDevFiles = new Map([
-  ['/sw.js', path.join(serviceWorkerSourceDir, 'sw.js')],
-  ['/worker.js', path.join(serverSourceDir, 'worker.js')],
+  ['/sw.js', path.join(serviceWorkerSourceDir, 'index.js')],
+  ['/worker.js', path.join(serverSourceDir, 'index.js')],
   ['/config.js', path.join(serverSourceDir, 'config.js')],
   ['/_headers', path.join(authoredStaticDir, '_headers')],
   ['/_redirects', path.join(authoredStaticDir, '_redirects')],
@@ -30,8 +32,9 @@ const exactDevFiles = new Map([
 
 const prefixedDevFiles = [
   ['/generated/', generatedSourceDir],
-  ['/playground-server/', serverSourceDir],
+  ['/server/', serverSourceDir],
   ['/protocol/', protocolSourceDir],
+  ['/runtime-config/', runtimeConfigDir],
   ['/service-worker/', serviceWorkerSourceDir],
   ['/storage/', runtimeArtifactsDir],
   ['/assets/', path.join(runtimeArtifactsDir, 'assets')],
@@ -101,7 +104,7 @@ function contentTypeFor(filePath) {
 }
 
 export default defineConfig({
-  root: 'src',
+  root: clientDir,
   base: '/',
   publicDir: false,
   plugins: [
@@ -115,7 +118,7 @@ export default defineConfig({
     },
   ],
   build: {
-    outDir: '../dist',
+    outDir: path.join(projectRoot, 'dist'),
     assetsDir: 'frontend',
     emptyOutDir: true,
     sourcemap: true,
@@ -136,7 +139,7 @@ export default defineConfig({
   },
   server: {
     port: 5173,
-    strictPort: false,
+    strictPort: true,
     headers: isolationHeaders,
   },
   preview: {

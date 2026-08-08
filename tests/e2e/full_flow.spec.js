@@ -24,7 +24,9 @@ test('full boot login setup desk flow reaches stable Desk without redirect loop'
 
     const desk = await expectStableDesk(page, navigations);
     const iframeNavigations = navigations.filter(navigation => navigation.name === 'iframe');
-    const deskNavigations = iframeNavigations.filter(navigation => navigation.url === 'http://localhost:8000/desk');
+    const deskNavigations = iframeNavigations.filter(
+        navigation => new URL(navigation.url).pathname === '/desk'
+    );
 
     expect(instanceId).toBeTruthy();
     expect(desk.href).toContain('/desk');

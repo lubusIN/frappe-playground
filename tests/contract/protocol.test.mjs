@@ -7,8 +7,6 @@ import {
   ProtocolMessageType,
   RuntimeStage,
   assertProtocolMessage,
-  createBackendRequest,
-  createBackendResponse,
   createClaimClientsMessage,
   createClearOtherInstancesMessage,
   createInitChannelMessage,
@@ -17,9 +15,13 @@ import {
   createRuntimeLogMessage,
   createRuntimeReadyMessage,
   isProtocolMessage,
+} from '../../packages/protocol/src/messages.js'
+import {
+  createBackendRequest,
+  createBackendResponse,
   readBackendRequest,
   readBackendResponse,
-} from '../../packages/protocol/src/index.js'
+} from '../../packages/protocol/src/request.js'
 
 test('control and runtime messages use the current protocol version', () => {
   const messages = [

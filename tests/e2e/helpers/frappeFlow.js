@@ -23,6 +23,7 @@ async function waitForPlaygroundBoot(page) {
 
     const iframe = page.locator('#frappe-desk');
     await expect(iframe).toBeVisible({ timeout: 120000 });
+    await getFrappeFrame(page);
     await dismissIntroDialogIfShown(page);
 
     const instanceId = await page.evaluate(() => localStorage.getItem('frappe_playground_instance_id'));
@@ -42,7 +43,24 @@ async function dismissIntroDialogIfShown(page) {
 }
 
 async function getFrappeFrame(page) {
-    const iframeHandle = await page.locator('#frappe-desk').elementHandle();
+    const iframe = page.locator('#frappe-desk');
+
+    await expect.poll(async () => {
+        const iframeHandle = await iframe.elementHandle();
+        const frame = await iframeHandle?.contentFrame();
+        if (!frame || frame.url() === 'about:blank') return false;
+
+        try {
+            return await frame.evaluate(() => document.readyState !== 'loading');
+        } catch (_) {
+            return false;
+        }
+    }, {
+        message: 'waiting for the scoped Frappe iframe document',
+        timeout: 120000,
+    }).toBe(true);
+
+    const iframeHandle = await iframe.elementHandle();
     const frame = await iframeHandle.contentFrame();
     expect(frame).toBeTruthy();
     return frame;
@@ -146,7 +164,9 @@ async function expectStableDesk(page, navigations = []) {
 
     const state = await readDeskState(page);
     const iframeNavigations = navigations.filter(navigation => navigation.name === 'iframe');
-    const deskNavigations = iframeNavigations.filter(navigation => navigation.url === 'http://localhost:8000/desk');
+    const deskNavigations = iframeNavigations.filter(
+        navigation => new URL(navigation.url).pathname === '/desk'
+    );
 
     expect(state.hasNestedPlayground).toBe(false);
     expect(state.hasLogin).toBe(false);

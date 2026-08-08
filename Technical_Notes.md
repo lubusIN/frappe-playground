@@ -16,7 +16,7 @@ unless they expose a concrete Frappe integration constraint.
 ## Reference Scope
 
 - The generated runtime currently contains **Frappe 16.23.0**.
-- `Dockerfile.build` builds from a pinned tag (`v16.23.0`) via a build argument. These notes therefore describe the checked runtime artifact, not every
+- `runtime/build/Dockerfile` builds from a pinned tag (`v16.23.0`) via a build argument. These notes therefore describe the checked runtime artifact, not every
   version of Frappe 16.
 - Local behavior is covered by the repository's Playwright flows, including
   boot, login, Setup Wizard, Desk, file upload, and scoped reloads.
@@ -251,7 +251,7 @@ but those modules are not required for ordinary boot. Their mocks allow an
 integration module to import if a hook, DocType, or route reaches it. The actual
 integration cannot work because calls are absorbed.
 
-`sentry-sdk` is already installed by `playground-server/src/config.js`, but the auto-mocker
+`sentry-sdk` is already installed by `runtime/config/packages.js`, but the auto-mocker
 shadows it. Frappe's web setup imports Sentry only when related environment
 variables are configured; error-reporting helpers can also import it on demand.
 The reason for overriding the installed package has not been demonstrated.

@@ -1,0 +1,5 @@
+{
+  "name": "@frappe-playground/service-worker",
+  "private": true,
+  "type": "module"
+}

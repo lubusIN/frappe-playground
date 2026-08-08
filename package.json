@@ -2,10 +2,14 @@
   "name": "frappe-playground",
   "version": "1.0.0",
   "description": "Run Frappe Framework in the browser via Pyodide",
+  "workspaces": [
+    "packages/*"
+  ],
   "scripts": {
     "generate:sources": "node scripts/generate-python-sources.mjs",
     "dev": "npm run generate:sources && vite --host 0.0.0.0",
     "dev:preview": "vite preview --host 0.0.0.0",
+    "test:serve": "vite preview --host 127.0.0.1 --port 8002",
     "start": "npm run dev:preview",
     "build": "npm run generate:sources && vite build && bash scripts/prepare.sh",
     "build:runtime": "bash scripts/build.sh",
