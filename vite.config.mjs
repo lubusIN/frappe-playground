@@ -11,6 +11,7 @@ const serviceWorkerSourceDir = path.join(projectRoot, 'service-worker/src')
 const serverSourceDir = path.join(projectRoot, 'playground-server/src')
 const pythonSourceDir = path.join(projectRoot, 'runtime/python')
 const runtimeArtifactsDir = path.join(projectRoot, 'artifacts/runtime')
+const protocolSourceDir = path.join(projectRoot, 'packages/protocol/src')
 const isolationHeaders = {
   'Cross-Origin-Opener-Policy': 'same-origin',
   'Cross-Origin-Embedder-Policy': 'require-corp',
@@ -29,6 +30,7 @@ const exactDevFiles = new Map([
 
 const prefixedDevFiles = [
   ['/python/', pythonSourceDir],
+  ['/protocol/', protocolSourceDir],
   ['/storage/', runtimeArtifactsDir],
   ['/assets/', path.join(runtimeArtifactsDir, 'assets')],
 ]

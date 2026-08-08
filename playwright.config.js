@@ -10,7 +10,7 @@ module.exports = defineConfig({
   outputDir: './tests/results',
   reporter: [['html', { outputFolder: './tests/results' }]],
   use: {
-    baseURL: 'http://localhost:8000',
+    baseURL: process.env.PLAYWRIGHT_BASE_URL || 'http://localhost:8000',
     trace: 'on',
     screenshot: 'on',
   },

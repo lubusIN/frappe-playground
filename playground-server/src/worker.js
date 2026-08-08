@@ -2,6 +2,15 @@
 // Frappe Playground — Web Worker (Pyodide Runtime Sandbox)
 // ──────────────────────────────────────────────────────────────────────────────
 import { PYTHON_PACKAGES, BENCH_DIRECTORIES, SITE_CONFIG } from "./config.js";
+import {
+    ProtocolMessageType,
+    createBackendResponse,
+    createRuntimeErrorMessage,
+    createRuntimeLogMessage,
+    createRuntimeReadyMessage,
+    isProtocolMessage,
+    readBackendRequest,
+} from "/protocol/index.js";
 
 function hashString(str) {
     let hash = 5381;
@@ -54,6 +63,10 @@ const STATIC_SITE_FILES = {
     [`${SITE_ROOT}/currentsite.txt`]: `${SITE_NAME}\n`,
     [`${SITE_ROOT}/${SITE_NAME}/site_config.json`]: JSON.stringify(SITE_CONFIG),
 };
+
+function logRuntime(message) {
+    self.postMessage(createRuntimeLogMessage(message));
+}
 
 // ─── Custom IndexedDB Persistence ──────────────────────────────────
 // We use a custom IndexedDB sync mechanism instead of Emscripten IDBFS because
@@ -263,13 +276,13 @@ async function bootPython() {
     await fetchAndMountFilesystem();
     await configureFrappeEnvironment();
     
-    self.postMessage({ type: "LOG", message: "Frappe booted successfully!" });
+    logRuntime("Frappe booted successfully!");
     console.log("[WORKER] bootPython complete. Sending READY to main thread.");
-    self.postMessage({ type: "READY" });
+    self.postMessage(createRuntimeReadyMessage());
 }
 
 async function initPyodideAndPackages() {
-    self.postMessage({ type: "LOG", message: "Loading Pyodide..." });
+    logRuntime("Loading Pyodide...");
     await loadPyodideLoaderFromCdn();
     pyodide = await loadPyodide({ indexURL: PYODIDE_BASE_URL });
 
@@ -281,10 +294,10 @@ async function initPyodideAndPackages() {
         warnings.filterwarnings("ignore", category=DeprecationWarning)
     `);
 
-    self.postMessage({ type: "LOG", message: "Loading core packages..." });
+    logRuntime("Loading core packages...");
     await pyodide.loadPackage(["micropip", "cryptography", "tzdata"]);
 
-    self.postMessage({ type: "LOG", message: "Installing Python dependencies..." });
+    logRuntime("Installing Python dependencies...");
     const micropip = pyodide.pyimport("micropip");
     await micropip.install(PYTHON_PACKAGES, { keep_going: true });
 }
@@ -307,14 +320,14 @@ async function loadPyodideLoaderFromCdn() {
 }
 
 async function fetchAndMountFilesystem() {
-    self.postMessage({ type: "LOG", message: "Fetching Frappe runtime..." });
+    logRuntime("Fetching Frappe runtime...");
     
     // First, fetch the current robust hash
     const res = await fetch(`${ASSETS_ENDPOINT}/assets.json?t=${Date.now()}`);
     const assetsText = await res.text();
     const currentHash = hashString(assetsText);
     
-    self.postMessage({ type: "LOG", message: "Mounting virtual filesystem..." });
+    logRuntime("Mounting virtual filesystem...");
     pyodide.FS.mkdir("/home/pyodide/frappe_env");
     pyodide.FS.mount(pyodide.FS.filesystems.IDBFS, {}, "/home/pyodide/frappe_env");
     
@@ -328,7 +341,7 @@ async function fetchAndMountFilesystem() {
         const cachedHash = pyodide.FS.readFile("/home/pyodide/frappe_env/version.txt", { encoding: "utf8" });
         if (cachedHash === currentHash) {
             needsExtract = false;
-            self.postMessage({ type: "LOG", message: "Restored virtual environment from IDBFS!" });
+            logRuntime("Restored virtual environment from IDBFS!");
             console.log("[Worker] Restored virtual environment from IDBFS. Skipping extraction.");
         } else {
             console.log(`[Worker] Hash mismatch! Cached: ${cachedHash}, Current: ${currentHash}`);
@@ -338,7 +351,7 @@ async function fetchAndMountFilesystem() {
     }
     
     if (needsExtract) {
-        self.postMessage({ type: "LOG", message: "Extracting fresh virtual filesystem..." });
+        logRuntime("Extracting fresh virtual filesystem...");
         const codeArr = await fetchBinary(`${STORAGE_ENDPOINT}/frappe_runtime.tar.gz`);
         pyodide.unpackArchive(codeArr, "gztar", { extractDir: "/home/pyodide/frappe_env" });
         
@@ -359,14 +372,14 @@ async function fetchAndMountFilesystem() {
     let dataLoaded = false;
     
     if (!isFreshSession) {
-        self.postMessage({ type: "LOG", message: "Restoring isolated database..." });
+        logRuntime("Restoring isolated database...");
         console.time("loadStateFromIDB");
         dataLoaded = await loadStateFromIDB(SITE_DB_PATH);
         console.timeEnd("loadStateFromIDB");
     }
     
     if (isFreshSession || !dataLoaded) {
-        self.postMessage({ type: "LOG", message: "Seeding fresh database..." });
+        logRuntime("Seeding fresh database...");
         const dbArr = await fetchBinary(`${STORAGE_ENDPOINT}/site1.db`);
         pyodide.FS.writeFile(SITE_DB_PATH, dbArr);
 
@@ -389,7 +402,7 @@ async function fetchAndMountFilesystem() {
 }
 
 async function configureFrappeEnvironment() {
-    self.postMessage({ type: "LOG", message: "Configuring Python environment..." });
+    logRuntime("Configuring Python environment...");
     
     const [mocksRes, wsgiRes] = await Promise.all([
         fetchOk("/python/frappe_mocks.py"),
@@ -409,12 +422,12 @@ async function configureFrappeEnvironment() {
 let bootPromise = null;
 
 self.onmessage = async (event) => {
-    if (event.data && event.data.type === "INIT_CHANNEL") {
+    if (isProtocolMessage(event.data, ProtocolMessageType.INIT_CHANNEL)) {
         fromServiceWorkerPort = event.ports[0];
         
         if (!bootPromise) {
-            isFreshSession = event.data.freshSession !== false;
-            instanceScope = event.data.scope || "default";
+            isFreshSession = event.data.payload.freshSession !== false;
+            instanceScope = event.data.payload.scope || "default";
         }
 
         const requestQueue = [];
@@ -450,13 +463,13 @@ self.onmessage = async (event) => {
                 }
                 
                 console.log(`[Worker] Handled request: ${req.path} -> ${jsResponse.status}`);
-                responsePort.postMessage(jsResponse);
+                responsePort.postMessage(createBackendResponse(jsResponse));
             } catch (err) {
-                responsePort.postMessage({
+                responsePort.postMessage(createBackendResponse({
                     status: 500,
                     headers: { "Content-Type": "text/plain" },
                     body: `Worker error: ${err.message}\n${err.stack || ""}`,
-                });
+                }));
             } finally {
                 processing = false;
                 setTimeout(processQueue, 0);
@@ -465,7 +478,7 @@ self.onmessage = async (event) => {
 
         fromServiceWorkerPort.onmessage = (reqEvent) => {
             requestQueue.push({
-                req: reqEvent.data,
+                req: readBackendRequest(reqEvent.data),
                 responsePort: reqEvent.ports[0]
             });
             processQueue();
@@ -476,16 +489,15 @@ self.onmessage = async (event) => {
                 bootPromise = bootPython();
             }
             await bootPromise;
-            fromServiceWorkerPort.postMessage({ type: "READY" });
+            fromServiceWorkerPort.postMessage(createRuntimeReadyMessage());
         } catch (err) {
             bootPromise = null;
             console.error("Failed to boot Pyodide:", err);
-            self.postMessage({
-                type: "ERROR",
-                message: err?.message
+            self.postMessage(createRuntimeErrorMessage(
+                err?.message
                     ? `Frappe runtime failed to start: ${err.message}`
                     : "Frappe runtime failed to start.",
-            });
+            ));
             return;
         }
     }
