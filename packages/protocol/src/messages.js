@@ -13,6 +13,8 @@ export const ProtocolMessageType = Object.freeze({
   RUNTIME_ERROR: 'runtime:error',
   APP_INSTALL: 'app:install',
   APP_INSTALL_RESULT: 'app:install-result',
+  APP_UNINSTALL: 'app:uninstall',
+  APP_UNINSTALL_RESULT: 'app:uninstall-result',
   BACKEND_REQUEST: 'backend:request',
   BACKEND_RESPONSE: 'backend:response',
 })
@@ -139,4 +141,21 @@ export function createAppInstallResultMessage(requestId, appId, options = {}) {
   }
   if (options.error) payload.error = requireString(options.error, 'error')
   return createMessage(ProtocolMessageType.APP_INSTALL_RESULT, payload)
+}
+
+export function createAppUninstallMessage(requestId, appId) {
+  return createMessage(ProtocolMessageType.APP_UNINSTALL, {
+    requestId: requireString(requestId, 'requestId'),
+    appId: requireString(appId, 'appId'),
+  })
+}
+
+export function createAppUninstallResultMessage(requestId, appId, options = {}) {
+  const payload = {
+    requestId: requireString(requestId, 'requestId'),
+    appId: requireString(appId, 'appId'),
+    uninstalled: options.uninstalled === true,
+  }
+  if (options.error) payload.error = requireString(options.error, 'error')
+  return createMessage(ProtocolMessageType.APP_UNINSTALL_RESULT, payload)
 }

@@ -5,7 +5,7 @@ const {
   waitForPlaygroundBoot,
 } = require('./helpers/frappeFlow')
 
-test('installs and restores a catalog app from the app manager', async ({ page }) => {
+test('installs, restores, and uninstalls a catalog app from the app manager', async ({ page }) => {
   page.on('console', message => console.log(`[BROWSER]: ${message.text()}`))
   await waitForPlaygroundBoot(page)
 
@@ -28,4 +28,22 @@ test('installs and restores a catalog app from the app manager', async ({ page }
   await expect(page.getByRole('dialog')).toContainText('Frappe Wiki')
   await expect(page.getByRole('dialog')).toContainText('Installed')
   await expect(page.getByRole('button', { name: 'Install', exact: true })).toHaveCount(0)
+
+  await page.getByRole('button', { name: 'Uninstall', exact: true }).click()
+  await expect(page.getByRole('dialog')).toContainText('Uninstall app?')
+  await expect(page.getByRole('dialog')).toContainText('permanently removed')
+  const shellReloadedAfterUninstall = page.waitForEvent('load', { timeout: 300000 })
+  await page.getByRole('button', { name: 'Uninstall', exact: true }).click()
+  await expect(page.getByText('Removing the app and its data.')).toBeVisible()
+
+  await shellReloadedAfterUninstall
+  await expect(page.locator('#loading-screen')).toBeHidden({ timeout: 600000 })
+  await expect(page.locator('#frappe-desk')).toBeVisible({ timeout: 120000 })
+  await getFrappeFrame(page)
+  await dismissIntroDialogIfShown(page)
+
+  await page.getByRole('button', { name: 'Manage apps' }).click()
+  await expect(page.getByRole('dialog')).toContainText('Frappe Wiki')
+  await expect(page.getByRole('dialog')).toContainText('Available')
+  await expect(page.getByRole('button', { name: 'Install', exact: true })).toBeVisible()
 })

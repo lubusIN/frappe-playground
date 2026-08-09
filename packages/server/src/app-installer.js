@@ -117,3 +117,40 @@ export async function installCatalogApp({
   await installFrappeApp(pyodide, appId)
   return nextAppIds
 }
+
+export async function uninstallFrappeApp(pyodide, appId) {
+  validateAppId(appId)
+  pyodide.globals.set('playground_app_id', appId)
+  try {
+    await pyodide.runPythonAsync(`
+import frappe
+from frappe.installer import remove_app
+
+frappe.init(site="site1", sites_path="/home/pyodide/bench/sites")
+frappe.connect()
+try:
+    if playground_app_id in frappe.get_installed_apps():
+        remove_app(playground_app_id, yes=True, no_backup=True)
+        frappe.db.commit()
+finally:
+    frappe.destroy()
+`)
+  } finally {
+    pyodide.globals.delete('playground_app_id')
+  }
+}
+
+export async function uninstallCatalogApp({
+  pyodide,
+  catalog,
+  appId,
+  installedAppIds,
+  appsFile,
+}) {
+  appById(catalog, appId)
+  if (!installedAppIds.includes(appId)) return [...installedAppIds]
+  await uninstallFrappeApp(pyodide, appId)
+  const nextAppIds = installedAppIds.filter(installedAppId => installedAppId !== appId)
+  writeInstalledApps(pyodide.FS, appsFile, nextAppIds)
+  return nextAppIds
+}

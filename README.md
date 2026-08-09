@@ -35,7 +35,7 @@ Vite sets these headers during local development and preview. Cloudflare Pages u
 - Run Frappe Desk and Python WSGI entirely in the browser.
 - Create and name multiple isolated playground instances.
 - Switch, rename, reset, and delete saved playgrounds from the top bar.
-- Browse and install curated optional apps into the active playground.
+- Browse, install, and uninstall curated optional apps in each playground.
 - Persist each instance's SQLite database, cookies, and uploaded site files in IndexedDB.
 - Preserve Frappe navigation and redirects behind scoped paths such as `/scope:<instance-id>/...`.
 - Recover runtime channels and Service Worker state across normal and cache-bypassing reloads.

@@ -2,12 +2,39 @@
   <Dialog
     :open="modelValue"
     size="lg"
-    title="Apps"
-    message="Add optional apps to this playground. Installed apps and their data stay isolated in this browser."
+    :title="dialogTitle"
+    :message="dialogMessage"
     @update:open="$emit('update:modelValue', $event)"
   >
     <template #actions>
-      <div class="-mt-5 w-full text-left">
+      <div v-if="pendingRemoval" class="w-full space-y-3 text-left">
+        <p v-if="uninstallingAppId" class="m-0 text-sm text-ink-gray-6">
+          Removing the app and its data. This can take several minutes; keep this tab open…
+        </p>
+        <p
+          v-else-if="installError"
+          role="alert"
+          class="m-0 rounded-md bg-surface-red-2 px-3 py-2 text-sm text-ink-red-8"
+        >
+          {{ installError }}
+        </p>
+        <div class="flex justify-end gap-2">
+          <Button variant="subtle" :disabled="Boolean(uninstallingAppId)" @click="pendingRemoval = null">
+            Cancel
+          </Button>
+          <Button
+            theme="red"
+            variant="solid"
+            :loading="uninstallingAppId === pendingRemoval.id"
+            :disabled="Boolean(uninstallingAppId)"
+            @click="$emit('uninstall', pendingRemoval.id)"
+          >
+            Uninstall
+          </Button>
+        </div>
+      </div>
+
+      <div v-else class="-mt-5 w-full text-left">
         <div
           v-if="loading"
           class="flex h-48 items-center justify-center gap-2 text-sm text-ink-gray-6"
@@ -63,7 +90,16 @@
               >
                 Install
               </Button>
-              <span v-else class="text-sm text-ink-gray-5">Ready</span>
+              <Button
+                v-else
+                size="sm"
+                theme="red"
+                variant="ghost"
+                :disabled="Boolean(installingAppId || uninstallingAppId)"
+                @click="pendingRemoval = row"
+              >
+                Uninstall
+              </Button>
             </div>
           </template>
         </ListView>
@@ -75,8 +111,10 @@
         >
           {{ installError }}
         </p>
-        <p v-else-if="installingAppId" class="m-0 mt-3 text-sm text-ink-gray-6">
-          Installing the app and updating its DocTypes. Keep this tab open…
+        <p v-else-if="installingAppId || uninstallingAppId" class="m-0 mt-3 text-sm text-ink-gray-6">
+          {{ installingAppId
+            ? 'Installing the app and updating its DocTypes. This can take several minutes; keep this tab open…'
+            : 'Removing the app and its data. This can take several minutes; keep this tab open…' }}
         </p>
       </div>
     </template>
@@ -89,6 +127,7 @@ import Button from 'frappe-ui/components/Button/Button.vue'
 import Dialog from 'frappe-ui/components/Dialog/Dialog.vue'
 import ListView from 'frappe-ui/components/ListView/ListView.vue'
 import Spinner from 'frappe-ui/components/Spinner/Spinner.vue'
+import { computed, ref, watch } from 'vue'
 
 const props = defineProps({
   modelValue: { type: Boolean, required: true },
@@ -98,9 +137,20 @@ const props = defineProps({
   error: { type: String, default: '' },
   installError: { type: String, default: '' },
   installingAppId: { type: String, default: '' },
+  uninstallingAppId: { type: String, default: '' },
 })
 
-defineEmits(['install', 'retry', 'update:modelValue'])
+defineEmits(['install', 'retry', 'uninstall', 'update:modelValue'])
+
+const pendingRemoval = ref(null)
+const dialogTitle = computed(() => pendingRemoval.value ? 'Uninstall app?' : 'Apps')
+const dialogMessage = computed(() => pendingRemoval.value
+  ? `Uninstall “${pendingRemoval.value.title}”? Its DocTypes and app data will be permanently removed from this playground.`
+  : 'Add optional apps to this playground. Installed apps and their data stay isolated in this browser.')
+
+watch(() => props.modelValue, open => {
+  if (!open && !props.uninstallingAppId) pendingRemoval.value = null
+})
 
 const columns = [
   { label: 'App', key: 'title', width: 3 },

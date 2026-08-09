@@ -4,6 +4,7 @@ import {
   ProtocolMessageType,
   RuntimeStage,
   createAppInstallResultMessage,
+  createAppUninstallResultMessage,
   createRuntimeErrorMessage,
   createRuntimeLogMessage,
   createRuntimeReadyMessage,
@@ -31,6 +32,7 @@ import {
   installCatalogApp,
   loadAppCatalog,
   prepareInstalledApps,
+  uninstallCatalogApp,
   writeInstalledApps,
 } from '/server/app-installer.js'
 import { BENCH_DIRECTORIES, PYTHON_PACKAGES, SITE_CONFIG } from './config.js'
@@ -59,7 +61,7 @@ let freshSession = urlParams.get('fresh') === 'true'
 let pyodide = null
 let bootPromise = null
 let appCatalog = null
-let appInstallationPromise = Promise.resolve()
+let appMutationPromise = Promise.resolve()
 
 const stateStore = new BrowserStateStore({
   indexedDB,
@@ -127,22 +129,13 @@ async function bootPython() {
   return bridge
 }
 
-async function installApp(appId) {
+async function mutateInstalledApps(mutation) {
   const bridge = await bootPromise
   await checkpointDatabase(pyodide, siteDbPath)
   const databaseBackup = pyodide.FS.readFile(siteDbPath).slice()
   const installedAppsBackup = [...stateStore.installedApps]
   try {
-    stateStore.installedApps = await installCatalogApp({
-      pyodide,
-      fetchFn: (...args) => fetch(...args),
-      catalog: appCatalog,
-      appId,
-      installedAppIds: stateStore.installedApps,
-      environmentRoot,
-      appsFile,
-      cryptoApi: self.crypto,
-    })
+    stateStore.installedApps = await mutation(stateStore.installedApps)
     await checkpointDatabase(pyodide, siteDbPath)
     await stateStore.save(siteDbPath, await bridge.exportCookieJar(), stateStore.installedApps)
   } catch (error) {
@@ -152,7 +145,7 @@ async function installApp(appId) {
       try {
         pyodide.FS.unlink(`${siteDbPath}${suffix}`)
       } catch (_) {
-        // The failed install may not have created a SQLite sidecar.
+        // The failed mutation may not have created a SQLite sidecar.
       }
     }
     writeInstalledApps(pyodide.FS, appsFile, installedAppsBackup)
@@ -160,9 +153,32 @@ async function installApp(appId) {
   }
 }
 
+async function installApp(appId) {
+  return mutateInstalledApps(installedAppIds => installCatalogApp({
+    pyodide,
+    fetchFn: (...args) => fetch(...args),
+    catalog: appCatalog,
+    appId,
+    installedAppIds,
+    environmentRoot,
+    appsFile,
+    cryptoApi: self.crypto,
+  }))
+}
+
+async function uninstallApp(appId) {
+  return mutateInstalledApps(installedAppIds => uninstallCatalogApp({
+    pyodide,
+    catalog: appCatalog,
+    appId,
+    installedAppIds,
+    appsFile,
+  }))
+}
+
 function handleAppInstall(message) {
   const { requestId, appId } = message.payload
-  appInstallationPromise = appInstallationPromise.then(async () => {
+  appMutationPromise = appMutationPromise.then(async () => {
     try {
       await installApp(appId)
       self.postMessage(createAppInstallResultMessage(requestId, appId, { installed: true }))
@@ -171,6 +187,22 @@ function handleAppInstall(message) {
       self.postMessage(createAppInstallResultMessage(requestId, appId, {
         installed: false,
         error: error?.message || `Failed to install ${appId}.`,
+      }))
+    }
+  })
+}
+
+function handleAppUninstall(message) {
+  const { requestId, appId } = message.payload
+  appMutationPromise = appMutationPromise.then(async () => {
+    try {
+      await uninstallApp(appId)
+      self.postMessage(createAppUninstallResultMessage(requestId, appId, { uninstalled: true }))
+    } catch (error) {
+      console.error(`[Worker] Failed to uninstall app ${appId}:`, error)
+      self.postMessage(createAppUninstallResultMessage(requestId, appId, {
+        uninstalled: false,
+        error: error?.message || `Failed to uninstall ${appId}.`,
       }))
     }
   })
@@ -186,7 +218,7 @@ function createRequestExecutor(bridge) {
       body: `Worker error: ${error.message}\n${error.stack || ''}`,
     }),
     handleRequest: async request => {
-      await appInstallationPromise
+      await appMutationPromise
       return bridge.handleRequest(request)
     },
     persist: async () => {
@@ -199,6 +231,10 @@ function createRequestExecutor(bridge) {
 self.onmessage = async event => {
   if (isProtocolMessage(event.data, ProtocolMessageType.APP_INSTALL)) {
     handleAppInstall(event.data)
+    return
+  }
+  if (isProtocolMessage(event.data, ProtocolMessageType.APP_UNINSTALL)) {
+    handleAppUninstall(event.data)
     return
   }
   if (!isProtocolMessage(event.data, ProtocolMessageType.INIT_CHANNEL)) return

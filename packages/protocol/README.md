@@ -7,7 +7,7 @@ or worker lifecycle implementation.
 ## Responsibilities
 
 - Define protocol message names and runtime progress stages.
-- Create and validate control, lifecycle, request, and response messages.
+- Create and validate control, lifecycle, app-management, request, and response messages.
 - Preserve transferable HTTP request and response bodies.
 - Add, read, and remove playground scopes in URLs.
 - Expose the current protocol version.
