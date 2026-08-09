@@ -111,17 +111,16 @@ export class PlaygroundController {
         }),
       )
       this.registration = registration
-      // Updating is maintenance work. An active controller can boot the app
-      // immediately, even when the browser's update check is slow or offline.
-      void this.checkForServiceWorkerUpdate()
+      this.serviceWorkerTarget = this.expectedServiceWorker(serviceWorker, registration)
 
-      if (!serviceWorker.controller || !this.isExpectedServiceWorker(serviceWorker.controller)) {
+      if (!this.serviceWorkerTarget) {
         const controllerReady = this.waitForExpectedServiceWorker(serviceWorker)
         this.progress(RuntimeStage.SERVICE_WORKER, 'active', 'Updating service worker...')
         const upgraded = await controllerReady
         if (upgraded === false) {
           throw new Error('The service worker update did not activate. Reload the page to retry.')
         }
+        this.serviceWorkerTarget = serviceWorker.controller
       }
 
       this.progress(RuntimeStage.SERVICE_WORKER, 'done', 'Service worker connected.')
@@ -191,10 +190,16 @@ export class PlaygroundController {
     }
 
     const serviceWorker = this.environment.navigator.serviceWorker
-    if (serviceWorker.controller) {
-      sendInit(serviceWorker.controller)
+    const target = this.expectedServiceWorker(serviceWorker, this.registration)
+      || this.serviceWorkerTarget
+    if (target) {
+      this.serviceWorkerTarget = target
+      sendInit(target)
     } else {
-      serviceWorker.ready.then(registration => sendInit(registration.active))
+      serviceWorker.ready.then(registration => {
+        this.serviceWorkerTarget = registration.active
+        sendInit(registration.active)
+      })
     }
   }
 
@@ -247,9 +252,20 @@ export class PlaygroundController {
   }
 
   isExpectedServiceWorker(worker) {
-    if (!worker?.scriptURL) return true
+    if (!worker) return false
+    if (!worker.scriptURL) return true
     const baseUrl = this.environment.location?.href || 'http://localhost/'
     return worker.scriptURL === new URL(this.options.serviceWorkerUrl, baseUrl).href
+  }
+
+  expectedServiceWorker(serviceWorker, registration) {
+    if (this.isExpectedServiceWorker(serviceWorker?.controller)) {
+      return serviceWorker.controller
+    }
+    if (this.isExpectedServiceWorker(registration?.active)) {
+      return registration.active
+    }
+    return null
   }
 
   waitForExpectedServiceWorker(serviceWorker) {
@@ -287,6 +303,7 @@ export class PlaygroundController {
     this.worker?.terminate()
     this.worker = null
     this.registration = null
+    this.serviceWorkerTarget = null
     this.recoveryChannel?.close()
     this.recoveryChannel = null
 
