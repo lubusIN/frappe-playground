@@ -62,6 +62,11 @@ export class InstanceRegistry {
     return false
   }
 
+  async waitForOnlyActiveScope(options = {}) {
+    const available = await this.waitUntilAvailable(options)
+    return available ? this.onlyActiveScope() : null
+  }
+
   async waitUntilReady(scope, {
     timeoutMs = 90000,
     pollMs = 100,

@@ -115,6 +115,19 @@ async function handleFetch(event, url) {
     || clientScope
     || (!isShellNavigation && !isStaticPath(requestPath) && instances.onlyActiveScope())
 
+  let recoveryAttempted = false
+  if (!scope && instances.size === 0) {
+    recoveryAttempted = true
+    console.log('[SW] Instance registry empty; requesting channel recovery.')
+    const recoveryChannel = new BroadcastChannel('sw-recovery')
+    recoveryChannel.postMessage(createRecoveryRequestMessage())
+    scope = await instances.waitForOnlyActiveScope({
+      timeoutMs: CHANNEL_RECOVERY_TIMEOUT_MS,
+      pollMs: CHANNEL_RECOVERY_POLL_MS,
+    })
+    recoveryChannel.close()
+  }
+
   if (scope) {
     instances.associateClient(event.clientId, scope)
     instances.associateClient(event.resultingClientId, scope)
@@ -129,28 +142,15 @@ async function handleFetch(event, url) {
   }
 
   if (!scope) {
-    console.log(`[SW] Fetching natively: ${event.request.url}`)
-    return fetch(event.request)
-  }
-
-  if (instances.size === 0) {
-    console.log('[SW] Instance registry empty; requesting channel recovery.')
-    const recoveryChannel = new BroadcastChannel('sw-recovery')
-    recoveryChannel.postMessage(createRecoveryRequestMessage())
-    const recovered = await instances.waitUntilAvailable({
-      timeoutMs: CHANNEL_RECOVERY_TIMEOUT_MS,
-      pollMs: CHANNEL_RECOVERY_POLL_MS,
-    })
-    recoveryChannel.close()
-
-    if (!recovered) {
-      console.warn('[SW] Channel recovery timed out; releasing the request.')
-      if (event.request.mode === 'navigate') return fetch(event.request)
+    if (recoveryAttempted) {
+      console.warn('[SW] Channel recovery timed out; rejecting the request.')
       return new Response('Runtime connection unavailable', {
         status: 503,
         headers: { 'Retry-After': '1' },
       })
     }
+    console.log(`[SW] Fetching natively: ${event.request.url}`)
+    return fetch(event.request)
   }
 
   if (!instances.get(scope)?.ready) {

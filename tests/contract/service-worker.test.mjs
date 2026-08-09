@@ -98,6 +98,19 @@ test('instance registry owns client associations, readiness, and cleanup', async
   })
   assert.equal(await available, true)
 
+  let recoveryClock = 0
+  const recoveringRegistry = new InstanceRegistry()
+  const recoveredScope = recoveringRegistry.waitForOnlyActiveScope({
+    timeoutMs: 10,
+    pollMs: 1,
+    now: () => recoveryClock,
+    sleep: async () => {
+      recoveryClock += 1
+      recoveringRegistry.register('restored-tab', { name: 'port' }, 'client')
+    },
+  })
+  assert.equal(await recoveredScope, 'restored-tab')
+
   let clock = 0
   const ready = registry.waitUntilReady('tab-1', {
     timeoutMs: 10,
