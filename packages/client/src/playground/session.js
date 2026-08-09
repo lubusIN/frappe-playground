@@ -66,6 +66,39 @@ export function selectInstanceSession(id, {
   return { ...instance, freshSession: false }
 }
 
+export function removeInstanceSession(id, { storage = globalThis.localStorage } = {}) {
+  const instances = parseCatalog(storage).filter(instance => instance.id !== id)
+  saveCatalog(storage, instances)
+  if (storage.getItem(PLAYGROUND_SESSION_KEY) === id) {
+    if (instances[0]) storage.setItem(PLAYGROUND_SESSION_KEY, instances[0].id)
+    else storage.removeItem(PLAYGROUND_SESSION_KEY)
+  }
+  return instances
+}
+
+export function renameInstanceSession(id, name, { storage = globalThis.localStorage } = {}) {
+  const normalizedName = name?.trim()
+  if (!normalizedName) throw new TypeError('Playground name is required')
+
+  const instances = parseCatalog(storage)
+  const index = instances.findIndex(instance => instance.id === id)
+  if (index === -1) return null
+
+  instances[index] = { ...instances[index], name: normalizedName }
+  saveCatalog(storage, instances)
+  return instances[index]
+}
+
+export function deleteInstanceData(id, { indexedDB = globalThis.indexedDB } = {}) {
+  if (!indexedDB) return Promise.resolve()
+  return new Promise((resolve, reject) => {
+    const request = indexedDB.deleteDatabase(`frappe_playground_db_${id}`)
+    request.onsuccess = () => resolve()
+    request.onerror = () => reject(request.error)
+    request.onblocked = () => reject(new Error('Close the playground before deleting its data.'))
+  })
+}
+
 export function getOrCreateInstanceSession(options = {}) {
   const {
     storage = globalThis.localStorage,

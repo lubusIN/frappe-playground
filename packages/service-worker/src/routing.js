@@ -45,7 +45,13 @@ const STATIC_PATH_PREFIXES = [
   '/server',
   '/storage',
 ]
-const DEVELOPMENT_PATH_PREFIXES = ['/@vite/', '/@fs/', '/src/', '/node_modules/']
+const DEVELOPMENT_PATH_PREFIXES = [
+  '/@fs/',
+  '/@id/',
+  '/@vite/',
+  '/node_modules/',
+  '/src/',
+]
 
 export function isShellStaticPath(pathname) {
   return pathname === '/favicon.ico'

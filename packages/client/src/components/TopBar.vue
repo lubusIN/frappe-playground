@@ -4,6 +4,7 @@
   >
     <div class="inline-flex min-w-0 items-center gap-2">
       <BrandWordmark clip-id="frappe-topbar-wordmark-clip" class="text-white" />
+      <span class="max-w-40 truncate text-xs text-gray-400">{{ activeInstanceName }}</span>
     </div>
 
     <form
@@ -38,16 +39,30 @@
           <RotateCw class="h-4 w-4" aria-hidden="true" />
         </template>
       </Button>
+      <Button
+        class="w-8 !text-gray-300 hover:!text-white hover:!bg-gray-800"
+        type="button"
+        variant="ghost"
+        :disabled="!ready"
+        title="Manage playgrounds"
+        aria-label="Manage playgrounds"
+        @click="$emit('manage-instances')"
+      >
+        <template #icon>
+          <PanelsTopLeft class="h-4 w-4" aria-hidden="true" />
+        </template>
+      </Button>
     </form>
   </div>
 </template>
 
 <script setup>
 import Button from 'frappe-ui/components/Button/Button.vue'
-import { RotateCw } from '@lucide/vue'
+import { computed } from 'vue'
+import { PanelsTopLeft, RotateCw } from '@lucide/vue'
 import BrandWordmark from './BrandWordmark.vue'
 
-defineProps({
+const props = defineProps({
   address: {
     type: String,
     required: true,
@@ -56,7 +71,24 @@ defineProps({
     type: Boolean,
     default: false,
   },
+  instances: {
+    type: Array,
+    default: () => [],
+  },
+  activeInstanceId: {
+    type: String,
+    default: '',
+  },
 })
 
-defineEmits(['navigate', 'reload', 'update:address'])
+const activeInstanceName = computed(() => (
+  props.instances.find(instance => instance.id === props.activeInstanceId)?.name || 'Playground'
+))
+
+defineEmits([
+  'manage-instances',
+  'navigate',
+  'reload',
+  'update:address',
+])
 </script>

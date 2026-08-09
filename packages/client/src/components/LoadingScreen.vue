@@ -23,6 +23,12 @@
         <div v-if="progress === 100" class="mt-1 pt-3 border-t border-surface-gray-2 text-center text-[13px] font-medium text-ink-gray-9">
           Brewed in {{ formatElapsed(totalElapsedMs) }}
         </div>
+        <div v-if="error" class="mt-1 border-t border-surface-gray-2 pt-3">
+          <p class="m-0 text-xs leading-5 text-red-600">{{ error }}</p>
+          <Button class="mt-3 w-full" variant="solid" @click="$emit('retry')">
+            Retry boot
+          </Button>
+        </div>
       </div>
     </div>
 
@@ -44,6 +50,7 @@
 <script setup>
 import { computed } from 'vue'
 import Progress from 'frappe-ui/components/Progress/Progress.vue'
+import Button from 'frappe-ui/components/Button/Button.vue'
 import { CheckCircle2, Loader2, Circle, Rocket } from '@lucide/vue'
 import BrandIcon from './BrandIcon.vue'
 
@@ -56,7 +63,13 @@ const props = defineProps({
     type: Boolean,
     default: false,
   },
+  error: {
+    type: String,
+    default: '',
+  },
 })
+
+defineEmits(['retry'])
 
 const progress = computed(() => {
   if (!props.steps || props.steps.length === 0) return 0
