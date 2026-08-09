@@ -99,9 +99,10 @@ existing artifacts.
 Optional app sources are declared in `runtime/apps/catalog.json`. Validate the
 catalog without running Docker using `npm run validate:apps`. The runtime build
 fetches immutable commits, builds their frontend assets, and emits deterministic
-install archives under `artifacts/runtime/apps/`. App installation is not yet
-exposed to playground instances; this is the build-and-catalog foundation for
-that workflow.
+install archives under `artifacts/runtime/apps/`. The server runtime can verify
+and install those archives into a selected playground through its versioned
+worker protocol. The app-management interface is intentionally left to the next
+phase.
 
 For a production-style local preview, build the Vue shell and start Vite preview:
 

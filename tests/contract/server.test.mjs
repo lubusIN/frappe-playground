@@ -14,9 +14,48 @@ import {
 } from '../../packages/server/src/request-handler.js'
 import { initializePyodide } from '../../packages/server/src/boot.js'
 import {
+  appById,
+  installCatalogApp,
+  prepareInstalledApps,
+} from '../../packages/server/src/app-installer.js'
+import {
+  BrowserStateStore,
   restoreSiteFiles,
   snapshotSiteFiles,
 } from '../../packages/server/src/persistence.js'
+
+function memoryIndexedDb() {
+  const values = new Map()
+  const request = result => {
+    const operation = {}
+    queueMicrotask(() => {
+      operation.result = result
+      operation.onsuccess?.()
+    })
+    return operation
+  }
+  const database = {
+    objectStoreNames: { contains: () => true },
+    createObjectStore() {},
+    transaction(_name, mode) {
+      const transaction = {
+        objectStore: () => ({
+          get: key => request(values.get(key)),
+          clear: () => values.clear(),
+          put: (value, key) => values.set(key, value),
+        }),
+      }
+      if (mode === 'readwrite') queueMicrotask(() => transaction.oncomplete?.())
+      return transaction
+    },
+    close() {},
+  }
+  return {
+    open() {
+      return request(database)
+    },
+  }
+}
 
 test('generated Python text module exactly matches authored Python sources', async () => {
   const [mocks, wsgi] = await Promise.all([
@@ -83,6 +122,29 @@ test('uploaded site files are snapshotted and restored within allowed roots', ()
   )
 })
 
+test('installed app metadata is persisted with its playground database', async () => {
+  const indexedDB = memoryIndexedDb()
+  const sourceFiles = new Map([['/site.db', new Uint8Array([1, 2, 3])]])
+  const source = new BrowserStateStore({
+    indexedDB,
+    scope: 'instance-1',
+    getFs: () => ({ readFile: path => sourceFiles.get(path) }),
+  })
+  await source.preloadedState
+  source.installedApps = ['wiki']
+  await source.save('/site.db')
+
+  const restoredFiles = new Map()
+  const restored = new BrowserStateStore({
+    indexedDB,
+    scope: 'instance-1',
+    getFs: () => ({ writeFile: (path, value) => restoredFiles.set(path, value) }),
+  })
+  assert.equal(await restored.load('/restored.db'), true)
+  assert.deepEqual(restored.installedApps, ['wiki'])
+  assert.deepEqual(restoredFiles.get('/restored.db'), new Uint8Array([1, 2, 3]))
+})
+
 test('Pyodide loader installs core and configured Python packages', async () => {
   const calls = []
   const pyodide = {
@@ -117,6 +179,75 @@ test('Pyodide loader installs core and configured Python packages', async () => 
     'tzdata',
   ])
   assert.deepEqual(calls.find(call => call[0] === 'install')[2], ['requests'])
+})
+
+test('catalog apps are verified, unpacked, and installed into the scoped site', async () => {
+  const archive = new TextEncoder().encode('app archive')
+  const digest = await crypto.subtle.digest('SHA-256', archive)
+  const archiveSha256 = [...new Uint8Array(digest)]
+    .map(value => value.toString(16).padStart(2, '0'))
+    .join('')
+  const app = {
+    id: 'wiki',
+    archive: 'apps/wiki/app.zip',
+    archiveBytes: archive.byteLength,
+    archiveSha256,
+    pythonDependencies: ['mistune>=3.0'],
+  }
+  const writes = []
+  const calls = []
+  const pyodide = {
+    FS: { writeFile: (...args) => writes.push(args) },
+    globals: {
+      set: (...args) => calls.push(['set', ...args]),
+      delete: (...args) => calls.push(['delete', ...args]),
+    },
+    pyimport: name => ({
+      install: async (...args) => calls.push(['install-dependencies', name, ...args]),
+    }),
+    unpackArchive: (...args) => calls.push(['unpack', ...args]),
+    runPythonAsync: async source => calls.push(['python', source]),
+  }
+  const fetchFn = async url => {
+    assert.equal(url, '/apps/wiki/app.zip')
+    return {
+      ok: true,
+      arrayBuffer: async () => archive.buffer,
+    }
+  }
+
+  const installed = await installCatalogApp({
+    pyodide,
+    fetchFn,
+    catalog: { apps: [app] },
+    appId: 'wiki',
+    installedAppIds: [],
+    environmentRoot: '/runtime',
+    appsFile: '/bench/sites/apps.txt',
+    cryptoApi: crypto,
+  })
+
+  assert.deepEqual(installed, ['wiki'])
+  assert.deepEqual(writes.at(-1), ['/bench/sites/apps.txt', 'frappe\nwiki\n'])
+  assert.deepEqual(calls.find(call => call[0] === 'install-dependencies').slice(1), [
+    'micropip',
+    ['mistune>=3.0'],
+    { keep_going: true },
+  ])
+  assert.equal(calls.some(call => call[0] === 'unpack' && call[2] === 'zip'), true)
+  assert.equal(calls.some(call => call[0] === 'python' && call[1].includes('install_app')), true)
+
+  await prepareInstalledApps({
+    pyodide,
+    fetchFn,
+    catalog: { apps: [app] },
+    appIds: [],
+    environmentRoot: '/runtime',
+    appsFile: '/bench/sites/apps.txt',
+    cryptoApi: crypto,
+  })
+  assert.deepEqual(writes.at(-1), ['/bench/sites/apps.txt', 'frappe\n'])
+  assert.throws(() => appById({ apps: [app] }, 'missing'), /not available/)
 })
 
 test('Python bridge converts requests and releases PyProxy values', () => {

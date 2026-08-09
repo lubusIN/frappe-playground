@@ -11,6 +11,8 @@ export const ProtocolMessageType = Object.freeze({
   RUNTIME_LOG: 'runtime:log',
   RUNTIME_READY: 'runtime:ready',
   RUNTIME_ERROR: 'runtime:error',
+  APP_INSTALL: 'app:install',
+  APP_INSTALL_RESULT: 'app:install-result',
   BACKEND_REQUEST: 'backend:request',
   BACKEND_RESPONSE: 'backend:response',
 })
@@ -105,12 +107,36 @@ export function createRuntimeLogMessage(text, stage, status = 'active') {
   })
 }
 
-export function createRuntimeReadyMessage() {
-  return createMessage(ProtocolMessageType.RUNTIME_READY)
+export function createRuntimeReadyMessage(options = {}) {
+  if (!('installedApps' in options)) return createMessage(ProtocolMessageType.RUNTIME_READY)
+  if (!Array.isArray(options.installedApps)
+    || options.installedApps.some(appId => typeof appId !== 'string' || !appId)) {
+    throw new TypeError('installedApps must be an array of strings')
+  }
+  return createMessage(ProtocolMessageType.RUNTIME_READY, {
+    installedApps: [...new Set(options.installedApps)],
+  })
 }
 
 export function createRuntimeErrorMessage(text) {
   return createMessage(ProtocolMessageType.RUNTIME_ERROR, {
     message: requireString(text, 'message'),
   })
+}
+
+export function createAppInstallMessage(requestId, appId) {
+  return createMessage(ProtocolMessageType.APP_INSTALL, {
+    requestId: requireString(requestId, 'requestId'),
+    appId: requireString(appId, 'appId'),
+  })
+}
+
+export function createAppInstallResultMessage(requestId, appId, options = {}) {
+  const payload = {
+    requestId: requireString(requestId, 'requestId'),
+    appId: requireString(appId, 'appId'),
+    installed: options.installed === true,
+  }
+  if (options.error) payload.error = requireString(options.error, 'error')
+  return createMessage(ProtocolMessageType.APP_INSTALL_RESULT, payload)
 }
