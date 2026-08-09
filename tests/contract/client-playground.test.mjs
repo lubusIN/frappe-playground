@@ -63,7 +63,14 @@ test('client app catalog loader validates generated metadata', async () => {
     archiveSha256: 'b'.repeat(64),
   }
   const catalog = await loadAppCatalog({
-    fetchFn: async () => ({ ok: true, json: async () => ({ schemaVersion: 1, apps: [app] }) }),
+    fetchFn: async () => ({
+      ok: true,
+      json: async () => ({
+        schemaVersion: 1,
+        sourceCatalogSha256: 'c'.repeat(64),
+        apps: [app],
+      }),
+    }),
   })
   assert.equal(catalog.apps[0].id, 'wiki')
   await assert.rejects(

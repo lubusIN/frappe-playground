@@ -23,6 +23,9 @@ export function validateAppCatalog(catalog, { generated = false } = {}) {
   if (!Array.isArray(catalog.apps) || catalog.apps.length === 0) {
     throw new TypeError('App catalog must contain at least one app')
   }
+  if (generated && !/^[a-f0-9]{64}$/.test(catalog.sourceCatalogSha256 || '')) {
+    throw new TypeError('Generated app catalog must identify its authored catalog SHA-256')
+  }
 
   const ids = new Set()
   for (const [index, app] of catalog.apps.entries()) {

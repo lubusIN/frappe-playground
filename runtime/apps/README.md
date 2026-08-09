@@ -17,6 +17,15 @@ and writes generated output to `artifacts/runtime/apps/`. The install archive is
 deterministic and excludes compiled public assets; those are published once
 under the entry's `assetPrefix`.
 
-Phase 1 only prepares and publishes app artifacts. Installing an app into an
-individual playground and exposing app management in the client belong to the
-following phases.
+The generated catalog records a fingerprint of this authored catalog. Build
+verification rejects stale archives after any app recipe, dependency, version,
+or source commit changes. After editing `catalog.json`, run:
+
+```bash
+npm run build:runtime
+npm run build
+npm run verify:build
+```
+
+The app manager installs and uninstalls these generated archives independently
+for each playground.
