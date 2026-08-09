@@ -58,7 +58,7 @@
           row-key="id"
         >
           <template #cell="{ item, row, column }">
-          <p v-if="column.key === 'name'" class="truncate font-medium text-ink-gray-9">
+          <p v-if="column.key === 'name'" class="truncate text-sm font-medium text-ink-gray-9">
             {{ item }}
           </p>
           <Badge
@@ -91,7 +91,7 @@
               :options="actionsFor(row)"
             />
           </div>
-          <span v-else class="text-ink-gray-6">{{ formatDate(item) }}</span>
+          <span v-else class="text-sm text-ink-gray-6">{{ formatDate(item) }}</span>
           </template>
         </ListView>
 
@@ -99,7 +99,7 @@
           <p class="text-sm text-ink-gray-6">
             {{ instances.length }} {{ instances.length === 1 ? 'playground' : 'playgrounds' }}
           </p>
-          <Button variant="solid" @click="creating = true">New playground</Button>
+          <Button variant="solid" @click="creating = true">New Playground</Button>
         </div>
       </div>
     </template>
