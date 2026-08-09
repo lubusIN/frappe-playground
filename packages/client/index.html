@@ -31,6 +31,11 @@
         <p class="loading-title">Preparing your playground…</p>
       </section>
     </div>
+    <!--
+      Keep this recovery watchdog inline: a stale service worker may prevent
+      /src/main.js from loading, so recovery code inside the client bundle
+      would never execute.
+    -->
     <script>
       (() => {
         const recoveryKey = 'frappe_playground_shell_recovery'

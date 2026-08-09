@@ -271,7 +271,7 @@ test('the controller owns lifecycle wiring and emits structured progress', async
   assert.equal(session.freshSession, true)
   assert.equal(typeof session.createdAt, 'number')
   assert.equal(typeof session.lastOpenedAt, 'number')
-  assert.equal(serviceWorkerUpdateChecks, 1)
+  assert.equal(serviceWorkerUpdateChecks, 0)
   assert.deepEqual(serviceWorkerRegistrationOptions, {
     type: 'module',
     updateViaCache: 'none',
@@ -280,6 +280,9 @@ test('the controller owns lifecycle wiring and emits structured progress', async
   assert.match(FakeWorker.instance.url, /^\/worker\.js\?build=test&scope=instance-1&fresh=true$/)
   assert.equal(serviceWorkerMessages[0][0].type, ProtocolMessageType.INIT_CHANNEL)
   assert.equal(workerMessages[0][0].type, ProtocolMessageType.INIT_CHANNEL)
+
+  documentListeners.get('visibilitychange')()
+  assert.equal(serviceWorkerUpdateChecks, 1)
 
   FakeWorker.instance.onmessage({
     data: createRuntimeLogMessage('Loading Pyodide...', RuntimeStage.PYTHON),
@@ -336,5 +339,17 @@ test('service worker registration fails with a bounded timeout', async () => {
   await assert.rejects(
     controller.withRegistrationTimeout(new Promise(() => {})),
     /registration timed out/,
+  )
+})
+
+test('an active registration can boot a hard-reloaded uncontrolled page', () => {
+  const active = { scriptURL: 'http://localhost:5173/sw.js?build=test' }
+  const controller = new PlaygroundController({
+    location: { href: 'http://localhost:5173/' },
+  })
+
+  assert.equal(
+    controller.expectedServiceWorker({ controller: null }, { active }),
+    active,
   )
 })
