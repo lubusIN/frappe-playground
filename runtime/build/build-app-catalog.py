@@ -49,6 +49,12 @@ def main():
     bench_dir = Path(sys.argv[2]).resolve()
     output_dir = Path(sys.argv[3]).resolve()
     catalog = json.loads(catalog_path.read_text())
+    source_catalog_sha256 = hashlib.sha256(json.dumps(
+        catalog,
+        ensure_ascii=False,
+        separators=(",", ":"),
+        sort_keys=True,
+    ).encode()).hexdigest()
     generated_apps = []
 
     for app in catalog["apps"]:
@@ -82,6 +88,7 @@ def main():
     output_dir.mkdir(parents=True, exist_ok=True)
     (output_dir / "apps" / "catalog.json").write_text(json.dumps({
         "schemaVersion": catalog["schemaVersion"],
+        "sourceCatalogSha256": source_catalog_sha256,
         "apps": generated_apps,
     }, indent=2) + "\n")
 

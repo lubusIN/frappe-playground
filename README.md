@@ -103,7 +103,9 @@ fetches immutable commits, builds their frontend assets, and emits deterministic
 install archives under `artifacts/runtime/apps/`. The server runtime can verify
 and install those archives into a selected playground through its versioned
 worker protocol. The top-bar app manager exposes that catalog and reloads the
-playground after installation so Frappe starts with the new hooks and DocTypes.
+playground after app changes so Frappe starts with the correct hooks and
+DocTypes. Build verification fingerprints the authored catalog and rejects
+stale generated app archives in CI.
 
 For a production-style local preview, build the Vue shell and start Vite preview:
 

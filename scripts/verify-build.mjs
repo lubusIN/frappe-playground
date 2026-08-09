@@ -2,11 +2,14 @@ import { createHash } from 'node:crypto'
 import { access, readFile, readdir, stat } from 'node:fs/promises'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { validateAppCatalog } from './app-catalog.mjs'
+import {
+  assertGeneratedCatalogMatches,
+} from './app-catalog.mjs'
 
 const projectRoot = path.dirname(path.dirname(fileURLToPath(import.meta.url)))
 const defaultArtifactsDir = path.join(projectRoot, 'artifacts/runtime')
 const defaultDistDir = path.join(projectRoot, 'dist')
+const defaultAuthoredCatalogPath = path.join(projectRoot, 'runtime/apps/catalog.json')
 
 async function exists(filePath) {
   try {
@@ -57,6 +60,7 @@ function resolvePublishedImport(distDir, importer, specifier) {
 export async function verifyBuild({
   artifactsDir = defaultArtifactsDir,
   distDir = defaultDistDir,
+  authoredCatalogPath = defaultAuthoredCatalogPath,
 } = {}) {
   const errors = []
   const manifestPath = path.join(artifactsDir, 'manifest.json')
@@ -71,7 +75,8 @@ export async function verifyBuild({
   let appCatalog = null
   try {
     appCatalog = JSON.parse(await readFile(path.join(artifactsDir, 'apps/catalog.json'), 'utf8'))
-    validateAppCatalog(appCatalog, { generated: true })
+    const authoredCatalog = JSON.parse(await readFile(authoredCatalogPath, 'utf8'))
+    assertGeneratedCatalogMatches(authoredCatalog, appCatalog)
   } catch (error) {
     errors.push(`Invalid generated app catalog: ${error.message}`)
   }
