@@ -57,6 +57,7 @@ const appCatalogLoading = ref(false)
 const appCatalogError = ref('')
 const appInstallError = ref('')
 const installingAppId = ref('')
+const uninstallingAppId = ref('')
 let appCatalogLoaded = false
 
 let addressTimer = 0
@@ -224,7 +225,7 @@ function retryAppCatalog() {
 }
 
 async function installApp(appId) {
-  if (!playground || installingAppId.value) return
+  if (!playground || installingAppId.value || uninstallingAppId.value) return
   installingAppId.value = appId
   appInstallError.value = ''
   try {
@@ -235,6 +236,21 @@ async function installApp(appId) {
     appInstallError.value = error.message || `Could not install ${appId}.`
   } finally {
     installingAppId.value = ''
+  }
+}
+
+async function uninstallApp(appId) {
+  if (!playground || installingAppId.value || uninstallingAppId.value) return
+  uninstallingAppId.value = appId
+  appInstallError.value = ''
+  try {
+    await playground.uninstallApp(appId)
+    installedApps.value = playground.listInstalledApps()
+    window.location.reload()
+  } catch (error) {
+    appInstallError.value = error.message || `Could not uninstall ${appId}.`
+  } finally {
+    uninstallingAppId.value = ''
   }
 }
 
@@ -351,8 +367,10 @@ onBeforeUnmount(() => {
       :error="appCatalogError"
       :install-error="appInstallError"
       :installing-app-id="installingAppId"
+      :uninstalling-app-id="uninstallingAppId"
       @install="installApp"
       @retry="retryAppCatalog"
+      @uninstall="uninstallApp"
     />
     <InstanceManagerDialog
       v-if="ready"

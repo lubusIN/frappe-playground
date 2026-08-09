@@ -17,6 +17,7 @@ import {
   appById,
   installCatalogApp,
   prepareInstalledApps,
+  uninstallCatalogApp,
 } from '../../packages/server/src/app-installer.js'
 import {
   BrowserStateStore,
@@ -248,6 +249,17 @@ test('catalog apps are verified, unpacked, and installed into the scoped site', 
   })
   assert.deepEqual(writes.at(-1), ['/bench/sites/apps.txt', 'frappe\n'])
   assert.throws(() => appById({ apps: [app] }, 'missing'), /not available/)
+
+  const remaining = await uninstallCatalogApp({
+    pyodide,
+    catalog: { apps: [app] },
+    appId: 'wiki',
+    installedAppIds: ['wiki'],
+    appsFile: '/bench/sites/apps.txt',
+  })
+  assert.deepEqual(remaining, [])
+  assert.deepEqual(writes.at(-1), ['/bench/sites/apps.txt', 'frappe\n'])
+  assert.equal(calls.some(call => call[0] === 'python' && call[1].includes('remove_app')), true)
 })
 
 test('Python bridge converts requests and releases PyProxy values', () => {

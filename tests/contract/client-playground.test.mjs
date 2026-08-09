@@ -7,6 +7,7 @@ import {
   createRuntimeLogMessage,
   createRuntimeReadyMessage,
   createAppInstallResultMessage,
+  createAppUninstallResultMessage,
 } from '../../packages/protocol/src/messages.js'
 import {
   PlaygroundController,
@@ -242,6 +243,7 @@ test('the controller owns lifecycle wiring and emits structured progress', async
     ready: Promise.resolve({ active: controllerWorker }),
   }
   const documentListeners = new Map()
+  const scheduledDelays = []
   const document = {
     visibilityState: 'visible',
     addEventListener: (type, listener) => documentListeners.set(type, listener),
@@ -285,6 +287,7 @@ test('the controller owns lifecycle wiring and emits structured progress', async
     storage: memoryStorage(),
     cryptoApi: { randomUUID: () => 'instance-1' },
     setTimeoutFn: (callback, delay) => {
+      scheduledDelays.push(delay)
       if (delay === 2000) callback()
       return 1
     },
@@ -334,6 +337,18 @@ test('the controller owns lifecycle wiring and emits structured progress', async
   })
   assert.equal((await installation).installed, true)
   assert.deepEqual(controller.listInstalledApps(), ['wiki'])
+
+  const uninstall = controller.uninstallApp('wiki')
+  assert.equal(scheduledDelays.at(-1), 600000)
+  const uninstallMessage = workerMessages.at(-1)[0]
+  assert.equal(uninstallMessage.type, ProtocolMessageType.APP_UNINSTALL)
+  FakeWorker.instance.onmessage({
+    data: createAppUninstallResultMessage(uninstallMessage.payload.requestId, 'wiki', {
+      uninstalled: true,
+    }),
+  })
+  assert.equal((await uninstall).uninstalled, true)
+  assert.deepEqual(controller.listInstalledApps(), [])
 
   controller.dispose()
   assert.equal(FakeWorker.instance.terminated, true)

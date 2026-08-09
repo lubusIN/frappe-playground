@@ -9,6 +9,8 @@ import {
   assertProtocolMessage,
   createAppInstallMessage,
   createAppInstallResultMessage,
+  createAppUninstallMessage,
+  createAppUninstallResultMessage,
   createAssociateClientMessage,
   createClaimClientsMessage,
   createClearOtherInstancesMessage,
@@ -38,6 +40,8 @@ test('control and runtime messages use the current protocol version', () => {
     createRuntimeErrorMessage('Boot failed'),
     createAppInstallMessage('request-1', 'wiki'),
     createAppInstallResultMessage('request-1', 'wiki', { installed: true }),
+    createAppUninstallMessage('request-2', 'wiki'),
+    createAppUninstallResultMessage('request-2', 'wiki', { uninstalled: true }),
   ]
 
   for (const value of messages) {
@@ -57,15 +61,23 @@ test('control and runtime messages use the current protocol version', () => {
       ProtocolMessageType.RUNTIME_ERROR,
       ProtocolMessageType.APP_INSTALL,
       ProtocolMessageType.APP_INSTALL_RESULT,
+      ProtocolMessageType.APP_UNINSTALL,
+      ProtocolMessageType.APP_UNINSTALL_RESULT,
     ]),
   )
   assert.deepEqual(messages[1].payload, { scope: 'instance-1' })
   assert.deepEqual(messages[2].payload, { scope: 'instance-1', freshSession: true })
-  assert.deepEqual(messages.at(-2).payload, { requestId: 'request-1', appId: 'wiki' })
-  assert.deepEqual(messages.at(-1).payload, {
+  assert.deepEqual(messages.at(-4).payload, { requestId: 'request-1', appId: 'wiki' })
+  assert.deepEqual(messages.at(-3).payload, {
     requestId: 'request-1',
     appId: 'wiki',
     installed: true,
+  })
+  assert.deepEqual(messages.at(-2).payload, { requestId: 'request-2', appId: 'wiki' })
+  assert.deepEqual(messages.at(-1).payload, {
+    requestId: 'request-2',
+    appId: 'wiki',
+    uninstalled: true,
   })
   assert.deepEqual(createRuntimeReadyMessage({ installedApps: ['wiki', 'wiki'] }).payload, {
     installedApps: ['wiki'],

@@ -8,7 +8,7 @@ events between the page, Service Worker, and Pyodide server worker.
 
 - Render the loading screen, top bar, dialogs, and Frappe iframe.
 - Create, select, rename, reset, and delete local playground instances.
-- Load the curated app catalog and install apps into the active playground.
+- Load the curated app catalog and manage apps in the active playground.
 - Register the Service Worker and start the selected server worker.
 - Establish the `MessageChannel` connecting those two workers.
 - Translate iframe navigation between visible Frappe paths and scoped paths.

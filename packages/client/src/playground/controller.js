@@ -2,6 +2,7 @@ import {
   ProtocolMessageType,
   RuntimeStage,
   createAppInstallMessage,
+  createAppUninstallMessage,
   createInitChannelMessage,
   isProtocolMessage,
 } from '../../../protocol/src/messages.js'
@@ -17,6 +18,9 @@ export const PlaygroundEventType = Object.freeze({
 
 export class PlaygroundController {
   constructor(options = {}) {
+    const appOperationTimeoutMs = options.appOperationTimeoutMs
+      ?? options.appInstallTimeoutMs
+      ?? 600000
     this.options = {
       serviceWorkerUrl: runtimeEntryUrl('/sw.js'),
       serverWorkerUrl: runtimeEntryUrl('/worker.js'),
@@ -24,7 +28,7 @@ export class PlaygroundController {
       serviceWorkerRegistrationTimeoutMs: 15000,
       serviceWorkerUpgradeTimeoutMs: 30000,
       readyDelayMs: 2000,
-      appInstallTimeoutMs: 120000,
+      appOperationTimeoutMs,
       ...options,
     }
     this.environment = {
@@ -52,7 +56,7 @@ export class PlaygroundController {
     this.disposed = false
     this.handleControllerChange = null
     this.handleVisibilityChange = null
-    this.pendingAppInstalls = new Map()
+    this.pendingAppOperations = new Map()
   }
 
   on(type, listener) {
@@ -178,10 +182,10 @@ export class PlaygroundController {
       }
 
       if (isProtocolMessage(event.data, ProtocolMessageType.APP_INSTALL_RESULT)) {
-        const pending = this.pendingAppInstalls.get(event.data.payload.requestId)
+        const pending = this.pendingAppOperations.get(event.data.payload.requestId)
         if (!pending) return
         this.environment.clearTimeoutFn(pending.timeout)
-        this.pendingAppInstalls.delete(event.data.payload.requestId)
+        this.pendingAppOperations.delete(event.data.payload.requestId)
         if (event.data.payload.installed) {
           if (!this.installedApps.includes(event.data.payload.appId)) {
             this.installedApps.push(event.data.payload.appId)
@@ -189,6 +193,20 @@ export class PlaygroundController {
           pending.resolve(event.data.payload)
         }
         else pending.reject(new Error(event.data.payload.error || 'App installation failed.'))
+        return
+      }
+
+      if (isProtocolMessage(event.data, ProtocolMessageType.APP_UNINSTALL_RESULT)) {
+        const pending = this.pendingAppOperations.get(event.data.payload.requestId)
+        if (!pending) return
+        this.environment.clearTimeoutFn(pending.timeout)
+        this.pendingAppOperations.delete(event.data.payload.requestId)
+        if (event.data.payload.uninstalled) {
+          this.installedApps = this.installedApps.filter(appId => appId !== event.data.payload.appId)
+          pending.resolve(event.data.payload)
+        } else {
+          pending.reject(new Error(event.data.payload.error || 'App uninstall failed.'))
+        }
       }
     }
 
@@ -320,19 +338,31 @@ export class PlaygroundController {
 
   installApp(appId) {
     validateAppId(appId)
+    return this.requestAppOperation(appId, createAppInstallMessage, 'installing')
+  }
+
+  uninstallApp(appId) {
+    validateAppId(appId)
+    if (!this.installedApps.includes(appId)) {
+      return Promise.reject(new Error(`${appId} is not installed in this playground.`))
+    }
+    return this.requestAppOperation(appId, createAppUninstallMessage, 'uninstalling')
+  }
+
+  requestAppOperation(appId, createMessage, action) {
     if (!this.runtimeReady || !this.worker) {
-      return Promise.reject(new Error('The playground must finish booting before installing apps.'))
+      return Promise.reject(new Error(`The playground must finish booting before ${action} apps.`))
     }
 
     const requestId = this.options.cryptoApi?.randomUUID?.()
       || `${Date.now()}-${Math.random().toString(16).slice(2)}`
     return new Promise((resolve, reject) => {
       const timeout = this.environment.setTimeoutFn(() => {
-        this.pendingAppInstalls.delete(requestId)
-        reject(new Error(`Timed out while installing ${appId}.`))
-      }, this.options.appInstallTimeoutMs)
-      this.pendingAppInstalls.set(requestId, { resolve, reject, timeout })
-      this.worker.postMessage(createAppInstallMessage(requestId, appId))
+        this.pendingAppOperations.delete(requestId)
+        reject(new Error(`Timed out while ${action} ${appId}.`))
+      }, this.options.appOperationTimeoutMs)
+      this.pendingAppOperations.set(requestId, { resolve, reject, timeout })
+      this.worker.postMessage(createMessage(requestId, appId))
     })
   }
 
@@ -346,11 +376,11 @@ export class PlaygroundController {
     this.environment.clearTimeoutFn(this.readyTimer)
     this.runtimeReady = false
     this.installedApps = []
-    for (const pending of this.pendingAppInstalls.values()) {
+    for (const pending of this.pendingAppOperations.values()) {
       this.environment.clearTimeoutFn(pending.timeout)
-      pending.reject(new Error('Playground stopped before app installation completed.'))
+      pending.reject(new Error('Playground stopped before the app operation completed.'))
     }
-    this.pendingAppInstalls.clear()
+    this.pendingAppOperations.clear()
     this.worker?.terminate()
     this.worker = null
     this.registration = null
