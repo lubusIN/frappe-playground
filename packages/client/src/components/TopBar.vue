@@ -3,14 +3,38 @@
     class="grid min-w-0 grid-cols-[max-content_minmax(0,1fr)] items-center gap-3.5 border-b border-gray-950 bg-gray-900 px-2.5 py-1.5 max-sm:grid-cols-1 max-sm:content-center max-sm:gap-1.5"
   >
     <div class="inline-flex min-w-0 items-center gap-2">
-      <BrandWordmark clip-id="frappe-topbar-wordmark-clip" class="text-white" />
-      <span class="max-w-40 truncate text-xs text-gray-400">{{ activeInstanceName }}</span>
+      <BrandIcon
+        clip-id="frappe-topbar-brand-clip"
+        mark-color="light"
+        class="text-gray-900"
+      />
+      <Badge
+        theme="gray"
+        variant="outline"
+        size="sm"
+        class="max-w-40 truncate !border-gray-700 !text-gray-300"
+      >
+        {{ activeInstanceName }}
+      </Badge>
     </div>
 
     <form
-      class="grid min-w-0 grid-cols-[minmax(0,1fr)_32px_32px] items-center gap-1.5"
+      class="grid min-w-0 grid-cols-[32px_minmax(0,1fr)_32px] items-center gap-1.5"
       @submit.prevent="$emit('navigate')"
     >
+      <Button
+        class="w-8 !text-gray-300 hover:!text-white hover:!bg-gray-800"
+        type="button"
+        variant="ghost"
+        :disabled="!ready"
+        title="Reload frame"
+        aria-label="Reload frame"
+        @click="$emit('reload')"
+      >
+        <template #icon>
+          <RotateCw class="h-4 w-4" aria-hidden="true" />
+        </template>
+      </Button>
       <!--
         NOTE: Do not refactor this to use Frappe UI's <TextInput>.
         The native input is used intentionally here to allow full control over
@@ -31,19 +55,6 @@
         type="button"
         variant="ghost"
         :disabled="!ready"
-        title="Reload frame"
-        aria-label="Reload frame"
-        @click="$emit('reload')"
-      >
-        <template #icon>
-          <RotateCw class="h-4 w-4" aria-hidden="true" />
-        </template>
-      </Button>
-      <Button
-        class="w-8 !text-gray-300 hover:!text-white hover:!bg-gray-800"
-        type="button"
-        variant="ghost"
-        :disabled="!ready"
         title="Manage playgrounds"
         aria-label="Manage playgrounds"
         @click="$emit('manage-instances')"
@@ -58,9 +69,10 @@
 
 <script setup>
 import Button from 'frappe-ui/components/Button/Button.vue'
+import Badge from 'frappe-ui/components/Badge/Badge.vue'
 import { computed } from 'vue'
 import { PanelsTopLeft, RotateCw } from '@lucide/vue'
-import BrandWordmark from './BrandWordmark.vue'
+import BrandIcon from './BrandIcon.vue'
 
 const props = defineProps({
   address: {

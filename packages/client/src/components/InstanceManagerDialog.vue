@@ -8,7 +8,25 @@
   >
     <template #actions>
       <form
-        v-if="renaming"
+        v-if="creating"
+        class="w-full space-y-4 text-left"
+        @submit.prevent="createInstance"
+      >
+        <TextInput
+          v-model="newName"
+          label="Playground name"
+          placeholder="e.g. Accounting demo"
+          maxlength="80"
+          required
+        />
+        <div class="flex justify-end gap-2">
+          <Button variant="subtle" type="button" @click="creating = false">Cancel</Button>
+          <Button variant="solid" type="submit" :disabled="!newName.trim()">Create</Button>
+        </div>
+      </form>
+
+      <form
+        v-else-if="renaming"
         class="w-full space-y-4 text-left"
         @submit.prevent="confirmRename"
       >
@@ -31,79 +49,57 @@
         </Button>
       </div>
 
-      <div v-else class="w-full space-y-4 text-left">
-        <form class="flex items-end gap-2" @submit.prevent="createInstance">
-          <TextInput
-            v-model="newName"
-            class="min-w-0 flex-1"
-            label="New playground"
-            placeholder="e.g. Accounting demo"
-            maxlength="80"
-            required
-          />
-          <Button variant="solid" type="submit" :disabled="!newName.trim()">
-            Create
-          </Button>
-        </form>
-
+      <div v-else class="-mt-5 w-full space-y-3 text-left">
         <ListView
-          class="h-72"
+          class="h-64 w-full"
           :columns="columns"
           :rows="instances"
           :options="listOptions"
           row-key="id"
         >
           <template #cell="{ item, row, column }">
-            <div v-if="column.key === 'name'" class="min-w-0">
-              <p class="truncate font-medium text-ink-gray-9">{{ item }}</p>
-              <p class="truncate font-mono text-xs text-ink-gray-5">{{ row.id }}</p>
-            </div>
-            <Badge
-              v-else-if="column.key === 'status'"
-              :theme="row.id === activeInstanceId ? 'blue' : 'gray'"
-              variant="subtle"
-            >
-              {{ row.id === activeInstanceId ? 'Active' : 'Saved' }}
-            </Badge>
-            <span v-else class="text-ink-gray-6">{{ formatDate(item) }}</span>
-          </template>
-        </ListView>
-
-        <div class="flex items-center justify-between border-t border-outline-gray-1 pt-3">
-          <p class="min-w-0 truncate text-sm text-ink-gray-6">
-            {{ selectedInstance ? selectedInstance.name : 'Select a playground to manage it' }}
+          <p v-if="column.key === 'name'" class="truncate font-medium text-ink-gray-9">
+            {{ item }}
           </p>
-          <div class="flex shrink-0 gap-2">
+          <Badge
+            v-else-if="column.key === 'status'"
+            :theme="row.id === activeInstanceId ? 'blue' : 'gray'"
+            variant="subtle"
+          >
+            {{ row.id === activeInstanceId ? 'Active' : 'Saved' }}
+          </Badge>
+          <div
+            v-else-if="column.key === 'actions'"
+            class="flex items-center justify-end gap-2"
+            @click.stop
+          >
             <Button
+              v-if="row.id !== activeInstanceId"
+              size="sm"
               variant="subtle"
-              :disabled="!selectedInstance || selectedInstance.id === activeInstanceId"
-              @click="$emit('select', selectedInstance.id)"
+              @click="$emit('select', row.id)"
             >
               Open
             </Button>
-            <Button
-              variant="subtle"
-              :disabled="!selectedInstance"
-              @click="startRename"
-            >
-              Rename
-            </Button>
-            <Button
-              variant="subtle"
-              :disabled="!selectedInstance"
-              @click="askConfirmation('reset')"
-            >
-              Reset
-            </Button>
-            <Button
-              theme="red"
-              variant="subtle"
-              :disabled="!selectedInstance"
-              @click="askConfirmation('delete')"
-            >
-              Delete
-            </Button>
+            <Dropdown
+              align="end"
+              :button="{
+                icon: 'lucide-ellipsis',
+                variant: 'ghost',
+                'aria-label': `Actions for ${row.name}`,
+              }"
+              :options="actionsFor(row)"
+            />
           </div>
+          <span v-else class="text-ink-gray-6">{{ formatDate(item) }}</span>
+          </template>
+        </ListView>
+
+        <div class="flex items-center justify-between gap-3">
+          <p class="text-sm text-ink-gray-6">
+            {{ instances.length }} {{ instances.length === 1 ? 'playground' : 'playgrounds' }}
+          </p>
+          <Button variant="solid" @click="creating = true">New playground</Button>
         </div>
       </div>
     </template>
@@ -115,6 +111,7 @@ import { computed, ref, watch } from 'vue'
 import Badge from 'frappe-ui/components/Badge/Badge.vue'
 import Button from 'frappe-ui/components/Button/Button.vue'
 import Dialog from 'frappe-ui/components/Dialog/Dialog.vue'
+import Dropdown from 'frappe-ui/components/Dropdown/Dropdown.vue'
 import ListView from 'frappe-ui/components/ListView/ListView.vue'
 import TextInput from 'frappe-ui/components/TextInput/TextInput.vue'
 
@@ -135,21 +132,22 @@ const emit = defineEmits([
 const newName = ref('')
 const selectedId = ref('')
 const pendingAction = ref('')
+const creating = ref(false)
 const renaming = ref(false)
 const renameValue = ref('')
 
 const columns = [
   { label: 'Playground', key: 'name', width: 3 },
-  { label: 'Status', key: 'status', width: '100px' },
-  { label: 'Last opened', key: 'lastOpenedAt', width: '150px' },
+  { label: 'Last opened', key: 'lastOpenedAt', width: '140px' },
+  { label: 'Status', key: 'status', width: '80px' },
+  { label: '', key: 'actions', width: '120px', align: 'right' },
 ]
 
 const listOptions = computed(() => ({
   selectable: false,
-  enableActive: true,
+  enableActive: false,
   showTooltip: true,
   rowHeight: 56,
-  onRowClick: row => { selectedId.value = row.id },
   emptyState: {
     title: 'No playgrounds',
     description: 'Create a playground to get started.',
@@ -167,6 +165,7 @@ const confirmationMessage = computed(() => {
 })
 
 const dialogTitle = computed(() => {
+  if (creating.value) return 'New playground'
   if (renaming.value) return 'Rename playground'
   if (pendingAction.value) return pendingAction.value === 'delete'
     ? 'Delete playground?'
@@ -175,6 +174,7 @@ const dialogTitle = computed(() => {
 })
 
 const dialogMessage = computed(() => {
+  if (creating.value) return 'Create a new isolated Frappe environment in this browser.'
   if (renaming.value) return 'Choose a name that helps you identify this playground.'
   if (pendingAction.value) return confirmationMessage.value
   return 'Create and manage isolated playgrounds stored in this browser.'
@@ -183,6 +183,7 @@ const dialogMessage = computed(() => {
 watch(() => props.modelValue, open => {
   if (open) selectedId.value = props.activeInstanceId
   else {
+    creating.value = false
     renaming.value = false
     pendingAction.value = ''
   }
@@ -193,6 +194,7 @@ function createInstance() {
   if (!name) return
   emit('create', name)
   newName.value = ''
+  creating.value = false
 }
 
 function formatDate(timestamp) {
@@ -201,6 +203,36 @@ function formatDate(timestamp) {
 
 function askConfirmation(action) {
   if (selectedInstance.value) pendingAction.value = action
+}
+
+function actionsFor(instance) {
+  return [
+    {
+      label: 'Rename',
+      icon: 'lucide-pencil',
+      onClick: () => {
+        selectedId.value = instance.id
+        startRename()
+      },
+    },
+    {
+      label: 'Reset',
+      icon: 'lucide-rotate-ccw',
+      onClick: () => {
+        selectedId.value = instance.id
+        askConfirmation('reset')
+      },
+    },
+    {
+      label: 'Delete',
+      icon: 'lucide-trash-2',
+      theme: 'red',
+      onClick: () => {
+        selectedId.value = instance.id
+        askConfirmation('delete')
+      },
+    },
+  ]
 }
 
 function startRename() {
