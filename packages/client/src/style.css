@@ -1,5 +1,9 @@
 @import 'frappe-ui/style.css';
 
+.dialog-content .mb-6 {
+  margin-bottom: 0.75rem;
+}
+
 * {
   box-sizing: border-box;
 }
