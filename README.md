@@ -4,7 +4,7 @@
 
 # Frappe Playground
 
-Run the Frappe Framework in the browser with Pyodide and WebAssembly. The playground serves a Vue shell, boots Frappe inside a Web Worker, and routes same-origin Frappe requests through a Service Worker into Python WSGI. Runtime state is kept in the browser, so a tab can reload without needing a traditional Python server.
+Run the Frappe Framework entirely in the browser with Pyodide and WebAssembly. A Vue shell boots Frappe inside dedicated Web Workers and routes same-origin requests through a Service Worker into Python WSGI. Named playgrounds are isolated and persisted in browser storage, so multiple Frappe sites can be created, reopened, reset, and managed without a traditional Python server.
 
 > [!CAUTION]
 > Project is currently experimental and under active development.
@@ -13,9 +13,9 @@ Run the Frappe Framework in the browser with Pyodide and WebAssembly. The playgr
 
 The playground has five main pieces:
 
-1. **Vue shell (`packages/client/`)**: Renders the loading screen, top bar, and Frappe Desk iframe. `packages/client/src/playground/` owns client configuration, runtime lifecycle, session identity, and iframe navigation independently of the Vue components. It depends on the shared protocol, never on server or Service Worker implementation modules. Vite emits the shell assets into `dist/frontend/`.
-2. **Service Worker (`packages/service-worker/`)**: A small event entry point delegates scoped routing, caching, instance registration, Socket.IO compatibility, and Python backend proxying to independently testable modules.
-3. **Pyodide server (`packages/server/`)**: A small worker entry point composes the Pyodide loader, filesystem installer, IndexedDB persistence, database lifecycle, Python bridge, and serial WSGI request executor. Browser-specific Python sources in `runtime/python/` are converted into a build-time JavaScript text module.
+1. **Vue shell (`packages/client/`)**: Renders boot progress, the top bar, the instance manager, and the Frappe iframe. `packages/client/src/playground/` owns runtime lifecycle, the persistent instance catalog, Service Worker coordination, and scoped iframe navigation independently of Vue components. Vite emits shell assets into `dist/frontend/`.
+2. **Service Worker (`packages/service-worker/`)**: Routes each scoped request to the correct server worker, associates browser clients with instances, caches runtime assets, preserves scoped redirects, and supports channel recovery across reloads. One Service Worker is shared by every instance on the origin.
+3. **Pyodide server (`packages/server/`)**: Each playground starts a dedicated worker that composes the Pyodide loader, filesystem installer, scoped IndexedDB persistence, database lifecycle, Python bridge, and serial WSGI request executor. Browser-specific Python sources in `runtime/python/` are converted into a build-time JavaScript module.
 4. **Shared protocol (`packages/protocol/`)**: Defines the versioned messages exchanged by the shell, Service Worker, and Pyodide server.
 5. **Runtime build (`runtime/`, `scripts/build.sh`)**: Keeps Python helpers, runtime configuration, the Dockerfile, and asset exporter together, and builds intermediate Frappe runtime artifacts into `artifacts/runtime/`. The application build assembles those artifacts and all authored browser sources into the clean `dist/` publish directory.
 
@@ -30,11 +30,45 @@ Access-Control-Allow-Origin: *
 
 Vite sets these headers during local development and preview. Cloudflare Pages uses the authored `static/_headers` file copied into `dist/` during assembly.
 
+## Features
+
+- Run Frappe Desk and Python WSGI entirely in the browser.
+- Create and name multiple isolated playground instances.
+- Switch, rename, reset, and delete saved playgrounds from the top bar.
+- Persist each instance's SQLite database, cookies, and uploaded site files in IndexedDB.
+- Preserve Frappe navigation and redirects behind scoped paths such as `/scope:<instance-id>/...`.
+- Recover runtime channels and Service Worker state across normal and cache-bypassing reloads.
+- Display structured progress while Pyodide, Frappe assets, and the site database initialize.
+
+## Runtime flow
+
+```text
+Vue client
+  -> creates a scoped server Web Worker
+  -> transfers a MessageChannel to the Service Worker and server worker
+
+Browser request
+  -> Service Worker resolves the instance scope
+  -> request envelope crosses the MessageChannel
+  -> Pyodide server executes Frappe WSGI
+  -> response envelope returns to the browser
+```
+
+The human-facing address bar displays ordinary Frappe routes while the iframe
+uses scoped paths internally. Shared contracts in `packages/protocol/` are the
+only supported coupling between the three browser contexts.
+
 ### Default Credentials
 
-The playground preconfigures a streamlined authentication flow for instant experimentation:
+The login form is automatically prefilled for local experimentation:
 
-The login form is automatically prefilled with username `Administrator` and password `admin` via client-owned configuration in `packages/client/src/playground/config.js`.
+```text
+Username: Administrator
+Password: admin
+```
+
+These presentation defaults live in `packages/client/src/playground/config.js`.
+The credentials are intended only for browser-local playground data.
 
 ## Getting Started
 
@@ -44,7 +78,7 @@ Install dependencies:
 npm install
 ```
 
-Build the browser runtime with Docker:
+Build the browser runtime artifacts with Docker:
 
 ```bash
 npm run build:runtime
@@ -57,6 +91,10 @@ npm run dev
 ```
 
 Open `http://localhost:5173/`.
+
+The runtime build is required when `artifacts/runtime/` is missing or when the
+Frappe runtime inputs change. Subsequent client-only development can reuse the
+existing artifacts.
 
 For a production-style local preview, build the Vue shell and start Vite preview:
 
@@ -80,16 +118,18 @@ This rebuilds the runtime artifacts, builds the frontend shell into a clean `dis
 ```text
 frappe-playground/
 |-- packages/
-|   |-- client/             # Vue shell and browser orchestration
-|   |-- protocol/src/       # Versioned cross-context message contracts
-|   |-- service-worker/src/ # Service Worker routing and proxy modules
-|   `-- server/src/         # Pyodide server modules
+|   |-- client/             # Vue shell, instance catalog, and orchestration
+|   |-- protocol/           # Versioned cross-context contracts and scoped URLs
+|   |-- service-worker/     # Origin routing, instance registry, cache, and proxy
+|   `-- server/             # Pyodide boot, persistence, filesystem, and WSGI bridge
 |-- runtime/
 |   |-- python/             # Authored Python bridge helpers and mocks
 |   |-- config/             # Python package and site configuration
 |   `-- build/              # Dockerfile and runtime asset exporter
 |-- static/                 # Authored static hosting files only
-|-- artifacts/runtime/      # Generated intermediate runtime artifacts
+|-- artifacts/
+|   |-- generated/          # Generated JavaScript sources used by browser workers
+|   `-- runtime/            # Generated Frappe runtime, database, assets, and manifest
 |-- dist/                   # Generated deployable application
 |-- scripts/
 |   |-- build.sh            # Docker runtime build
@@ -98,9 +138,8 @@ frappe-playground/
 |   |-- prepare.sh          # Assembles runtime and authored files into dist/
 |   `-- prepare-deploy.sh   # Full deploy preparation flow
 |-- tests/
-|   |-- unit/               # Focused module tests
-|   |-- contract/           # Fast protocol and MessageChannel tests
-|   `-- e2e/                # Playwright browser flows
+|   |-- contract/           # Fast module, protocol, and MessageChannel tests
+|   `-- e2e/                # Playwright boot, persistence, and UI flows
 |-- vite.config.mjs
 `-- playwright.config.js
 ```
@@ -108,6 +147,25 @@ frappe-playground/
 `artifacts/` and `dist/` are generated and intentionally ignored by Git. Authored source files never live in either directory.
 
 Application code may import shared contracts from `packages/`, but applications must not import implementation modules from sibling applications. Build scripts are responsible for mapping authored application entry points to their stable public URLs in `dist/`.
+
+Each package contains a README with its responsibilities, boundaries, important
+entry points, and focused verification commands.
+
+## Browser storage and isolation
+
+The client stores the instance catalog and active instance ID in `localStorage`.
+Each server worker stores persistent site state in a scoped IndexedDB database:
+
+```text
+frappe_playground_db_<instance-id>
+```
+
+Reset and delete operations target only that database. The Pyodide environment
+and immutable Frappe runtime assets are shared browser caches, while SQLite,
+cookies, and uploaded public/private files remain isolated per playground.
+
+Clearing browser site data removes saved playgrounds. This project does not yet
+provide remote synchronization or server-side backups.
 
 ## Testing
 
@@ -119,7 +177,9 @@ npm run test
 
 Set `PLAYWRIGHT_BASE_URL` to test an explicitly managed server instead.
 
-The e2e tests cover boot, login, setup wizard completion, Desk stability, scoped reload behavior, and the mobile shell.
+The e2e tests cover boot, login, setup wizard completion, Desk stability,
+multi-instance creation and rename, scoped reload behavior, IndexedDB
+persistence, uploaded files, static assets, and the mobile shell.
 
 Run only the fast protocol contract tests with:
 
