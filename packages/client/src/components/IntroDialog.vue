@@ -37,7 +37,9 @@
 </template>
 
 <script setup>
-import { Button, Dialog, Badge } from 'frappe-ui'
+import Badge from 'frappe-ui/components/Badge/Badge.vue'
+import Button from 'frappe-ui/components/Button/Button.vue'
+import Dialog from 'frappe-ui/components/Dialog/Dialog.vue'
 import { User, Key } from '@lucide/vue'
 import { LOGIN_DEMO } from '../playground/config.js'
 

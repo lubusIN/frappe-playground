@@ -5,6 +5,7 @@ import sys
 import mimetypes
 import sqlite3
 from http.cookies import SimpleCookie
+from urllib.parse import unquote
 import frappe
 import frappe.auth
 from frappe.app import application
@@ -34,7 +35,11 @@ class FrappeWSGIHandler:
     def serve_static_file(self, req, site_name):
         """Serve a static file directly from Pyodide's MEMFS."""
         try:
-            file_path = os.path.join(self.bench_sites_path, site_name, "public", req["path"].lstrip("/"))
+            public_root = os.path.realpath(os.path.join(self.bench_sites_path, site_name, "public"))
+            relative_path = unquote(req["path"]).lstrip("/")
+            file_path = os.path.realpath(os.path.join(public_root, relative_path))
+            if os.path.commonpath([public_root, file_path]) != public_root:
+                return {"status": 403, "headers": [], "body": b"Forbidden"}
             with open(file_path, "rb") as f:
                 content = f.read()
             mime_type, _ = mimetypes.guess_type(file_path)

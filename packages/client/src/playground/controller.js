@@ -1,14 +1,11 @@
 import {
   ProtocolMessageType,
   RuntimeStage,
-  createClaimClientsMessage,
-  createClearOtherInstancesMessage,
   createInitChannelMessage,
   isProtocolMessage,
 } from '../../../protocol/src/messages.js'
 import { getOrCreateInstanceSession } from './session.js'
-
-const CURRENT_SERVICE_WORKER_URL = '/sw.js?v=2'
+import { runtimeEntryUrl } from './runtime-version.js'
 
 export const PlaygroundEventType = Object.freeze({
   PROGRESS: 'progress',
@@ -19,9 +16,8 @@ export const PlaygroundEventType = Object.freeze({
 export class PlaygroundController {
   constructor(options = {}) {
     this.options = {
-      serviceWorkerUrl: CURRENT_SERVICE_WORKER_URL,
-      serverWorkerUrl: '/worker.js',
-      serverWorkerVersion: '2',
+      serviceWorkerUrl: runtimeEntryUrl('/sw.js'),
+      serverWorkerUrl: runtimeEntryUrl('/worker.js'),
       recoveryChannelName: 'sw-recovery',
       serviceWorkerUpgradeTimeoutMs: 30000,
       readyDelayMs: 2000,
@@ -42,6 +38,7 @@ export class PlaygroundController {
     this.worker = null
     this.recoveryChannel = null
     this.readyTimer = 0
+    this.runtimeReady = false
     this.started = false
     this.disposed = false
     this.handleControllerChange = null
@@ -98,14 +95,13 @@ export class PlaygroundController {
 
       const registration = await serviceWorker.register(this.options.serviceWorkerUrl, {
         type: 'module',
+        updateViaCache: 'none',
       })
       this.registration = registration
       await this.checkForServiceWorkerUpdate()
 
       if (!serviceWorker.controller || !this.isExpectedServiceWorker(serviceWorker.controller)) {
         const controllerReady = this.waitForExpectedServiceWorker(serviceWorker)
-        registration.waiting?.postMessage(createClaimClientsMessage())
-        registration.active?.postMessage(createClaimClientsMessage())
         this.progress(RuntimeStage.SERVICE_WORKER, 'active', 'Updating service worker...')
         const upgraded = await controllerReady
         if (upgraded === false) {
@@ -127,13 +123,11 @@ export class PlaygroundController {
 
   createWorker() {
     const { id, freshSession } = this.session
-    const query = new URLSearchParams({
-      v: this.options.serverWorkerVersion,
-      scope: id,
-      fresh: String(freshSession),
-    })
+    this.runtimeReady = false
+    const query = new URLSearchParams({ scope: id, fresh: String(freshSession) })
+    const separator = this.options.serverWorkerUrl.includes('?') ? '&' : '?'
     this.worker = new this.environment.WorkerClass(
-      `${this.options.serverWorkerUrl}?${query}`,
+      `${this.options.serverWorkerUrl}${separator}${query}`,
       { type: 'module' },
     )
 
@@ -145,6 +139,8 @@ export class PlaygroundController {
       }
 
       if (isProtocolMessage(event.data, ProtocolMessageType.RUNTIME_READY)) {
+        if (this.runtimeReady) return
+        this.runtimeReady = true
         this.progress(RuntimeStage.FRAPPE, 'done', 'Frappe booted successfully!')
         this.readyTimer = this.environment.setTimeoutFn(() => {
           if (!this.disposed) {
@@ -171,9 +167,6 @@ export class PlaygroundController {
       if (!serviceWorker || this.disposed) return
       const channel = new this.environment.MessageChannelClass()
       serviceWorker.postMessage(createInitChannelMessage(this.session.id), [channel.port1])
-      if (this.session.freshSession) {
-        serviceWorker.postMessage(createClearOtherInstancesMessage(this.session.id))
-      }
       this.worker.postMessage(
         createInitChannelMessage(this.session.id, {
           freshSession: this.session.freshSession,
@@ -256,6 +249,7 @@ export class PlaygroundController {
     this.disposed = true
     this.started = false
     this.environment.clearTimeoutFn(this.readyTimer)
+    this.runtimeReady = false
     this.worker?.terminate()
     this.worker = null
     this.registration = null

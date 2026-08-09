@@ -1,4 +1,11 @@
-export const SCOPE_QUERY_PARAM = '__scope'
+import {
+  addScopeToPath,
+  queryWithoutLegacyScope,
+  scopeFromUrl,
+  stripScopeFromPath,
+} from '../../protocol/src/scope-url.js'
+
+export { scopeFromUrl }
 
 export function isSocketIoPath(pathname) {
   return pathname.startsWith('/socket.io/')
@@ -20,26 +27,34 @@ export function handleSocketIoRequest(request, url) {
 export const NODE_MODULES_ASSET_PREFIX = '/assets/frappe/node_modules/'
 export const DEPLOY_SAFE_NODE_MODULES_ASSET_PREFIX = '/assets/frappe/runtime_modules/'
 
-const STATIC_PATHS = new Set(['/worker.js', '/config.js', '/sw.js'])
+const STATIC_PATHS = new Set([
+  '/config.js',
+  '/favicon.ico',
+  '/index.html',
+  '/sw.js',
+  '/worker.js',
+])
 const STATIC_PATH_PREFIXES = [
-  '/storage',
   '/assets',
-  '/pyodide',
+  '/frontend',
   '/generated',
-  '/server',
   '/protocol',
+  '/pyodide',
+  '/runtime-config',
   '/service-worker',
+  '/server',
+  '/storage',
 ]
 const DEVELOPMENT_PATH_PREFIXES = ['/@vite/', '/@fs/', '/src/', '/node_modules/']
 
-export function scopeFromUrl(url) {
-  return url.searchParams.get(SCOPE_QUERY_PARAM)
+export function isShellStaticPath(pathname) {
+  return pathname === '/favicon.ico'
+    || pathname === '/index.html'
+    || pathname.startsWith('/frontend/')
 }
 
 export function queryWithoutScope(url) {
-  const params = new URLSearchParams(url.search)
-  params.delete(SCOPE_QUERY_PARAM)
-  return params.toString()
+  return queryWithoutLegacyScope(url)
 }
 
 export function isStaticPath(pathname) {
@@ -63,8 +78,8 @@ export function remapStaticPath(pathname) {
 
 export function staticRequestUrl(requestUrl) {
   const url = new URL(requestUrl)
-  url.pathname = remapStaticPath(url.pathname)
-  url.searchParams.delete(SCOPE_QUERY_PARAM)
+  url.pathname = remapStaticPath(stripScopeFromPath(url.pathname))
+  url.searchParams.delete('__scope')
   return url
 }
 
@@ -75,9 +90,10 @@ export function scopeRedirectLocation(headers, scope, origin) {
   try {
     const scopedLocation = new URL(location, origin)
     if (scopedLocation.origin !== origin) return
-    if (scopedLocation.pathname === '/' || isStaticPath(scopedLocation.pathname)) return
+    if (isStaticPath(stripScopeFromPath(scopedLocation.pathname))) return
 
-    scopedLocation.searchParams.set(SCOPE_QUERY_PARAM, scope)
+    scopedLocation.pathname = addScopeToPath(scopedLocation.pathname, scope)
+    scopedLocation.searchParams.delete('__scope')
     headers.set(
       'Location',
       `${scopedLocation.pathname}${scopedLocation.search}${scopedLocation.hash}`,

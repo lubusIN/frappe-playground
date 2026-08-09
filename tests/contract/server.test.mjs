@@ -13,6 +13,10 @@ import {
   shouldPersistRequest,
 } from '../../packages/server/src/request-handler.js'
 import { initializePyodide } from '../../packages/server/src/boot.js'
+import {
+  restoreSiteFiles,
+  snapshotSiteFiles,
+} from '../../packages/server/src/persistence.js'
 
 test('generated Python text module exactly matches authored Python sources', async () => {
   const [mocks, wsgi] = await Promise.all([
@@ -35,6 +39,48 @@ test('runtime filesystem utilities are deterministic and tolerate existing direc
   assert.deepEqual(created, ['/new'])
   assert.equal(hashString('runtime-manifest'), hashString('runtime-manifest'))
   assert.notEqual(hashString('runtime-manifest'), hashString('other-manifest'))
+})
+
+test('uploaded site files are snapshotted and restored within allowed roots', () => {
+  const createFs = () => {
+    const directories = new Set(['/site', '/site/public', '/site/public/files', '/site/private', '/site/private/files'])
+    const files = new Map()
+    return {
+      directories,
+      files,
+      readdir(directory) {
+        const prefix = `${directory}/`
+        const children = new Set(['.', '..'])
+        for (const path of [...directories, ...files.keys()]) {
+          if (path.startsWith(prefix)) children.add(path.slice(prefix.length).split('/')[0])
+        }
+        return [...children]
+      },
+      stat(path) {
+        return { mode: directories.has(path) ? 1 : 2 }
+      },
+      isDir: mode => mode === 1,
+      isFile: mode => mode === 2,
+      readFile: path => files.get(path),
+      writeFile: (path, data) => files.set(path, new Uint8Array(data)),
+      mkdir: path => directories.add(path),
+    }
+  }
+
+  const source = createFs()
+  source.files.set('/site/public/files/image.png', new Uint8Array([1, 2, 3]))
+  source.directories.add('/site/private/files/nested')
+  source.files.set('/site/private/files/nested/document.txt', new Uint8Array([4, 5]))
+  const roots = ['/site/public/files', '/site/private/files']
+  const snapshot = snapshotSiteFiles(source, roots)
+
+  const restored = createFs()
+  restoreSiteFiles(restored, snapshot, roots)
+  assert.deepEqual(restored.files.get('/site/public/files/image.png'), new Uint8Array([1, 2, 3]))
+  assert.deepEqual(
+    restored.files.get('/site/private/files/nested/document.txt'),
+    new Uint8Array([4, 5]),
+  )
 })
 
 test('Pyodide loader installs core and configured Python packages', async () => {

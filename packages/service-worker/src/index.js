@@ -1,26 +1,29 @@
 // Frappe Playground — Service Worker entry point
 import {
   ProtocolMessageType,
+  createAssociateClientMessage,
   createRecoveryRequestMessage,
   isProtocolMessage,
-} from '/protocol/messages.js?v=2'
+} from '/protocol/messages.js'
 import {
   createBackendRequest,
   readBackendResponse,
-} from '/protocol/request.js?v=2'
-import { createBackendProxy } from '/service-worker/backend-proxy.js?v=1'
-import { RuntimeAssetCache } from '/service-worker/cache.js?v=1'
-import { InstanceRegistry } from '/service-worker/instance-registry.js?v=1'
+} from '/protocol/request.js'
+import { createBackendProxy } from '/service-worker/backend-proxy.js'
+import { RuntimeAssetCache } from '/service-worker/cache.js'
+import { InstanceRegistry } from '/service-worker/instance-registry.js'
 import {
   NODE_MODULES_ASSET_PREFIX,
   handleSocketIoRequest,
   isDevelopmentPath,
+  isShellStaticPath,
   isSocketIoPath,
   isStaticPath,
   queryWithoutScope,
   scopeFromUrl,
   staticRequestUrl,
-} from '/service-worker/routing.js?v=1'
+} from '/service-worker/routing.js'
+import { stripScopeFromPath } from '/protocol/scope-url.js'
 
 const BACKEND_READY_TIMEOUT_MS = 90000
 const BACKEND_READY_POLL_MS = 100
@@ -36,21 +39,29 @@ const callBackend = createBackendProxy({
   createBackendRequest,
   readBackendResponse,
   origin: self.location.origin,
+  createAssociateClientMessage,
 })
 
 self.addEventListener('install', () => self.skipWaiting())
 self.addEventListener('activate', event => event.waitUntil(self.clients.claim()))
 
 self.addEventListener('message', event => {
+  if (isProtocolMessage(event.data, ProtocolMessageType.ASSOCIATE_CLIENT)) {
+    instances.associateClient(event.source?.id, event.data.payload.scope)
+    return
+  }
+
   if (isProtocolMessage(event.data, ProtocolMessageType.CLEAR_OTHER_INSTANCES)) {
-    for (const scope of instances.clearExcept(event.data.payload.scope)) {
-      console.log(`[SW] Cleared stale instance: ${scope}`)
-    }
+    // Compatibility with older clients. A service worker is shared by every
+    // tab on the origin, so one client must never evict another playground.
+    console.warn('[SW] Ignoring deprecated CLEAR_OTHER_INSTANCES message.')
     return
   }
 
   if (isProtocolMessage(event.data, ProtocolMessageType.CLAIM_CLIENTS)) {
-    self.clients.claim()
+    // Compatibility with older clients. Claiming belongs to the activate
+    // event; a waiting worker throws InvalidStateError if it calls claim().
+    console.warn('[SW] Ignoring deprecated CLAIM_CLIENTS message.')
     return
   }
 
@@ -77,7 +88,10 @@ self.addEventListener('fetch', event => {
 
   if (url.origin !== self.location.origin) return
 
-  if (!scopeFromUrl(url) && isStaticPath(url.pathname)) {
+  const unscopedPath = stripScopeFromPath(url.pathname)
+  if (!scopeFromUrl(url) && isShellStaticPath(unscopedPath)) return
+
+  if (!scopeFromUrl(url) && isStaticPath(unscopedPath)) {
     if (!url.pathname.startsWith(NODE_MODULES_ASSET_PREFIX)) {
       event.respondWith(assetCache.respond(event.request))
       return
@@ -88,7 +102,7 @@ self.addEventListener('fetch', event => {
 })
 
 async function handleFetch(event, url) {
-  const requestPath = url.pathname
+  const requestPath = stripScopeFromPath(url.pathname)
   if (isDevelopmentPath(requestPath)) return fetch(event.request)
 
   const isShellNavigation = event.request.mode === 'navigate' && requestPath === '/'
@@ -99,12 +113,7 @@ async function handleFetch(event, url) {
   let scope = scopeFromUrl(url)
     || instances.scopeForClient(event.clientId)
     || clientScope
-    || (
-      event.request.mode === 'navigate'
-      && !isShellNavigation
-      && !isStaticPath(requestPath)
-      && instances.onlyActiveScope()
-    )
+    || (!isShellNavigation && !isStaticPath(requestPath) && instances.onlyActiveScope())
 
   if (scope) {
     instances.associateClient(event.clientId, scope)
@@ -144,7 +153,9 @@ async function handleFetch(event, url) {
     }
   }
 
-  console.log(`[SW] Waiting for instance ready for scope: ${scope}`)
+  if (!instances.get(scope)?.ready) {
+    console.log(`[SW] Waiting for instance ready for scope: ${scope}`)
+  }
   const ready = await instances.waitUntilReady(scope, {
     timeoutMs: BACKEND_READY_TIMEOUT_MS,
     pollMs: BACKEND_READY_POLL_MS,

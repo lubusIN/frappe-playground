@@ -1,5 +1,5 @@
-export { PYTHON_PACKAGES } from '/runtime-config/packages.js?v=1'
-export { SITE_CONFIG } from '/runtime-config/site.js?v=1'
+export { PYTHON_PACKAGES } from '/runtime-config/packages.js'
+export { SITE_CONFIG } from '/runtime-config/site.js'
 
 export const BENCH_DIRECTORIES = Object.freeze([
   '/home/pyodide/bench',

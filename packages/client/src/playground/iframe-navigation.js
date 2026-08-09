@@ -18,13 +18,17 @@ export function stripScope(value, origin = browserOrigin()) {
   const parsed = new URL(value, origin)
   parsed.searchParams.delete('__scope')
   const search = parsed.searchParams.toString()
-  return `${parsed.pathname || '/'}${search ? `?${search}` : ''}${parsed.hash}`
+  return `${stripScopeFromPath(parsed.pathname)}${search ? `?${search}` : ''}${parsed.hash}`
 }
 
 export function scopedFrameUrl(value, instanceId, origin = browserOrigin()) {
   if (!instanceId) throw new TypeError('instanceId is required')
 
   const parsed = new URL(normalizeAddress(value, origin), origin)
-  parsed.searchParams.set('__scope', instanceId)
-  return `${parsed.pathname}${parsed.search}${parsed.hash}`
+  parsed.searchParams.delete('__scope')
+  return `${addScopeToPath(parsed.pathname, instanceId)}${parsed.search}${parsed.hash}`
 }
+import {
+  addScopeToPath,
+  stripScopeFromPath,
+} from '../../../protocol/src/scope-url.js'

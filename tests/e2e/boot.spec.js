@@ -13,5 +13,5 @@ test('Frappe Playground boots up without crashing', async ({ page }) => {
 
     const { iframe, instanceId } = await waitForPlaygroundBoot(page);
 
-    await expect(iframe).toHaveAttribute('src', new RegExp(`^/\\?__scope=${instanceId}$`));
+    await expect(iframe).toHaveAttribute('src', `/scope:${instanceId}/`);
 });

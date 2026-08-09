@@ -103,6 +103,7 @@ export async function verifyBuild({
     'config.js',
     'protocol/messages.js',
     'protocol/request.js',
+    'protocol/scope-url.js',
     'protocol/version.js',
     'runtime-config/packages.js',
     'runtime-config/site.js',

@@ -43,7 +43,7 @@
 
 <script setup>
 import { computed } from 'vue'
-import { Progress } from 'frappe-ui'
+import Progress from 'frappe-ui/components/Progress/Progress.vue'
 import { CheckCircle2, Loader2, Circle, Rocket } from '@lucide/vue'
 import BrandIcon from './BrandIcon.vue'
 

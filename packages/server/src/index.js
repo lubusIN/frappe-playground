@@ -1,5 +1,5 @@
 // Frappe Playground — Pyodide server worker entry point
-import { FRAPPE_MOCKS_SOURCE, WSGI_SERVER_SOURCE } from '/generated/python-sources.js?v=1'
+import { FRAPPE_MOCKS_SOURCE, WSGI_SERVER_SOURCE } from '/generated/python-sources.js'
 import {
   ProtocolMessageType,
   RuntimeStage,
@@ -7,25 +7,25 @@ import {
   createRuntimeLogMessage,
   createRuntimeReadyMessage,
   isProtocolMessage,
-} from '/protocol/messages.js?v=2'
+} from '/protocol/messages.js'
 import {
   createBackendResponse,
   readBackendRequest,
-} from '/protocol/request.js?v=2'
+} from '/protocol/request.js'
 import {
   installRuntimeFilesystem,
   writeSiteFiles,
-} from '/server/filesystem.js?v=1'
+} from '/server/filesystem.js'
 import {
   BrowserStateStore,
   checkpointDatabase,
   initializeSiteDatabase,
-} from '/server/persistence.js?v=1'
+} from '/server/persistence.js'
 import {
   PythonBridge,
   SerialRequestExecutor,
-} from '/server/request-handler.js?v=1'
-import { initializePyodide } from '/server/boot.js?v=1'
+} from '/server/request-handler.js'
+import { initializePyodide } from '/server/boot.js'
 import { BENCH_DIRECTORIES, PYTHON_PACKAGES, SITE_CONFIG } from './config.js'
 
 const origin = self.location.origin
@@ -35,6 +35,10 @@ const environmentRoot = '/home/pyodide/frappe_env'
 const siteRoot = '/home/pyodide/bench/sites'
 const siteName = 'site1'
 const siteDbPath = `${siteRoot}/${siteName}/db/${siteName}.db`
+const siteFileRoots = [
+  `${siteRoot}/${siteName}/public/files`,
+  `${siteRoot}/${siteName}/private/files`,
+]
 const assetsJsonPath = `${siteRoot}/assets/assets.json`
 const staticSiteFiles = {
   [`${siteRoot}/apps.txt`]: 'frappe\n',
@@ -52,6 +56,7 @@ const stateStore = new BrowserStateStore({
   indexedDB,
   scope: instanceScope,
   getFs: () => pyodide.FS,
+  siteFileRoots,
 })
 
 function logRuntime(message, stage, status = 'active') {
@@ -100,7 +105,6 @@ async function bootPython() {
 
   logRuntime('Frappe booted successfully!', RuntimeStage.FRAPPE, 'done')
   console.log('[WORKER] Pyodide server boot complete.')
-  self.postMessage(createRuntimeReadyMessage())
   return bridge
 }
 
@@ -133,7 +137,9 @@ self.onmessage = async event => {
   try {
     const bridge = await bootPromise
     createRequestExecutor(bridge).attach(serviceWorkerPort)
-    serviceWorkerPort.postMessage(createRuntimeReadyMessage())
+    const readyMessage = createRuntimeReadyMessage()
+    serviceWorkerPort.postMessage(readyMessage)
+    self.postMessage(readyMessage)
   } catch (error) {
     bootPromise = null
     console.error('Failed to boot Pyodide:', error)
