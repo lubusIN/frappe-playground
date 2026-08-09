@@ -51,6 +51,7 @@ test('routing scopes backend requests and remaps deploy-safe static assets', () 
   assert.equal(isShellStaticPath('/frontend/index-abc.js'), true)
   assert.equal(isShellStaticPath('/assets/frappe/js/frappe-web.js'), false)
   assert.equal(isDevelopmentPath('/@vite/client'), true)
+  assert.equal(isDevelopmentPath('/@id/~icons/lucide/star'), true)
 
   const staticUrl = staticRequestUrl(
     'https://playground.test/scope:tab-1/assets/frappe/node_modules/ace/index.js',

@@ -2,6 +2,7 @@
 import { nextTick, onBeforeUnmount, onMounted, ref } from 'vue'
 import { RuntimeStage } from '../../protocol/src/messages.js'
 import IntroDialog from './components/IntroDialog.vue'
+import InstanceManagerDialog from './components/InstanceManagerDialog.vue'
 import LoadingScreen from './components/LoadingScreen.vue'
 import TopBar from './components/TopBar.vue'
 import { LOGIN_DEMO } from './playground/config.js'
@@ -14,9 +15,18 @@ import {
   scopedFrameUrl,
   stripScope,
 } from './playground/iframe-navigation.js'
+import {
+  createInstanceSession,
+  deleteInstanceData,
+  listInstanceSessions,
+  removeInstanceSession,
+  renameInstanceSession,
+} from './playground/session.js'
+
 
 const ready = ref(false)
 const booting = ref(false)
+const bootError = ref('')
 const bootSteps = ref([
   { label: 'Booting Service Worker', status: 'pending', startTime: null, elapsed: null },
   { label: 'Loading Python Runtime', status: 'pending', startTime: null, elapsed: null },
@@ -35,11 +45,28 @@ const address = ref('/')
 const frameSrc = ref('')
 const iframeRef = ref(null)
 const instanceId = ref('')
+const instances = ref([])
 const showIntroDialog = ref(true)
+const showInstanceManager = ref(false)
 
 let addressTimer = 0
 let playground = null
 let hasPrefilledLogin = false
+
+function resetBootState() {
+  ready.value = false
+  booting.value = true
+  bootError.value = ''
+  frameSrc.value = ''
+  address.value = '/'
+  hasPrefilledLogin = false
+  clearInterval(addressTimer)
+  for (const step of bootSteps.value) {
+    step.status = 'pending'
+    step.startTime = null
+    step.elapsed = null
+  }
+}
 
 function updateStep(index, status) {
   const now = performance.now()
@@ -130,27 +157,91 @@ function reloadFrame() {
   }
 }
 
-async function initPlayground() {
-  booting.value = true
-  playground = createPlayground()
+function reloadPage() {
+  window.location.reload()
+}
+
+async function initPlayground(options = {}) {
+  resetBootState()
+  playground?.dispose()
+  playground = createPlayground(options)
   playground.on(PlaygroundEventType.PROGRESS, handleProgress)
   playground.on(PlaygroundEventType.READY, ({ instanceId: id }) => {
     instanceId.value = id
+    instances.value = listInstanceSessions()
     ready.value = true
     booting.value = false
     frameSrc.value = frameUrl('/')
     startAddressSync()
   })
-  playground.on(PlaygroundEventType.ERROR, () => {
+  playground.on(PlaygroundEventType.ERROR, ({ message }) => {
     ready.value = false
     booting.value = false
+    bootError.value = message
   })
 
   try {
     const session = await playground.start()
     instanceId.value = session.id
+    instances.value = listInstanceSessions()
   } catch (_) {
     // The controller emits the user-facing error state.
+  }
+}
+
+function createInstance(name) {
+  const session = createInstanceSession({ name })
+  instances.value = listInstanceSessions()
+  showInstanceManager.value = false
+  initPlayground({ session })
+}
+
+function selectInstance(id) {
+  if (!id || id === instanceId.value) return
+  showInstanceManager.value = false
+  initPlayground({ instanceId: id })
+}
+
+function renameInstance({ id, name }) {
+  const renamed = renameInstanceSession(id, name)
+  if (renamed) instances.value = listInstanceSessions()
+}
+
+async function resetInstance(id) {
+  const isActive = id === instanceId.value
+  const instance = instances.value.find(item => item.id === id)
+  if (isActive) playground?.dispose()
+
+  try {
+    await deleteInstanceData(id)
+    if (isActive && instance) {
+      showInstanceManager.value = false
+      initPlayground({ session: { ...instance, freshSession: true } })
+    }
+  } catch (error) {
+    window.alert(error.message)
+  }
+}
+
+async function deleteInstance(id) {
+  const isActive = id === instanceId.value
+  if (isActive) playground?.dispose()
+
+  try {
+    await deleteInstanceData(id)
+    const remaining = removeInstanceSession(id)
+    instances.value = remaining
+    if (!isActive) return
+
+    showInstanceManager.value = false
+    if (remaining.length) {
+      initPlayground({ instanceId: remaining[0].id })
+    } else {
+      const replacement = createInstanceSession({ name: 'My Playground' })
+      initPlayground({ session: replacement })
+    }
+  } catch (error) {
+    window.alert(error.message)
   }
 }
 
@@ -174,7 +265,10 @@ onBeforeUnmount(() => {
     <TopBar
       v-show="ready"
       v-model:address="address"
+      :active-instance-id="instanceId"
+      :instances="instances"
       :ready="ready"
+      @manage-instances="showInstanceManager = true"
       @navigate="navigateFrame"
       @reload="reloadFrame"
     />
@@ -182,7 +276,9 @@ onBeforeUnmount(() => {
     <LoadingScreen
       v-show="!ready"
       :booting="booting"
+      :error="bootError"
       :steps="bootSteps"
+      @retry="reloadPage"
     />
 
     <iframe
@@ -196,5 +292,16 @@ onBeforeUnmount(() => {
     />
 
     <IntroDialog v-if="ready" v-model="showIntroDialog" />
+    <InstanceManagerDialog
+      v-if="ready"
+      v-model="showInstanceManager"
+      :active-instance-id="instanceId"
+      :instances="instances"
+      @create="createInstance"
+      @delete="deleteInstance"
+      @reset="resetInstance"
+      @rename="renameInstance"
+      @select="selectInstance"
+    />
   </main>
 </template>

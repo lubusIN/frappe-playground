@@ -19,6 +19,7 @@ export class PlaygroundController {
       serviceWorkerUrl: runtimeEntryUrl('/sw.js'),
       serverWorkerUrl: runtimeEntryUrl('/worker.js'),
       recoveryChannelName: 'sw-recovery',
+      serviceWorkerRegistrationTimeoutMs: 15000,
       serviceWorkerUpgradeTimeoutMs: 30000,
       readyDelayMs: 2000,
       ...options,
@@ -32,6 +33,10 @@ export class PlaygroundController {
       BroadcastChannelClass: options.BroadcastChannelClass || globalThis.BroadcastChannel,
       setTimeoutFn: options.setTimeoutFn || ((...args) => globalThis.setTimeout(...args)),
       clearTimeoutFn: options.clearTimeoutFn || (timer => globalThis.clearTimeout(timer)),
+      registrationSetTimeoutFn: options.registrationSetTimeoutFn
+        || ((...args) => globalThis.setTimeout(...args)),
+      registrationClearTimeoutFn: options.registrationClearTimeoutFn
+        || (timer => globalThis.clearTimeout(timer)),
     }
     this.listeners = new Map()
     this.session = null
@@ -77,9 +82,9 @@ export class PlaygroundController {
         now: this.options.now,
         random: this.options.random,
       }
-      this.session = this.options.instanceId
+      this.session = this.options.session || (this.options.instanceId
         ? selectInstanceSession(this.options.instanceId, sessionOptions)
-        : getOrCreateInstanceSession(sessionOptions)
+        : getOrCreateInstanceSession(sessionOptions))
       if (!this.session) {
         throw new Error(`Playground instance not found: ${this.options.instanceId}`)
       }
@@ -99,12 +104,16 @@ export class PlaygroundController {
       }
       serviceWorker.addEventListener('controllerchange', this.handleControllerChange)
 
-      const registration = await serviceWorker.register(this.options.serviceWorkerUrl, {
-        type: 'module',
-        updateViaCache: 'none',
-      })
+      const registration = await this.withRegistrationTimeout(
+        serviceWorker.register(this.options.serviceWorkerUrl, {
+          type: 'module',
+          updateViaCache: 'none',
+        }),
+      )
       this.registration = registration
-      await this.checkForServiceWorkerUpdate()
+      // Updating is maintenance work. An active controller can boot the app
+      // immediately, even when the browser's update check is slow or offline.
+      void this.checkForServiceWorkerUpdate()
 
       if (!serviceWorker.controller || !this.isExpectedServiceWorker(serviceWorker.controller)) {
         const controllerReady = this.waitForExpectedServiceWorker(serviceWorker)
@@ -216,6 +225,25 @@ export class PlaygroundController {
       // A transient update failure must not prevent the active worker from booting.
       console.warn('[Playground] Service Worker update check failed.', error)
     }
+  }
+
+  withRegistrationTimeout(registrationPromise) {
+    return new Promise((resolve, reject) => {
+      const timeout = this.environment.registrationSetTimeoutFn(() => {
+        reject(new Error('Service worker registration timed out.'))
+      }, this.options.serviceWorkerRegistrationTimeoutMs)
+
+      Promise.resolve(registrationPromise).then(
+        registration => {
+          this.environment.registrationClearTimeoutFn(timeout)
+          resolve(registration)
+        },
+        error => {
+          this.environment.registrationClearTimeoutFn(timeout)
+          reject(error)
+        },
+      )
+    })
   }
 
   isExpectedServiceWorker(worker) {

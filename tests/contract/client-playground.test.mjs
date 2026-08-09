@@ -20,8 +20,11 @@ import {
   PLAYGROUND_INSTANCES_KEY,
   PLAYGROUND_SESSION_KEY,
   createInstanceSession,
+  deleteInstanceData,
   getOrCreateInstanceSession,
   listInstanceSessions,
+  removeInstanceSession,
+  renameInstanceSession,
   selectInstanceSession,
 } from '../../packages/client/src/playground/session.js'
 import {
@@ -34,6 +37,7 @@ function memoryStorage() {
   return {
     getItem: key => values.get(key) || null,
     setItem: (key, value) => values.set(key, value),
+    removeItem: key => values.delete(key),
   }
 }
 
@@ -105,6 +109,61 @@ test('legacy instance identity is migrated into the catalog', () => {
   assert.equal(JSON.parse(storage.getItem(PLAYGROUND_INSTANCES_KEY))[0].id, 'legacy-instance')
 })
 
+test('instances can be removed with a safe active-session fallback', () => {
+  const storage = memoryStorage()
+  let id = 0
+  const options = {
+    storage,
+    cryptoApi: { randomUUID: () => `instance-${++id}` },
+    now: () => 100,
+  }
+  createInstanceSession(options)
+  createInstanceSession(options)
+
+  assert.deepEqual(removeInstanceSession('instance-2', { storage }).map(item => item.id), [
+    'instance-1',
+  ])
+  assert.equal(storage.getItem(PLAYGROUND_SESSION_KEY), 'instance-1')
+  assert.deepEqual(removeInstanceSession('instance-1', { storage }), [])
+  assert.equal(storage.getItem(PLAYGROUND_SESSION_KEY), null)
+})
+
+test('instances can be renamed without changing their identity', () => {
+  const storage = memoryStorage()
+  createInstanceSession({
+    storage,
+    cryptoApi: { randomUUID: () => 'instance-1' },
+    now: () => 100,
+  })
+
+  assert.deepEqual(renameInstanceSession('instance-1', '  Sales Demo  ', { storage }), {
+    id: 'instance-1',
+    name: 'Sales Demo',
+    createdAt: 100,
+    lastOpenedAt: 100,
+  })
+  assert.equal(storage.getItem(PLAYGROUND_SESSION_KEY), 'instance-1')
+  assert.throws(() => renameInstanceSession('instance-1', ' ', { storage }), {
+    name: 'TypeError',
+  })
+  assert.equal(renameInstanceSession('missing', 'Name', { storage }), null)
+})
+
+test('instance data deletion targets only its scoped IndexedDB database', async () => {
+  let databaseName
+  const indexedDB = {
+    deleteDatabase(name) {
+      databaseName = name
+      const request = {}
+      queueMicrotask(() => request.onsuccess())
+      return request
+    },
+  }
+
+  await deleteInstanceData('instance-1', { indexedDB })
+  assert.equal(databaseName, 'frappe_playground_db_instance-1')
+})
+
 test('worker entry URLs share the build-derived runtime identity', () => {
   assert.equal(RUNTIME_BUILD_ID, 'test')
   assert.equal(runtimeEntryUrl('/sw.js'), '/sw.js?build=test')
@@ -144,8 +203,9 @@ test('the controller owns lifecycle wiring and emits structured progress', async
       serviceWorkerRegistrationOptions = options
       return {
         active: controllerWorker,
-        async update() {
+        update() {
           serviceWorkerUpdateChecks += 1
+          return new Promise(() => {})
         },
       }
     },
@@ -261,4 +321,20 @@ test('the controller waits for the versioned worker when a legacy worker control
 
   assert.equal(await ready, true)
   assert.equal(listeners.size, 0)
+})
+
+test('service worker registration fails with a bounded timeout', async () => {
+  const controller = new PlaygroundController({
+    serviceWorkerRegistrationTimeoutMs: 10,
+    registrationSetTimeoutFn: callback => {
+      callback()
+      return 1
+    },
+    registrationClearTimeoutFn() {},
+  })
+
+  await assert.rejects(
+    controller.withRegistrationTimeout(new Promise(() => {})),
+    /registration timed out/,
+  )
 })
