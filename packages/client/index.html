@@ -15,9 +15,19 @@
       #playground-shell-placeholder svg { width: 56px; height: 56px; }
       #playground-shell-placeholder .loading-title {
         box-sizing: border-box; width: 100%; max-width: 320px; margin: 22px 0 0;
+        display: flex; align-items: center; gap: 10px;
         padding: 20px; border-radius: 12px; background: #fff; text-align: left;
         box-shadow: 0 1px 3px rgba(0, 0, 0, .1);
         font-size: 14px; font-weight: 600;
+      }
+      #playground-shell-placeholder .loading-spinner {
+        box-sizing: border-box; width: 16px; height: 16px; flex: 0 0 auto;
+        border: 2px solid #fde68a; border-top-color: #f59e0b; border-radius: 999px;
+        animation: playground-spin .8s linear infinite;
+      }
+      @keyframes playground-spin { to { transform: rotate(360deg); } }
+      @media (prefers-reduced-motion: reduce) {
+        #playground-shell-placeholder .loading-spinner { animation: none; }
       }
     </style>
   </head>
@@ -28,7 +38,10 @@
           <path d="M19.9624.7637H5.8396A4.575 4.575 0 0 0 1.2646 5.3385v14.1223a4.575 4.575 0 0 0 4.575 4.5748h14.1228a4.575 4.575 0 0 0 4.575-4.5748V5.3385a4.575 4.575 0 0 0-4.575-4.5748Z" fill="currentColor"/>
           <path d="M9.1777 7.9785H16.625M10.2246 17.8705v-4.8871h5.8182" stroke="white" stroke-width="2.1005"/>
         </svg>
-        <p class="loading-title">Preparing your playground…</p>
+        <p class="loading-title">
+          <span class="loading-spinner" aria-hidden="true"></span>
+          <span>Warming up the espresso machine…</span>
+        </p>
       </section>
     </div>
     <!--
