@@ -54,8 +54,12 @@ cp "${SERVER_SOURCE_DIR}/filesystem.js" \
    "${SERVER_SOURCE_DIR}/request-handler.js" \
    "${SERVER_SOURCE_DIR}/boot.js" \
    "${DIST_DIR}/server/"
+sed 's#../../protocol/src/app-catalog.js#/protocol/app-catalog.js#' \
+   "${SERVER_SOURCE_DIR}/app-installer.js" \
+   > "${DIST_DIR}/server/app-installer.js"
 cp "${GENERATED_SOURCE_DIR}/python-sources.js" "${DIST_DIR}/generated/python-sources.js"
 cp "${PROTOCOL_SOURCE_DIR}/messages.js" \
+   "${PROTOCOL_SOURCE_DIR}/app-catalog.js" \
    "${PROTOCOL_SOURCE_DIR}/request.js" \
    "${PROTOCOL_SOURCE_DIR}/scope-url.js" \
    "${PROTOCOL_SOURCE_DIR}/version.js" \

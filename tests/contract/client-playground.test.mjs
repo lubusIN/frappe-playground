@@ -6,6 +6,7 @@ import {
   RuntimeStage,
   createRuntimeLogMessage,
   createRuntimeReadyMessage,
+  createAppInstallResultMessage,
 } from '../../packages/protocol/src/messages.js'
 import {
   PlaygroundController,
@@ -254,8 +255,8 @@ test('the controller owns lifecycle wiring and emits structured progress', async
     BroadcastChannelClass: FakeBroadcastChannel,
     storage: memoryStorage(),
     cryptoApi: { randomUUID: () => 'instance-1' },
-    setTimeoutFn: callback => {
-      callback()
+    setTimeoutFn: (callback, delay) => {
+      if (delay === 2000) callback()
       return 1
     },
     clearTimeoutFn() {},
@@ -287,11 +288,23 @@ test('the controller owns lifecycle wiring and emits structured progress', async
   FakeWorker.instance.onmessage({
     data: createRuntimeLogMessage('Loading Pyodide...', RuntimeStage.PYTHON),
   })
-  FakeWorker.instance.onmessage({ data: createRuntimeReadyMessage() })
+  FakeWorker.instance.onmessage({ data: createRuntimeReadyMessage({ installedApps: [] }) })
   FakeWorker.instance.onmessage({ data: createRuntimeReadyMessage() })
 
   assert.equal(progress.some(event => event.stage === RuntimeStage.PYTHON), true)
   assert.deepEqual(ready, [{ instanceId: 'instance-1' }])
+
+  const installation = controller.installApp('wiki')
+  const installMessage = workerMessages.at(-1)[0]
+  assert.equal(installMessage.type, ProtocolMessageType.APP_INSTALL)
+  assert.equal(installMessage.payload.appId, 'wiki')
+  FakeWorker.instance.onmessage({
+    data: createAppInstallResultMessage(installMessage.payload.requestId, 'wiki', {
+      installed: true,
+    }),
+  })
+  assert.equal((await installation).installed, true)
+  assert.deepEqual(controller.listInstalledApps(), ['wiki'])
 
   controller.dispose()
   assert.equal(FakeWorker.instance.terminated, true)

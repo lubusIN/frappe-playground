@@ -7,6 +7,8 @@ import {
   ProtocolMessageType,
   RuntimeStage,
   assertProtocolMessage,
+  createAppInstallMessage,
+  createAppInstallResultMessage,
   createAssociateClientMessage,
   createClaimClientsMessage,
   createClearOtherInstancesMessage,
@@ -34,6 +36,8 @@ test('control and runtime messages use the current protocol version', () => {
     createRuntimeLogMessage('Loading Pyodide...', RuntimeStage.PYTHON),
     createRuntimeReadyMessage(),
     createRuntimeErrorMessage('Boot failed'),
+    createAppInstallMessage('request-1', 'wiki'),
+    createAppInstallResultMessage('request-1', 'wiki', { installed: true }),
   ]
 
   for (const value of messages) {
@@ -51,10 +55,21 @@ test('control and runtime messages use the current protocol version', () => {
       ProtocolMessageType.RUNTIME_LOG,
       ProtocolMessageType.RUNTIME_READY,
       ProtocolMessageType.RUNTIME_ERROR,
+      ProtocolMessageType.APP_INSTALL,
+      ProtocolMessageType.APP_INSTALL_RESULT,
     ]),
   )
   assert.deepEqual(messages[1].payload, { scope: 'instance-1' })
   assert.deepEqual(messages[2].payload, { scope: 'instance-1', freshSession: true })
+  assert.deepEqual(messages.at(-2).payload, { requestId: 'request-1', appId: 'wiki' })
+  assert.deepEqual(messages.at(-1).payload, {
+    requestId: 'request-1',
+    appId: 'wiki',
+    installed: true,
+  })
+  assert.deepEqual(createRuntimeReadyMessage({ installedApps: ['wiki', 'wiki'] }).payload, {
+    installedApps: ['wiki'],
+  })
 })
 
 test('messages from another or missing protocol version are rejected', () => {

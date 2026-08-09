@@ -3,6 +3,7 @@ import { FRAPPE_MOCKS_SOURCE, WSGI_SERVER_SOURCE } from '/generated/python-sourc
 import {
   ProtocolMessageType,
   RuntimeStage,
+  createAppInstallResultMessage,
   createRuntimeErrorMessage,
   createRuntimeLogMessage,
   createRuntimeReadyMessage,
@@ -26,6 +27,12 @@ import {
   SerialRequestExecutor,
 } from '/server/request-handler.js'
 import { initializePyodide } from '/server/boot.js'
+import {
+  installCatalogApp,
+  loadAppCatalog,
+  prepareInstalledApps,
+  writeInstalledApps,
+} from '/server/app-installer.js'
 import { BENCH_DIRECTORIES, PYTHON_PACKAGES, SITE_CONFIG } from './config.js'
 
 const origin = self.location.origin
@@ -40,8 +47,8 @@ const siteFileRoots = [
   `${siteRoot}/${siteName}/private/files`,
 ]
 const assetsJsonPath = `${siteRoot}/assets/assets.json`
+const appsFile = `${siteRoot}/apps.txt`
 const staticSiteFiles = {
-  [`${siteRoot}/apps.txt`]: 'frappe\n',
   [`${siteRoot}/currentsite.txt`]: `${siteName}\n`,
   [`${siteRoot}/${siteName}/site_config.json`]: JSON.stringify(SITE_CONFIG),
 }
@@ -51,6 +58,8 @@ const instanceScope = urlParams.get('scope') || 'default'
 let freshSession = urlParams.get('fresh') === 'true'
 let pyodide = null
 let bootPromise = null
+let appCatalog = null
+let appInstallationPromise = Promise.resolve()
 
 const stateStore = new BrowserStateStore({
   indexedDB,
@@ -93,6 +102,16 @@ async function bootPython() {
 
   pyodide.FS.writeFile(assetsJsonPath, assetsText)
   writeSiteFiles(pyodide.FS, staticSiteFiles)
+  appCatalog = await loadAppCatalog({ fetchFn: (...args) => fetch(...args) })
+  await prepareInstalledApps({
+    pyodide,
+    fetchFn: (...args) => fetch(...args),
+    catalog: appCatalog,
+    appIds: stateStore.installedApps,
+    environmentRoot,
+    appsFile,
+    cryptoApi: self.crypto,
+  })
 
   logRuntime('Configuring Python environment...', RuntimeStage.FRAPPE)
   const bridge = new PythonBridge({
@@ -108,6 +127,55 @@ async function bootPython() {
   return bridge
 }
 
+async function installApp(appId) {
+  const bridge = await bootPromise
+  await checkpointDatabase(pyodide, siteDbPath)
+  const databaseBackup = pyodide.FS.readFile(siteDbPath).slice()
+  const installedAppsBackup = [...stateStore.installedApps]
+  try {
+    stateStore.installedApps = await installCatalogApp({
+      pyodide,
+      fetchFn: (...args) => fetch(...args),
+      catalog: appCatalog,
+      appId,
+      installedAppIds: stateStore.installedApps,
+      environmentRoot,
+      appsFile,
+      cryptoApi: self.crypto,
+    })
+    await checkpointDatabase(pyodide, siteDbPath)
+    await stateStore.save(siteDbPath, await bridge.exportCookieJar(), stateStore.installedApps)
+  } catch (error) {
+    stateStore.installedApps = installedAppsBackup
+    pyodide.FS.writeFile(siteDbPath, databaseBackup)
+    for (const suffix of ['-wal', '-shm']) {
+      try {
+        pyodide.FS.unlink(`${siteDbPath}${suffix}`)
+      } catch (_) {
+        // The failed install may not have created a SQLite sidecar.
+      }
+    }
+    writeInstalledApps(pyodide.FS, appsFile, installedAppsBackup)
+    throw error
+  }
+}
+
+function handleAppInstall(message) {
+  const { requestId, appId } = message.payload
+  appInstallationPromise = appInstallationPromise.then(async () => {
+    try {
+      await installApp(appId)
+      self.postMessage(createAppInstallResultMessage(requestId, appId, { installed: true }))
+    } catch (error) {
+      console.error(`[Worker] Failed to install app ${appId}:`, error)
+      self.postMessage(createAppInstallResultMessage(requestId, appId, {
+        installed: false,
+        error: error?.message || `Failed to install ${appId}.`,
+      }))
+    }
+  })
+}
+
 function createRequestExecutor(bridge) {
   return new SerialRequestExecutor({
     decodeRequest: readBackendRequest,
@@ -117,7 +185,10 @@ function createRequestExecutor(bridge) {
       headers: { 'Content-Type': 'text/plain' },
       body: `Worker error: ${error.message}\n${error.stack || ''}`,
     }),
-    handleRequest: request => bridge.handleRequest(request),
+    handleRequest: async request => {
+      await appInstallationPromise
+      return bridge.handleRequest(request)
+    },
     persist: async () => {
       await checkpointDatabase(pyodide, siteDbPath)
       await stateStore.save(siteDbPath, await bridge.exportCookieJar())
@@ -126,6 +197,10 @@ function createRequestExecutor(bridge) {
 }
 
 self.onmessage = async event => {
+  if (isProtocolMessage(event.data, ProtocolMessageType.APP_INSTALL)) {
+    handleAppInstall(event.data)
+    return
+  }
   if (!isProtocolMessage(event.data, ProtocolMessageType.INIT_CHANNEL)) return
 
   const serviceWorkerPort = event.ports[0]
@@ -137,7 +212,9 @@ self.onmessage = async event => {
   try {
     const bridge = await bootPromise
     createRequestExecutor(bridge).attach(serviceWorkerPort)
-    const readyMessage = createRuntimeReadyMessage()
+    const readyMessage = createRuntimeReadyMessage({
+      installedApps: stateStore.installedApps,
+    })
     serviceWorkerPort.postMessage(readyMessage)
     self.postMessage(readyMessage)
   } catch (error) {

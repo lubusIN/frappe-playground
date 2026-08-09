@@ -172,6 +172,7 @@ export class BrowserStateStore {
     this.logger = logger
     this.preloadedState = this.preload()
     this.cookieJarJson = null
+    this.installedApps = []
   }
 
   open() {
@@ -191,13 +192,14 @@ export class BrowserStateStore {
     try {
       const db = await this.open()
       const store = db.transaction('files', 'readonly').objectStore('files')
-      const [siteDb, cookieJar, siteFiles] = await Promise.all([
+      const [siteDb, cookieJar, siteFiles, installedApps] = await Promise.all([
         requestToPromise(store.get('site1.db')),
         requestToPromise(store.get('cookie_jar.json')),
         requestToPromise(store.get('site_files')),
+        requestToPromise(store.get('installed_apps')),
       ])
       db.close()
-      return { siteDb, cookieJar, siteFiles }
+      return { siteDb, cookieJar, siteFiles, installedApps }
     } catch (error) {
       this.logger.warn('[Worker] Failed to preload state from IDB:', error)
       return null
@@ -211,6 +213,7 @@ export class BrowserStateStore {
       this.getFs().writeFile(dbPath, state.siteDb)
       restoreSiteFiles(this.getFs(), state.siteFiles, this.siteFileRoots)
       if (typeof state.cookieJar === 'string') this.cookieJarJson = state.cookieJar
+      if (Array.isArray(state.installedApps)) this.installedApps = state.installedApps
       return true
     } catch (error) {
       this.logger.warn('[Worker] Failed to restore preloaded state:', error)
@@ -218,7 +221,7 @@ export class BrowserStateStore {
     }
   }
 
-  async save(dbPath, cookieJarJson = '{}') {
+  async save(dbPath, cookieJarJson = '{}', installedApps = this.installedApps || []) {
     try {
       const data = this.getFs().readFile(dbPath).slice()
       const siteFiles = snapshotSiteFiles(this.getFs(), this.siteFileRoots)
@@ -230,6 +233,7 @@ export class BrowserStateStore {
         store.put(data, 'site1.db')
         store.put(cookieJarJson, 'cookie_jar.json')
         store.put(siteFiles, 'site_files')
+        store.put(installedApps, 'installed_apps')
         store.put(
           JSON.stringify({ savedAt: this.now(), scope: this.scope }),
           'manifest.json',

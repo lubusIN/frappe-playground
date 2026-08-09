@@ -9,6 +9,7 @@ IndexedDB.
 - Load Pyodide and required Python packages.
 - Install the generated Frappe runtime filesystem.
 - Seed or restore the scoped site database and uploaded files.
+- Verify and unpack catalog app archives, install their schema, and restore them on boot.
 - Configure the Python WSGI bridge and browser-specific Frappe mocks.
 - Execute backend requests serially.
 - Persist database, cookies, and site files after mutations.
@@ -18,6 +19,7 @@ IndexedDB.
 
 - `src/index.js` is the server worker entry point and composition root.
 - `src/boot.js` loads Pyodide and Python packages.
+- `src/app-installer.js` owns catalog loading, archive verification, and Frappe installation.
 - `src/filesystem.js` installs runtime assets and filesystem content.
 - `src/persistence.js` owns scoped IndexedDB state and database lifecycle.
 - `src/request-handler.js` bridges protocol requests to Python WSGI.
@@ -31,7 +33,8 @@ in `runtime/config/`; generated runtime artifacts belong in
 ## Instance isolation
 
 The worker receives its scope and freshness through its entry URL. Persistent
-site state is stored in `frappe_playground_db_<scope>`. Resetting or deleting
+site state, cookies, uploaded files, and installed-app metadata are stored in
+`frappe_playground_db_<scope>`. Resetting or deleting
 one playground must affect only that database, not the shared Pyodide runtime
 cache or another playground's state.
 

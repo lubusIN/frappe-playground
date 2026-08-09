@@ -15,6 +15,7 @@ or worker lifecycle implementation.
 ## Structure
 
 - `src/messages.js` defines worker messages and validation helpers.
+- `src/app-catalog.js` validates optional-app metadata in Node and browser contexts.
 - `src/request.js` defines backend request and response envelopes.
 - `src/scope-url.js` defines scoped URL parsing and rewriting.
 - `src/version.js` contains the protocol version.
