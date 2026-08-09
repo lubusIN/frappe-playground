@@ -17,8 +17,12 @@ import {
   stripScope,
 } from '../../packages/client/src/playground/iframe-navigation.js'
 import {
+  PLAYGROUND_INSTANCES_KEY,
   PLAYGROUND_SESSION_KEY,
+  createInstanceSession,
   getOrCreateInstanceSession,
+  listInstanceSessions,
+  selectInstanceSession,
 } from '../../packages/client/src/playground/session.js'
 import {
   RUNTIME_BUILD_ID,
@@ -35,17 +39,70 @@ function memoryStorage() {
 
 test('instance sessions are created once and restored on reload', () => {
   const storage = memoryStorage()
-  const options = { storage, cryptoApi: { randomUUID: () => 'instance-1' } }
+  const options = {
+    storage,
+    cryptoApi: { randomUUID: () => 'instance-1' },
+    now: () => 100,
+  }
 
   assert.deepEqual(getOrCreateInstanceSession(options), {
     id: 'instance-1',
+    name: 'Playground 1',
+    createdAt: 100,
+    lastOpenedAt: 100,
     freshSession: true,
   })
   assert.equal(storage.getItem(PLAYGROUND_SESSION_KEY), 'instance-1')
   assert.deepEqual(getOrCreateInstanceSession(options), {
     id: 'instance-1',
+    name: 'Playground 1',
+    createdAt: 100,
+    lastOpenedAt: 100,
     freshSession: false,
   })
+})
+
+test('instance catalog creates and selects independent playgrounds', () => {
+  const storage = memoryStorage()
+  let id = 0
+  let timestamp = 100
+  const options = {
+    storage,
+    cryptoApi: { randomUUID: () => `instance-${++id}` },
+    now: () => timestamp++,
+  }
+
+  const first = createInstanceSession({ ...options, name: 'Accounting' })
+  const second = createInstanceSession(options)
+
+  assert.equal(first.name, 'Accounting')
+  assert.equal(second.name, 'Playground 2')
+  assert.equal(storage.getItem(PLAYGROUND_SESSION_KEY), 'instance-2')
+  assert.deepEqual(listInstanceSessions({ storage }).map(instance => instance.id), [
+    'instance-1',
+    'instance-2',
+  ])
+
+  assert.deepEqual(selectInstanceSession('instance-1', { storage, now: () => 200 }), {
+    id: 'instance-1',
+    name: 'Accounting',
+    createdAt: 100,
+    lastOpenedAt: 200,
+    freshSession: false,
+  })
+  assert.equal(storage.getItem(PLAYGROUND_SESSION_KEY), 'instance-1')
+  assert.equal(selectInstanceSession('missing', { storage }), null)
+})
+
+test('legacy instance identity is migrated into the catalog', () => {
+  const storage = memoryStorage()
+  storage.setItem(PLAYGROUND_SESSION_KEY, 'legacy-instance')
+
+  const session = getOrCreateInstanceSession({ storage, now: () => 500 })
+
+  assert.equal(session.id, 'legacy-instance')
+  assert.equal(session.freshSession, false)
+  assert.equal(JSON.parse(storage.getItem(PLAYGROUND_INSTANCES_KEY))[0].id, 'legacy-instance')
 })
 
 test('worker entry URLs share the build-derived runtime identity', () => {
@@ -148,7 +205,12 @@ test('the controller owns lifecycle wiring and emits structured progress', async
   controller.on(PlaygroundEventType.PROGRESS, event => progress.push(event))
   controller.on(PlaygroundEventType.READY, event => ready.push(event))
 
-  assert.deepEqual(await controller.start(), { id: 'instance-1', freshSession: true })
+  const session = await controller.start()
+  assert.equal(session.id, 'instance-1')
+  assert.equal(session.name, 'Playground 1')
+  assert.equal(session.freshSession, true)
+  assert.equal(typeof session.createdAt, 'number')
+  assert.equal(typeof session.lastOpenedAt, 'number')
   assert.equal(serviceWorkerUpdateChecks, 1)
   assert.deepEqual(serviceWorkerRegistrationOptions, {
     type: 'module',
