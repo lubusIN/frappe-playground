@@ -25,7 +25,7 @@ test('creates and boots an independent playground instance', async ({ page }) =>
   await expect(page.getByText('Second Site', { exact: true })).toBeVisible()
 
   await page.getByRole('button', { name: 'Manage playgrounds' }).click()
-  await page.getByRole('button', { name: 'Actions for Second Site' }).click()
+  await page.getByRole('button', { name: 'Actions for Second Site', exact: true }).click()
   await page.getByRole('menuitem', { name: 'Rename' }).click()
   await page.getByRole('textbox', { name: 'Playground name' }).fill('Renamed Site')
   await page.getByRole('button', { name: 'Rename', exact: true }).click()
