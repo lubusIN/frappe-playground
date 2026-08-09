@@ -35,6 +35,7 @@ const STATIC_PATHS = new Set([
   '/worker.js',
 ])
 const STATIC_PATH_PREFIXES = [
+  '/apps',
   '/assets',
   '/frontend',
   '/generated',

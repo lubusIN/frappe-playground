@@ -59,10 +59,17 @@ RUN bench init --frappe-branch ${FRAPPE_VERSION} --skip-redis-config-generation 
     && cd test-bench \
     && bench new-site playground.local --db-type sqlite --admin-password admin \
     && bench --site playground.local execute frappe.db.set_single_value --args "('System Settings', 'login_with_email_link', 0)"
+COPY --chown=frappe:frappe runtime/build/build-app-catalog.py /workspace/scripts/build-app-catalog.py
+COPY --chown=frappe:frappe runtime/apps/catalog.json /workspace/runtime/apps/catalog.json
+RUN python /workspace/scripts/build-app-catalog.py \
+    /workspace/runtime/apps/catalog.json \
+    /workspace/test-bench \
+    /workspace/app_artifacts
 USER root
 # 6. Expose entry point compilation commands
 CMD cp -r /workspace/test-bench/env/lib/python3.14/site-packages/pypika /workspace/archive_root/ && \
     tar -czf /output/frappe_runtime.tar.gz -C /workspace/archive_root . && \
+    cp -r /workspace/app_artifacts/apps /output/apps && \
     rm -rf /workspace/assets_export && \
     python /workspace/scripts/export-runtime-assets.py /workspace/test-bench/sites /workspace/assets_export && \
     find /workspace/test-bench/apps -name "node_modules" -type d -prune -exec rm -rf '{}' + && \
