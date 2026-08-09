@@ -3,3 +3,24 @@
   Cross-Origin-Embedder-Policy: require-corp
   Cross-Origin-Resource-Policy: same-origin
   Access-Control-Allow-Origin: *
+
+/sw.js
+  Cache-Control: no-cache, no-store, must-revalidate
+
+/worker.js
+  Cache-Control: no-cache, no-store, must-revalidate
+
+/protocol/*
+  Cache-Control: no-cache, no-store, must-revalidate
+
+/service-worker/*
+  Cache-Control: no-cache, no-store, must-revalidate
+
+/server/*
+  Cache-Control: no-cache, no-store, must-revalidate
+
+/generated/*
+  Cache-Control: no-cache, no-store, must-revalidate
+
+/runtime-config/*
+  Cache-Control: no-cache, no-store, must-revalidate

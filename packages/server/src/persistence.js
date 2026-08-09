@@ -15,6 +15,57 @@ function removeIfExists(fs, path) {
   }
 }
 
+function joinPath(parent, child) {
+  return `${parent.replace(/\/$/, '')}/${child}`
+}
+
+function ensureDirectoryTree(fs, directory) {
+  const parts = directory.split('/').filter(Boolean)
+  let current = ''
+  for (const part of parts) {
+    current += `/${part}`
+    try {
+      fs.mkdir(current)
+    } catch (_) {
+      // Directory already exists.
+    }
+  }
+}
+
+export function snapshotSiteFiles(fs, roots) {
+  const files = []
+  const visit = (root, directory, relativeDirectory = '') => {
+    for (const name of fs.readdir(directory)) {
+      if (name === '.' || name === '..') continue
+      const absolutePath = joinPath(directory, name)
+      const relativePath = relativeDirectory ? `${relativeDirectory}/${name}` : name
+      const mode = fs.stat(absolutePath).mode
+      if (fs.isDir(mode)) {
+        visit(root, absolutePath, relativePath)
+      } else if (fs.isFile(mode)) {
+        files.push({
+          root,
+          path: relativePath,
+          data: fs.readFile(absolutePath).slice(),
+        })
+      }
+    }
+  }
+
+  for (const root of roots) visit(root, root)
+  return files
+}
+
+export function restoreSiteFiles(fs, files = [], allowedRoots = []) {
+  for (const file of files) {
+    if (!allowedRoots.includes(file.root)) continue
+    if (file.path.split('/').some(part => part === '..' || part === '.')) continue
+    const absolutePath = joinPath(file.root, file.path)
+    ensureDirectoryTree(fs, absolutePath.slice(0, absolutePath.lastIndexOf('/')))
+    fs.writeFile(absolutePath, file.data)
+  }
+}
+
 export async function checkpointDatabase(pyodide, dbPath) {
   await pyodide.runPythonAsync(`
 import sqlite3
@@ -105,10 +156,18 @@ export async function initializeSiteDatabase({
 }
 
 export class BrowserStateStore {
-  constructor({ indexedDB, scope, getFs, now = Date.now, logger = console }) {
+  constructor({
+    indexedDB,
+    scope,
+    getFs,
+    siteFileRoots = [],
+    now = Date.now,
+    logger = console,
+  }) {
     this.indexedDB = indexedDB
     this.scope = scope
     this.getFs = getFs
+    this.siteFileRoots = siteFileRoots
     this.now = now
     this.logger = logger
     this.preloadedState = this.preload()
@@ -132,12 +191,13 @@ export class BrowserStateStore {
     try {
       const db = await this.open()
       const store = db.transaction('files', 'readonly').objectStore('files')
-      const [siteDb, cookieJar] = await Promise.all([
+      const [siteDb, cookieJar, siteFiles] = await Promise.all([
         requestToPromise(store.get('site1.db')),
         requestToPromise(store.get('cookie_jar.json')),
+        requestToPromise(store.get('site_files')),
       ])
       db.close()
-      return { siteDb, cookieJar }
+      return { siteDb, cookieJar, siteFiles }
     } catch (error) {
       this.logger.warn('[Worker] Failed to preload state from IDB:', error)
       return null
@@ -149,6 +209,7 @@ export class BrowserStateStore {
     if (!state?.siteDb) return false
     try {
       this.getFs().writeFile(dbPath, state.siteDb)
+      restoreSiteFiles(this.getFs(), state.siteFiles, this.siteFileRoots)
       if (typeof state.cookieJar === 'string') this.cookieJarJson = state.cookieJar
       return true
     } catch (error) {
@@ -160,6 +221,7 @@ export class BrowserStateStore {
   async save(dbPath, cookieJarJson = '{}') {
     try {
       const data = this.getFs().readFile(dbPath).slice()
+      const siteFiles = snapshotSiteFiles(this.getFs(), this.siteFileRoots)
       const db = await this.open()
       await new Promise((resolve, reject) => {
         const transaction = db.transaction('files', 'readwrite')
@@ -167,6 +229,7 @@ export class BrowserStateStore {
         store.clear()
         store.put(data, 'site1.db')
         store.put(cookieJarJson, 'cookie_jar.json')
+        store.put(siteFiles, 'site_files')
         store.put(
           JSON.stringify({ savedAt: this.now(), scope: this.scope }),
           'manifest.json',

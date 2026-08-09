@@ -10,7 +10,7 @@ test.describe('Static Files serving', () => {
         // We can just fetch /files/something that doesn't exist to test 404
         const res404 = await page.evaluate(async () => {
             const instanceId = localStorage.getItem('frappe_playground_instance_id');
-            const r = await fetch(`/files/does_not_exist.txt?__scope=${instanceId}`);
+            const r = await fetch(`/scope:${instanceId}/files/does_not_exist.txt`);
             return r.status;
         });
         expect(res404).toBe(404);
@@ -18,7 +18,7 @@ test.describe('Static Files serving', () => {
         // Verify private files are blocked
         const resPrivate = await page.evaluate(async () => {
             const instanceId = localStorage.getItem('frappe_playground_instance_id');
-            const r = await fetch(`/private/files/secret.txt?__scope=${instanceId}`);
+            const r = await fetch(`/scope:${instanceId}/private/files/secret.txt`);
             return r.status;
         });
         expect(resPrivate).not.toBe(200);

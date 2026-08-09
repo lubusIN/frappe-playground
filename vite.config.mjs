@@ -3,6 +3,7 @@ import vue from '@vitejs/plugin-vue'
 import Icons from 'unplugin-icons/vite'
 import fs from 'node:fs'
 import path from 'node:path'
+import { createHash } from 'node:crypto'
 import { fileURLToPath } from 'node:url'
 
 const projectRoot = path.dirname(fileURLToPath(import.meta.url))
@@ -12,6 +13,7 @@ const serviceWorkerSourceDir = path.join(projectRoot, 'packages/service-worker/s
 const serverSourceDir = path.join(projectRoot, 'packages/server/src')
 const runtimeArtifactsDir = path.join(projectRoot, 'artifacts/runtime')
 const generatedSourceDir = path.join(projectRoot, 'artifacts/generated')
+const runtimeManifestPath = path.join(runtimeArtifactsDir, 'manifest.json')
 const protocolSourceDir = path.join(projectRoot, 'packages/protocol/src')
 const runtimeConfigDir = path.join(projectRoot, 'runtime/config')
 const isolationHeaders = {
@@ -20,6 +22,42 @@ const isolationHeaders = {
   'Cross-Origin-Resource-Policy': 'same-origin',
   'Access-Control-Allow-Origin': '*',
 }
+
+function runtimeSourceFiles(inputs) {
+  const files = []
+  const visit = input => {
+    if (!fs.existsSync(input)) return
+    const metadata = fs.statSync(input)
+    if (metadata.isFile()) {
+      files.push(input)
+      return
+    }
+    for (const entry of fs.readdirSync(input).sort()) visit(path.join(input, entry))
+  }
+  for (const input of inputs) visit(input)
+  return files.sort()
+}
+
+function runtimeBuildId() {
+  const hash = createHash('sha256')
+  const inputs = runtimeSourceFiles([
+    protocolSourceDir,
+    serviceWorkerSourceDir,
+    serverSourceDir,
+    runtimeConfigDir,
+    generatedSourceDir,
+    runtimeManifestPath,
+  ])
+  for (const file of inputs) {
+    hash.update(path.relative(projectRoot, file))
+    hash.update('\0')
+    hash.update(fs.readFileSync(file))
+    hash.update('\0')
+  }
+  return hash.digest('hex').slice(0, 12)
+}
+
+const playgroundRuntimeBuildId = runtimeBuildId()
 
 const exactDevFiles = new Map([
   ['/sw.js', path.join(serviceWorkerSourceDir, 'index.js')],
@@ -33,6 +71,9 @@ const exactDevFiles = new Map([
 const prefixedDevFiles = [
   ['/generated/', generatedSourceDir],
   ['/server/', serverSourceDir],
+  // Preserve the monorepo-relative import used by service-worker/routing.js.
+  // This must precede /protocol/ so /protocol/src/x maps to protocol/src/x.
+  ['/protocol/src/', protocolSourceDir],
   ['/protocol/', protocolSourceDir],
   ['/runtime-config/', runtimeConfigDir],
   ['/service-worker/', serviceWorkerSourceDir],
@@ -78,6 +119,9 @@ function runtimeFileMiddleware(req, res, next) {
     for (const [header, value] of Object.entries(isolationHeaders)) {
       res.setHeader(header, value)
     }
+    if (path.extname(filePath) === '.js') {
+      res.setHeader('Cache-Control', 'no-store')
+    }
     res.setHeader('Content-Type', contentTypeFor(filePath))
     fs.createReadStream(filePath).pipe(res)
   })
@@ -117,6 +161,11 @@ export default defineConfig({
       },
     },
   ],
+  define: {
+    'import.meta.env.VITE_PLAYGROUND_RUNTIME_BUILD_ID': JSON.stringify(
+      playgroundRuntimeBuildId,
+    ),
+  },
   build: {
     outDir: path.join(projectRoot, 'dist'),
     assetsDir: 'frontend',

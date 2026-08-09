@@ -20,6 +20,10 @@ import {
   PLAYGROUND_SESSION_KEY,
   getOrCreateInstanceSession,
 } from '../../packages/client/src/playground/session.js'
+import {
+  RUNTIME_BUILD_ID,
+  runtimeEntryUrl,
+} from '../../packages/client/src/playground/runtime-version.js'
 
 function memoryStorage() {
   const values = new Map()
@@ -44,12 +48,22 @@ test('instance sessions are created once and restored on reload', () => {
   })
 })
 
+test('worker entry URLs share the build-derived runtime identity', () => {
+  assert.equal(RUNTIME_BUILD_ID, 'test')
+  assert.equal(runtimeEntryUrl('/sw.js'), '/sw.js?build=test')
+  assert.equal(runtimeEntryUrl('/worker.js', 'abc123'), '/worker.js?build=abc123')
+})
+
 test('iframe navigation scopes backend URLs without exposing scope in the address bar', () => {
   const origin = 'https://playground.example'
   assert.equal(normalizeAddress('desk?view=list#main', origin), '/desk?view=list#main')
   assert.equal(
     scopedFrameUrl('/desk?view=list#main', 'instance-1', origin),
-    '/desk?view=list&__scope=instance-1#main',
+    '/scope:instance-1/desk?view=list#main',
+  )
+  assert.equal(
+    stripScope('/scope:instance-1/desk?view=list#main', origin),
+    '/desk?view=list#main',
   )
   assert.equal(
     stripScope('/desk?view=list&__scope=instance-1#main', origin),
@@ -61,6 +75,7 @@ test('the controller owns lifecycle wiring and emits structured progress', async
   const serviceWorkerMessages = []
   const workerMessages = []
   let serviceWorkerUpdateChecks = 0
+  let serviceWorkerRegistrationOptions
   const controllerWorker = {
     postMessage: (...args) => serviceWorkerMessages.push(args),
   }
@@ -68,7 +83,8 @@ test('the controller owns lifecycle wiring and emits structured progress', async
     controller: controllerWorker,
     addEventListener() {},
     removeEventListener() {},
-    async register() {
+    async register(_url, options) {
+      serviceWorkerRegistrationOptions = options
       return {
         active: controllerWorker,
         async update() {
@@ -134,14 +150,19 @@ test('the controller owns lifecycle wiring and emits structured progress', async
 
   assert.deepEqual(await controller.start(), { id: 'instance-1', freshSession: true })
   assert.equal(serviceWorkerUpdateChecks, 1)
+  assert.deepEqual(serviceWorkerRegistrationOptions, {
+    type: 'module',
+    updateViaCache: 'none',
+  })
   assert.equal(FakeWorker.instance.options.type, 'module')
-  assert.match(FakeWorker.instance.url, /^\/worker\.js\?v=2&scope=instance-1&fresh=true$/)
+  assert.match(FakeWorker.instance.url, /^\/worker\.js\?build=test&scope=instance-1&fresh=true$/)
   assert.equal(serviceWorkerMessages[0][0].type, ProtocolMessageType.INIT_CHANNEL)
   assert.equal(workerMessages[0][0].type, ProtocolMessageType.INIT_CHANNEL)
 
   FakeWorker.instance.onmessage({
     data: createRuntimeLogMessage('Loading Pyodide...', RuntimeStage.PYTHON),
   })
+  FakeWorker.instance.onmessage({ data: createRuntimeReadyMessage() })
   FakeWorker.instance.onmessage({ data: createRuntimeReadyMessage() })
 
   assert.equal(progress.some(event => event.stage === RuntimeStage.PYTHON), true)
@@ -169,11 +190,11 @@ test('the controller waits for the versioned worker when a legacy worker control
     clearTimeoutFn: clearTimeout,
   })
 
-  assert.equal(controller.options.serviceWorkerUrl, '/sw.js?v=2')
+  assert.equal(controller.options.serviceWorkerUrl, '/sw.js?build=test')
   assert.equal(controller.isExpectedServiceWorker(serviceWorker.controller), false)
 
   const ready = controller.waitForExpectedServiceWorker(serviceWorker)
-  serviceWorker.controller = { scriptURL: 'http://localhost:5173/sw.js?v=2' }
+  serviceWorker.controller = { scriptURL: 'http://localhost:5173/sw.js?build=test' }
   for (const listener of [...listeners]) listener()
 
   assert.equal(await ready, true)

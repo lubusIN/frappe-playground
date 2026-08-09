@@ -39,8 +39,10 @@ cp "${SERVICE_WORKER_SOURCE_DIR}/index.js" "${DIST_DIR}/sw.js"
 cp "${SERVICE_WORKER_SOURCE_DIR}/backend-proxy.js" \
    "${SERVICE_WORKER_SOURCE_DIR}/cache.js" \
    "${SERVICE_WORKER_SOURCE_DIR}/instance-registry.js" \
-   "${SERVICE_WORKER_SOURCE_DIR}/routing.js" \
    "${DIST_DIR}/service-worker/"
+sed 's#../../protocol/src/scope-url.js#/protocol/scope-url.js#' \
+   "${SERVICE_WORKER_SOURCE_DIR}/routing.js" \
+   > "${DIST_DIR}/service-worker/routing.js"
 cp "${SERVER_SOURCE_DIR}/index.js" "${DIST_DIR}/worker.js"
 cp "${SERVER_SOURCE_DIR}/config.js" "${DIST_DIR}/config.js"
 cp "${SERVER_SOURCE_DIR}/filesystem.js" \
@@ -51,6 +53,7 @@ cp "${SERVER_SOURCE_DIR}/filesystem.js" \
 cp "${GENERATED_SOURCE_DIR}/python-sources.js" "${DIST_DIR}/generated/python-sources.js"
 cp "${PROTOCOL_SOURCE_DIR}/messages.js" \
    "${PROTOCOL_SOURCE_DIR}/request.js" \
+   "${PROTOCOL_SOURCE_DIR}/scope-url.js" \
    "${PROTOCOL_SOURCE_DIR}/version.js" \
    "${DIST_DIR}/protocol/"
 cp "${RUNTIME_CONFIG_DIR}/packages.js" "${RUNTIME_CONFIG_DIR}/site.js" "${DIST_DIR}/runtime-config/"

@@ -7,6 +7,7 @@ import {
   ProtocolMessageType,
   RuntimeStage,
   assertProtocolMessage,
+  createAssociateClientMessage,
   createClaimClientsMessage,
   createClearOtherInstancesMessage,
   createInitChannelMessage,
@@ -26,6 +27,7 @@ import {
 test('control and runtime messages use the current protocol version', () => {
   const messages = [
     createClaimClientsMessage(),
+    createAssociateClientMessage('instance-1'),
     createInitChannelMessage('instance-1', { freshSession: true }),
     createClearOtherInstancesMessage('instance-1'),
     createRecoveryRequestMessage(),
@@ -42,6 +44,7 @@ test('control and runtime messages use the current protocol version', () => {
     new Set(messages.map(message => message.type)),
     new Set([
       ProtocolMessageType.CLAIM_CLIENTS,
+      ProtocolMessageType.ASSOCIATE_CLIENT,
       ProtocolMessageType.INIT_CHANNEL,
       ProtocolMessageType.CLEAR_OTHER_INSTANCES,
       ProtocolMessageType.RECOVERY_REQUEST,
@@ -50,7 +53,8 @@ test('control and runtime messages use the current protocol version', () => {
       ProtocolMessageType.RUNTIME_ERROR,
     ]),
   )
-  assert.deepEqual(messages[1].payload, { scope: 'instance-1', freshSession: true })
+  assert.deepEqual(messages[1].payload, { scope: 'instance-1' })
+  assert.deepEqual(messages[2].payload, { scope: 'instance-1', freshSession: true })
 })
 
 test('messages from another or missing protocol version are rejected', () => {

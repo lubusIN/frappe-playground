@@ -4,6 +4,7 @@ export { PROTOCOL_VERSION }
 
 export const ProtocolMessageType = Object.freeze({
   CLAIM_CLIENTS: 'service-worker:claim-clients',
+  ASSOCIATE_CLIENT: 'service-worker:associate-client',
   CLEAR_OTHER_INSTANCES: 'service-worker:clear-other-instances',
   INIT_CHANNEL: 'channel:init',
   RECOVERY_REQUEST: 'channel:recovery-request',
@@ -64,10 +65,21 @@ export function assertProtocolMessage(value, type) {
 }
 
 export function createClaimClientsMessage() {
+  // Deprecated: activation owns clients.claim(). Retained for protocol-v2
+  // compatibility so older messages remain recognizable and can be ignored.
   return createMessage(ProtocolMessageType.CLAIM_CLIENTS)
 }
 
+export function createAssociateClientMessage(scope) {
+  return createMessage(ProtocolMessageType.ASSOCIATE_CLIENT, {
+    scope: requireString(scope, 'scope'),
+  })
+}
+
 export function createClearOtherInstancesMessage(scope) {
+  // Deprecated: retained only so protocol-v2 clients can be parsed safely.
+  // A service worker is shared across tabs, making cross-instance eviction
+  // unsafe for the multi-playground model.
   return createMessage(ProtocolMessageType.CLEAR_OTHER_INSTANCES, {
     scope: requireString(scope, 'scope'),
   })
