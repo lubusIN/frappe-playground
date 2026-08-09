@@ -28,10 +28,10 @@ const ready = ref(false)
 const booting = ref(false)
 const bootError = ref('')
 const bootSteps = ref([
-  { label: 'Booting Service Worker', status: 'pending', startTime: null, elapsed: null },
-  { label: 'Loading Python Runtime', status: 'pending', startTime: null, elapsed: null },
-  { label: 'Fetching Frappe Core', status: 'pending', startTime: null, elapsed: null },
-  { label: 'Initializing Database', status: 'pending', startTime: null, elapsed: null },
+  { label: 'Booting Worker', status: 'pending', startTime: null, elapsed: null },
+  { label: 'Loading Runtime', status: 'pending', startTime: null, elapsed: null },
+  { label: 'Loading Frappe', status: 'pending', startTime: null, elapsed: null },
+  { label: 'Loading Database', status: 'pending', startTime: null, elapsed: null },
   { label: 'Starting Frappe', status: 'pending', startTime: null, elapsed: null },
 ])
 const stageIndexes = new Map([

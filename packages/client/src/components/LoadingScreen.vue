@@ -4,7 +4,7 @@
       <BrandIcon clip-id="frappe-loading-brand-clip" size="xl" class="mb-1.5 text-ink-gray-9" />
       <div class="mt-4 flex w-full max-w-[320px] flex-col gap-3 rounded-xl bg-surface-base p-5 text-left shadow-sm">
         <div class="mb-1">
-          <p class="m-0 text-base font-semibold text-ink-gray-9 mb-3">Brewing your frappe</p>
+          <p class="m-0 text-base font-semibold text-ink-gray-9 mb-3">Brewing your Frappe</p>
           <Progress :value="progress" :intervals="true" :intervalCount="steps.length" />
         </div>
         <div v-for="(step, idx) in steps" :key="idx" class="flex items-center justify-between gap-3 text-[13px]" :class="step.status === 'pending' ? 'text-ink-gray-4' : 'text-ink-gray-8'">
