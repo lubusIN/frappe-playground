@@ -70,6 +70,7 @@ const exactDevFiles = new Map([
 
 const prefixedDevFiles = [
   ['/generated/', generatedSourceDir],
+  ['/apps/', path.join(runtimeArtifactsDir, 'apps')],
   ['/server/', serverSourceDir],
   // Preserve the monorepo-relative import used by service-worker/routing.js.
   // This must precede /protocol/ so /protocol/src/x maps to protocol/src/x.
@@ -140,6 +141,7 @@ function contentTypeFor(filePath) {
     '.py': 'text/x-python; charset=utf-8',
     '.svg': 'image/svg+xml',
     '.wasm': 'application/wasm',
+    '.zip': 'application/zip',
     '.whl': 'application/octet-stream',
     '.woff2': 'font/woff2',
     '.gz': 'application/gzip',

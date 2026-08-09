@@ -24,12 +24,16 @@ if [ ! -f "${RUNTIME_ARTIFACTS_DIR}/manifest.json" ]; then
     exit 1
 fi
 
-rm -rf "${DIST_DIR}/assets" "${DIST_DIR}/storage" "${DIST_DIR}/python" "${DIST_DIR}/protocol" "${DIST_DIR}/runtime-config" "${DIST_DIR}/service-worker" "${DIST_DIR}/server" "${DIST_DIR}/generated"
+rm -rf "${DIST_DIR}/apps" "${DIST_DIR}/assets" "${DIST_DIR}/storage" "${DIST_DIR}/python" "${DIST_DIR}/protocol" "${DIST_DIR}/runtime-config" "${DIST_DIR}/service-worker" "${DIST_DIR}/server" "${DIST_DIR}/generated"
 rm -f "${DIST_DIR}/sw.js" "${DIST_DIR}/worker.js" "${DIST_DIR}/config.js"
 mkdir -p "${DIST_DIR}/storage" "${DIST_DIR}/protocol" "${DIST_DIR}/runtime-config" "${DIST_DIR}/service-worker" "${DIST_DIR}/server" "${DIST_DIR}/generated"
 
 # Runtime files are fetched by the Web Worker from /storage, excluding assets.
-find "${RUNTIME_ARTIFACTS_DIR}" -mindepth 1 -maxdepth 1 ! -name assets -exec cp -R {} "${DIST_DIR}/storage/" \;
+find "${RUNTIME_ARTIFACTS_DIR}" -mindepth 1 -maxdepth 1 ! -name apps ! -name assets -exec cp -R {} "${DIST_DIR}/storage/" \;
+
+# Curated, build-time application packages are published independently from
+# the core runtime so clients can discover and fetch them lazily.
+cp -R "${RUNTIME_ARTIFACTS_DIR}/apps" "${DIST_DIR}/apps"
 
 # Runtime and Frappe-rendered pages reference browser assets from /assets.
 cp -R "${RUNTIME_ARTIFACTS_DIR}/assets" "${DIST_DIR}/assets"

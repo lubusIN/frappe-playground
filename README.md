@@ -17,7 +17,7 @@ The playground has five main pieces:
 2. **Service Worker (`packages/service-worker/`)**: Routes each scoped request to the correct server worker, associates browser clients with instances, caches runtime assets, preserves scoped redirects, and supports channel recovery across reloads. One Service Worker is shared by every instance on the origin.
 3. **Pyodide server (`packages/server/`)**: Each playground starts a dedicated worker that composes the Pyodide loader, filesystem installer, scoped IndexedDB persistence, database lifecycle, Python bridge, and serial WSGI request executor. Browser-specific Python sources in `runtime/python/` are converted into a build-time JavaScript module.
 4. **Shared protocol (`packages/protocol/`)**: Defines the versioned messages exchanged by the shell, Service Worker, and Pyodide server.
-5. **Runtime build (`runtime/`, `scripts/build.sh`)**: Keeps Python helpers, runtime configuration, the Dockerfile, and asset exporter together, and builds intermediate Frappe runtime artifacts into `artifacts/runtime/`. The application build assembles those artifacts and all authored browser sources into the clean `dist/` publish directory.
+5. **Runtime build (`runtime/`, `scripts/build.sh`)**: Keeps Python helpers, runtime configuration, the optional-app catalog, the Dockerfile, and asset exporter together, and builds intermediate Frappe runtime artifacts into `artifacts/runtime/`. The application build assembles those artifacts and all authored browser sources into the clean `dist/` publish directory.
 
 The app must be served from `localhost` or HTTPS with cross-origin isolation headers:
 
@@ -96,6 +96,13 @@ The runtime build is required when `artifacts/runtime/` is missing or when the
 Frappe runtime inputs change. Subsequent client-only development can reuse the
 existing artifacts.
 
+Optional app sources are declared in `runtime/apps/catalog.json`. Validate the
+catalog without running Docker using `npm run validate:apps`. The runtime build
+fetches immutable commits, builds their frontend assets, and emits deterministic
+install archives under `artifacts/runtime/apps/`. App installation is not yet
+exposed to playground instances; this is the build-and-catalog foundation for
+that workflow.
+
 For a production-style local preview, build the Vue shell and start Vite preview:
 
 ```bash
@@ -125,11 +132,12 @@ frappe-playground/
 |-- runtime/
 |   |-- python/             # Authored Python bridge helpers and mocks
 |   |-- config/             # Python package and site configuration
+|   |-- apps/               # Authored optional-app catalog
 |   `-- build/              # Dockerfile and runtime asset exporter
 |-- static/                 # Authored static hosting files only
 |-- artifacts/
 |   |-- generated/          # Generated JavaScript sources used by browser workers
-|   `-- runtime/            # Generated Frappe runtime, database, assets, and manifest
+|   `-- runtime/            # Generated runtime, app archives, assets, and manifest
 |-- dist/                   # Generated deployable application
 |-- scripts/
 |   |-- build.sh            # Docker runtime build

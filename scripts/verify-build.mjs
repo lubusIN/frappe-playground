@@ -2,6 +2,7 @@ import { createHash } from 'node:crypto'
 import { access, readFile, readdir, stat } from 'node:fs/promises'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
+import { validateAppCatalog } from './app-catalog.mjs'
 
 const projectRoot = path.dirname(path.dirname(fileURLToPath(import.meta.url)))
 const defaultArtifactsDir = path.join(projectRoot, 'artifacts/runtime')
@@ -67,10 +68,29 @@ export async function verifyBuild({
     errors.push('Runtime manifest must declare frappeVersion')
   }
 
+  let appCatalog = null
+  try {
+    appCatalog = JSON.parse(await readFile(path.join(artifactsDir, 'apps/catalog.json'), 'utf8'))
+    validateAppCatalog(appCatalog, { generated: true })
+  } catch (error) {
+    errors.push(`Invalid generated app catalog: ${error.message}`)
+  }
+
   const publishPaths = {
     'frappe_runtime.tar.gz': 'storage/frappe_runtime.tar.gz',
     'site1.db': 'storage/site1.db',
     'assets/assets.json': 'assets/assets.json',
+    'apps/catalog.json': 'apps/catalog.json',
+  }
+  for (const app of appCatalog?.apps || []) publishPaths[app.archive] = app.archive
+  for (const app of appCatalog?.apps || []) {
+    const archiveMetadata = manifest.files?.[app.archive]
+    if (archiveMetadata?.bytes !== app.archiveBytes) {
+      errors.push(`App catalog size mismatch: ${app.archive}`)
+    }
+    if (archiveMetadata?.sha256 !== app.archiveSha256) {
+      errors.push(`App catalog hash mismatch: ${app.archive}`)
+    }
   }
   for (const [artifactName, publishName] of Object.entries(publishPaths)) {
     const metadata = manifest.files?.[artifactName]
@@ -98,6 +118,7 @@ export async function verifyBuild({
 
   const requiredFiles = [
     'index.html',
+    'apps/catalog.json',
     'sw.js',
     'worker.js',
     'config.js',
@@ -157,12 +178,16 @@ export async function verifyBuild({
   }
 
   if (errors.length) throw new Error(`Build verification failed:\n- ${errors.join('\n- ')}`)
-  return { frappeVersion: manifest.frappeVersion, checkedFiles: requiredFiles.length }
+  return {
+    frappeVersion: manifest.frappeVersion,
+    checkedFiles: requiredFiles.length,
+    appCount: appCatalog?.apps.length || 0,
+  }
 }
 
 if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
   const result = await verifyBuild()
   console.log(
-    `Build verified: Frappe ${result.frappeVersion}, ${result.checkedFiles} required files, runtime hashes match.`,
+    `Build verified: Frappe ${result.frappeVersion}, ${result.appCount} catalog app(s), ${result.checkedFiles} required files, runtime hashes match.`,
   )
 }

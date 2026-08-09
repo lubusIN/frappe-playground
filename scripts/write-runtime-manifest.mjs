@@ -9,7 +9,14 @@ if (!artifactsDir || !frappeVersion) {
   process.exit(1)
 }
 
-const artifactNames = ['frappe_runtime.tar.gz', 'site1.db', 'assets/assets.json']
+const appCatalog = JSON.parse(await readFile(path.join(artifactsDir, 'apps/catalog.json'), 'utf8'))
+const artifactNames = [
+  'frappe_runtime.tar.gz',
+  'site1.db',
+  'assets/assets.json',
+  'apps/catalog.json',
+  ...appCatalog.apps.map(app => app.archive),
+]
 const files = {}
 
 for (const name of artifactNames) {
