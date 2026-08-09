@@ -17,7 +17,8 @@
         "public"
       ],
       "pythonDependencies": [
-        "mistune>=3.0"
+        "mistune>=3.0",
+        "pycountry"
       ],
       "source": {
         "repository": "https://github.com/frappe/wiki.git",

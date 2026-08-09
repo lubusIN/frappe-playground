@@ -35,6 +35,7 @@ Vite sets these headers during local development and preview. Cloudflare Pages u
 - Run Frappe Desk and Python WSGI entirely in the browser.
 - Create and name multiple isolated playground instances.
 - Switch, rename, reset, and delete saved playgrounds from the top bar.
+- Browse and install curated optional apps into the active playground.
 - Persist each instance's SQLite database, cookies, and uploaded site files in IndexedDB.
 - Preserve Frappe navigation and redirects behind scoped paths such as `/scope:<instance-id>/...`.
 - Recover runtime channels and Service Worker state across normal and cache-bypassing reloads.
@@ -101,8 +102,8 @@ catalog without running Docker using `npm run validate:apps`. The runtime build
 fetches immutable commits, builds their frontend assets, and emits deterministic
 install archives under `artifacts/runtime/apps/`. The server runtime can verify
 and install those archives into a selected playground through its versioned
-worker protocol. The app-management interface is intentionally left to the next
-phase.
+worker protocol. The top-bar app manager exposes that catalog and reloads the
+playground after installation so Frappe starts with the new hooks and DocTypes.
 
 For a production-style local preview, build the Vue shell and start Vite preview:
 

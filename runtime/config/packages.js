@@ -27,7 +27,6 @@ export const PYTHON_PACKAGES = Object.freeze([
   'openpyxl',
   'xlsxwriter',
   'phonenumbers',
-  'pycountry',
   'premailer',
   'pyotp',
   'requests-oauthlib',

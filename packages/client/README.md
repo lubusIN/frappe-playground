@@ -8,6 +8,7 @@ events between the page, Service Worker, and Pyodide server worker.
 
 - Render the loading screen, top bar, dialogs, and Frappe iframe.
 - Create, select, rename, reset, and delete local playground instances.
+- Load the curated app catalog and install apps into the active playground.
 - Register the Service Worker and start the selected server worker.
 - Establish the `MessageChannel` connecting those two workers.
 - Translate iframe navigation between visible Frappe paths and scoped paths.
@@ -20,6 +21,7 @@ events between the page, Service Worker, and Pyodide server worker.
 - `src/App.vue` composes UI state and the playground controller.
 - `src/components/` contains presentation components.
 - `src/playground/controller.js` owns worker lifecycle and channel wiring.
+- `src/playground/apps.js` loads and validates the published app catalog.
 - `src/playground/session.js` owns the persistent instance catalog.
 - `src/playground/iframe-navigation.js` owns scoped iframe URL conversion.
 - `src/playground/runtime-version.js` builds versioned worker entry URLs.

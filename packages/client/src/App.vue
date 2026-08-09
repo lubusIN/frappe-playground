@@ -2,10 +2,12 @@
 import { nextTick, onBeforeUnmount, onMounted, ref } from 'vue'
 import { RuntimeStage } from '../../protocol/src/messages.js'
 import IntroDialog from './components/IntroDialog.vue'
+import AppManagerDialog from './components/AppManagerDialog.vue'
 import InstanceManagerDialog from './components/InstanceManagerDialog.vue'
 import LoadingScreen from './components/LoadingScreen.vue'
 import TopBar from './components/TopBar.vue'
 import { LOGIN_DEMO } from './playground/config.js'
+import { loadAppCatalog } from './playground/apps.js'
 import {
   PlaygroundEventType,
   createPlayground,
@@ -48,6 +50,14 @@ const instanceId = ref('')
 const instances = ref([])
 const showIntroDialog = ref(true)
 const showInstanceManager = ref(false)
+const showAppManager = ref(false)
+const availableApps = ref([])
+const installedApps = ref([])
+const appCatalogLoading = ref(false)
+const appCatalogError = ref('')
+const appInstallError = ref('')
+const installingAppId = ref('')
+let appCatalogLoaded = false
 
 let addressTimer = 0
 let playground = null
@@ -170,6 +180,7 @@ async function initPlayground(options = {}) {
     instanceId.value = id
     instances.value = listInstanceSessions()
     ready.value = true
+    installedApps.value = playground.listInstalledApps()
     booting.value = false
     frameSrc.value = frameUrl('/')
     startAddressSync()
@@ -186,6 +197,44 @@ async function initPlayground(options = {}) {
     instances.value = listInstanceSessions()
   } catch (_) {
     // The controller emits the user-facing error state.
+  }
+}
+
+async function openAppManager() {
+  showAppManager.value = true
+  appInstallError.value = ''
+  installedApps.value = playground?.listInstalledApps() || []
+  if (appCatalogLoaded || appCatalogLoading.value) return
+  appCatalogLoading.value = true
+  appCatalogError.value = ''
+  try {
+    const catalog = await loadAppCatalog()
+    availableApps.value = catalog.apps
+    appCatalogLoaded = true
+  } catch (error) {
+    appCatalogError.value = error.message || 'Could not load the app catalog.'
+  } finally {
+    appCatalogLoading.value = false
+  }
+}
+
+function retryAppCatalog() {
+  appCatalogLoaded = false
+  openAppManager()
+}
+
+async function installApp(appId) {
+  if (!playground || installingAppId.value) return
+  installingAppId.value = appId
+  appInstallError.value = ''
+  try {
+    await playground.installApp(appId)
+    installedApps.value = playground.listInstalledApps()
+    window.location.reload()
+  } catch (error) {
+    appInstallError.value = error.message || `Could not install ${appId}.`
+  } finally {
+    installingAppId.value = ''
   }
 }
 
@@ -269,6 +318,7 @@ onBeforeUnmount(() => {
       :instances="instances"
       :ready="ready"
       @manage-instances="showInstanceManager = true"
+      @manage-apps="openAppManager"
       @navigate="navigateFrame"
       @reload="reloadFrame"
     />
@@ -292,6 +342,18 @@ onBeforeUnmount(() => {
     />
 
     <IntroDialog v-if="ready" v-model="showIntroDialog" />
+    <AppManagerDialog
+      v-if="ready"
+      v-model="showAppManager"
+      :apps="availableApps"
+      :installed-apps="installedApps"
+      :loading="appCatalogLoading"
+      :error="appCatalogError"
+      :install-error="appInstallError"
+      :installing-app-id="installingAppId"
+      @install="installApp"
+      @retry="retryAppCatalog"
+    />
     <InstanceManagerDialog
       v-if="ready"
       v-model="showInstanceManager"
