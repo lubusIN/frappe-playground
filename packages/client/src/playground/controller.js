@@ -4,7 +4,7 @@ import {
   createInitChannelMessage,
   isProtocolMessage,
 } from '../../../protocol/src/messages.js'
-import { getOrCreateInstanceSession } from './session.js'
+import { getOrCreateInstanceSession, selectInstanceSession } from './session.js'
 import { runtimeEntryUrl } from './runtime-version.js'
 
 export const PlaygroundEventType = Object.freeze({
@@ -71,12 +71,18 @@ export class PlaygroundController {
       if (!serviceWorker) throw new Error('Service workers are unavailable in this browser.')
 
       this.progress(RuntimeStage.SERVICE_WORKER, 'active', 'Starting service worker...')
-      this.session = getOrCreateInstanceSession({
+      const sessionOptions = {
         storage: this.options.storage,
         cryptoApi: this.options.cryptoApi,
         now: this.options.now,
         random: this.options.random,
-      })
+      }
+      this.session = this.options.instanceId
+        ? selectInstanceSession(this.options.instanceId, sessionOptions)
+        : getOrCreateInstanceSession(sessionOptions)
+      if (!this.session) {
+        throw new Error(`Playground instance not found: ${this.options.instanceId}`)
+      }
 
       let isInitialLoad = !serviceWorker.controller
       let isUpgradingLegacyWorker = !isInitialLoad
