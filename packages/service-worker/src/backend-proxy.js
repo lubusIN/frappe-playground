@@ -1,8 +1,9 @@
 import { scopeRedirectLocation } from './routing.js'
 
-function scopeBootstrapScript(associationMessage) {
+function scopeBootstrapScript(scope, associationMessage) {
   const message = JSON.stringify(associationMessage).replace(/</g, '\\u003c')
-  return `<script data-playground-scope-bootstrap>(function(){var s=navigator.serviceWorker;function a(){var w=s&&s.controller;if(w)w.postMessage(${message})}a();if(s){s.addEventListener('controllerchange',a);s.ready.then(a)}addEventListener('pageshow',a);var p=location.pathname;var m=p.match(/^\\/scope:[^/]+(\\/.*|$)/);if(m){history.replaceState(history.state,'',(m[1]||'/')+location.search+location.hash)}})();</script>`
+  const scopePrefix = JSON.stringify(`/scope:${encodeURIComponent(scope)}`)
+  return `<script data-playground-scope-bootstrap>(function(){var s=navigator.serviceWorker;function a(){var w=s&&s.controller;if(w)w.postMessage(${message})}function u(v){if(!v)return v;var r=String(v);if(r.charAt(0)==='#'||/^(?:mailto|tel|javascript|data|blob):/i.test(r))return v;try{var x=new URL(r,location.href);if(x.origin!==location.origin||x.pathname.indexOf('/scope:')===0)return v;x.pathname=${scopePrefix}+(x.pathname.charAt(0)==='/'?x.pathname:'/'+x.pathname);return x.href}catch(e){return v}}a();if(s){s.addEventListener('controllerchange',a);s.ready.then(a)}addEventListener('pageshow',a);var o=window.open;window.open=function(){if(arguments.length)arguments[0]=u(arguments[0]);return o.apply(this,arguments)};addEventListener('click',function(e){var l=e.target&&e.target.closest&&e.target.closest('a[href]');if(l&&l.target==='_blank')l.href=u(l.href)},true);var p=location.pathname;var m=p.match(/^\\/scope:[^/]+(\\/.*|$)/);if(m){history.replaceState(history.state,'',(m[1]||'/')+location.search+location.hash)}})();</script>`
 }
 
 export function rewriteScopedHtml(body, headers, scope, associationMessage) {
@@ -14,7 +15,7 @@ export function rewriteScopedHtml(body, headers, scope, associationMessage) {
   if (html.includes('data-playground-scope-bootstrap')) return html
 
   headers.delete('Content-Length')
-  const bootstrap = scopeBootstrapScript(associationMessage)
+  const bootstrap = scopeBootstrapScript(scope, associationMessage)
   const head = /<head(?:\s[^>]*)?>/i.exec(html)
   if (!head) return `${bootstrap}${html}`
 

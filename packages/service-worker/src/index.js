@@ -16,6 +16,7 @@ import {
   NODE_MODULES_ASSET_PREFIX,
   handleSocketIoRequest,
   isDevelopmentPath,
+  isShellNavigation,
   isShellStaticPath,
   isSocketIoPath,
   isStaticPath,
@@ -105,15 +106,21 @@ async function handleFetch(event, url) {
   const requestPath = stripScopeFromPath(url.pathname)
   if (isDevelopmentPath(requestPath)) return fetch(event.request)
 
-  const isShellNavigation = event.request.mode === 'navigate' && requestPath === '/'
-  if (isShellNavigation && !scopeFromUrl(url)) return fetch(event.request)
+  const explicitScope = scopeFromUrl(url)
+  const client = event.clientId ? await getClientContext(event.clientId) : null
+  const servesShell = isShellNavigation({
+    mode: event.request.mode,
+    pathname: requestPath,
+    explicitScope,
+    clientFrameType: client?.frameType,
+  })
+  if (servesShell) return fetch(event.request)
 
-  const clientUrl = event.clientId ? await getClientUrl(event.clientId) : null
-  const clientScope = clientUrl ? scopeFromUrl(clientUrl) : null
-  let scope = scopeFromUrl(url)
+  const clientScope = client?.url ? scopeFromUrl(client.url) : null
+  let scope = explicitScope
     || instances.scopeForClient(event.clientId)
     || clientScope
-    || (!isShellNavigation && !isStaticPath(requestPath) && instances.onlyActiveScope())
+    || (!servesShell && !isStaticPath(requestPath) && instances.onlyActiveScope())
 
   let recoveryAttempted = false
   if (!scope && instances.size === 0) {
@@ -179,10 +186,13 @@ async function handleFetch(event, url) {
   })
 }
 
-async function getClientUrl(clientId) {
+async function getClientContext(clientId) {
   try {
     const client = await self.clients.get(clientId)
-    return client ? new URL(client.url) : null
+    return client ? {
+      url: new URL(client.url),
+      frameType: client.frameType,
+    } : null
   } catch (_) {
     return null
   }

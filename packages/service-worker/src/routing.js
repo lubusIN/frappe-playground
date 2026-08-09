@@ -72,6 +72,13 @@ export function isDevelopmentPath(pathname) {
   return DEVELOPMENT_PATH_PREFIXES.some(prefix => pathname.startsWith(prefix))
 }
 
+export function isShellNavigation({ mode, pathname, explicitScope, clientFrameType }) {
+  return mode === 'navigate'
+    && pathname === '/'
+    && !explicitScope
+    && clientFrameType !== 'nested'
+}
+
 export function remapStaticPath(pathname) {
   if (pathname.startsWith(NODE_MODULES_ASSET_PREFIX)) {
     return pathname.replace(

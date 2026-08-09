@@ -23,6 +23,7 @@ import {
 import {
   handleSocketIoRequest,
   isDevelopmentPath,
+  isShellNavigation,
   isShellStaticPath,
   isSocketIoPath,
   isStaticPath,
@@ -52,6 +53,24 @@ test('routing scopes backend requests and remaps deploy-safe static assets', () 
   assert.equal(isShellStaticPath('/assets/frappe/js/frappe-web.js'), false)
   assert.equal(isDevelopmentPath('/@vite/client'), true)
   assert.equal(isDevelopmentPath('/@id/~icons/lucide/star'), true)
+  assert.equal(isShellNavigation({
+    mode: 'navigate',
+    pathname: '/',
+    explicitScope: null,
+    clientFrameType: 'top-level',
+  }), true)
+  assert.equal(isShellNavigation({
+    mode: 'navigate',
+    pathname: '/',
+    explicitScope: null,
+    clientFrameType: 'nested',
+  }), false)
+  assert.equal(isShellNavigation({
+    mode: 'navigate',
+    pathname: '/',
+    explicitScope: 'tab-1',
+    clientFrameType: 'top-level',
+  }), false)
 
   const staticUrl = staticRequestUrl(
     'https://playground.test/scope:tab-1/assets/frappe/node_modules/ace/index.js',
@@ -222,6 +241,9 @@ test('scoped HTML hides the virtual path before application scripts execute', ()
   assert.match(html, /service-worker:associate-client/)
   assert.match(html, /controllerchange/)
   assert.match(html, /\.ready\.then/)
+  assert.match(html, /window\.open/)
+  assert.match(html, /target==='_blank'/)
+  assert.match(html, /\/scope:tab-1/)
   assert.equal(headers.has('Content-Length'), false)
 })
 

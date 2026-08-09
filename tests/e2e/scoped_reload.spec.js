@@ -32,6 +32,23 @@ test('iframe and main page reload keep the same scoped runtime', async ({ page, 
 
     const frame = await iframe.elementHandle();
     const contentFrame = await frame.contentFrame();
+    console.log('Opening an unscoped Frappe URL in a new tab...');
+    const popupPromise = page.waitForEvent('popup');
+    await contentFrame.evaluate(() => window.open('/', '_blank'));
+    const popup = await popupPromise;
+    await popup.waitForLoadState('domcontentloaded');
+    expect(await popup.evaluate(() => window.__FRAPPE_PLAYGROUND_MOUNTED__)).not.toBe(true);
+    await popup.close();
+
+    console.log('Navigating the Frappe iframe to an unscoped root URL...');
+    await Promise.all([
+        contentFrame.waitForNavigation(),
+        contentFrame.evaluate(() => location.assign('/')),
+    ]);
+    expect(
+        await contentFrame.evaluate(() => window.__FRAPPE_PLAYGROUND_MOUNTED__)
+    ).not.toBe(true);
+
     console.log('Reloading iframe...');
     await contentFrame.evaluate(() => location.reload());
     console.log('Iframe reloaded! Checking src...');
