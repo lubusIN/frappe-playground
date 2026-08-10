@@ -141,6 +141,11 @@ class FrappeWSGIHandler:
                 body_parts.append(chunk)
 
             user_id = str(getattr(frappe.session, "user", "Guest"))
+            if not user_id or user_id == "Guest":
+                # Some website responses tear down their request-local session
+                # while their iterable is being exhausted. The persisted
+                # Frappe cookie remains the authoritative browser identity.
+                user_id = unquote(self.cookie_jar.get("user_id", "Guest")).strip('"')
             if hasattr(result_iter, "close"):
                 result_iter.close()
 

@@ -17,12 +17,31 @@
         "public"
       ],
       "pythonDependencies": [
-        "mistune>=3.0",
-        "pycountry"
+        "mistune>=3.0"
       ],
       "source": {
         "repository": "https://github.com/frappe/wiki.git",
         "ref": "6420bd3d41c0b9ac60b552ab9c8bf9155ac9b7cd"
+      }
+    },
+    {
+      "id": "frappe_vault",
+      "title": "Frappe Vault",
+      "description": "A password and secrets manager built on Frappe.",
+      "version": "1.0.1",
+      "license": "MIT",
+      "experimental": true,
+      "frappeVersion": ">=15.0.0 <17.0.0",
+      "archive": "apps/frappe_vault/app.zip",
+      "assetPrefix": "/assets/frappe_vault",
+      "packageRoot": "frappe_vault",
+      "archiveExcludes": [
+        "public"
+      ],
+      "pythonDependencies": [],
+      "source": {
+        "repository": "https://github.com/lubusIN/frappe-vault.git",
+        "ref": "91459ab1d841ce3933e7ed974ce52b71ba62d44c"
       }
     }
   ]
