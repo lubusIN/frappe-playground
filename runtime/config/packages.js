@@ -28,6 +28,7 @@ export const PYTHON_PACKAGES = Object.freeze([
   'xlsxwriter',
   'phonenumbers',
   'premailer',
+  'pycountry',
   'pyotp',
   'requests-oauthlib',
   'rsa',

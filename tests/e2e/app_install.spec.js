@@ -69,3 +69,57 @@ test('installs, restores, and uninstalls a catalog app from the app manager', as
   await expect(page.getByRole('dialog')).toContainText('Frappe Wiki')
   await expect(page.getByTestId('install-app-wiki')).toBeVisible()
 })
+
+test('installs, opens, and uninstalls Frappe Vault', async ({ page }) => {
+  const consoleMessages = []
+  page.on('console', message => {
+    consoleMessages.push(message.text())
+    console.log(`[BROWSER]: ${message.text()}`)
+  })
+  await bootLoginAndReachDesk(page)
+
+  await page.getByRole('button', { name: 'Manage apps' }).click()
+  await expect(page.getByRole('dialog')).toContainText('Frappe Vault')
+  await expect(page.getByTestId('install-app-frappe_vault')).toBeVisible()
+
+  const shellReloaded = page.waitForEvent('load', { timeout: 300000 })
+  await page.getByTestId('install-app-frappe_vault').click()
+  await expect(page.getByText('Installing the app and updating its DocTypes.')).toBeVisible()
+  await shellReloaded
+  await expect(page.locator('#loading-screen')).toBeHidden({ timeout: 600000 })
+  await expect(page.locator('#frappe-desk')).toBeVisible({ timeout: 120000 })
+  const restoredFrame = await getFrappeFrame(page)
+  await dismissIntroDialogIfShown(page)
+  expect(consoleMessages.some(message => message.includes('Error creating icons'))).toBe(false)
+
+  const vaultTabPromise = page.waitForEvent('popup', { timeout: 120000 })
+  await restoredFrame.evaluate(() => window.open('/vault', '_blank'))
+  const vaultTab = await vaultTabPromise
+  await vaultTab.waitForURL(url => url.pathname === '/vault' || url.pathname === '/vault/', {
+    timeout: 120000,
+  })
+  await expect(vaultTab.getByRole('heading', { name: 'Dashboard' })).toBeVisible({
+    timeout: 120000,
+  })
+  expect(new URL(vaultTab.url()).hostname).toBe('localhost')
+  expect(vaultTab.url()).not.toContain('site1')
+  await vaultTab.close()
+
+  await page.getByRole('button', { name: 'Manage apps' }).click()
+  await expect(page.getByRole('dialog')).toContainText('Frappe Vault')
+  await expect(page.getByTestId('install-app-frappe_vault')).toHaveCount(0)
+  await page.getByTestId('uninstall-app-frappe_vault').click()
+  await expect(page.getByRole('dialog')).toContainText('Uninstall app?')
+
+  const shellReloadedAfterUninstall = page.waitForEvent('load', { timeout: 300000 })
+  await page.getByRole('button', { name: 'Uninstall', exact: true }).click()
+  await expect(page.getByText('Removing the app and its data.')).toBeVisible()
+  await shellReloadedAfterUninstall
+  await expect(page.locator('#loading-screen')).toBeHidden({ timeout: 600000 })
+  await expect(page.locator('#frappe-desk')).toBeVisible({ timeout: 120000 })
+  await getFrappeFrame(page)
+  await dismissIntroDialogIfShown(page)
+
+  await page.getByRole('button', { name: 'Manage apps' }).click()
+  await expect(page.getByTestId('install-app-frappe_vault')).toBeVisible()
+})

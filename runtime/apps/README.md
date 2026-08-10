@@ -4,9 +4,9 @@ This directory contains the authored catalog for optional Frappe apps that can
 be prepared for the browser runtime. Catalog entries are build inputs, not
 generated artifacts.
 
-The current compatibility set includes Frappe Wiki. Apps remain marked
-experimental until their install, reload, primary route, and uninstall
-lifecycle passes in the browser runtime.
+The current compatibility set includes Frappe Wiki and Frappe Vault. Apps
+remain marked experimental until their install, reload, primary route, and
+uninstall lifecycle passes in the browser runtime.
 
 Each app must use an immutable 40-character Git commit and declare its archive,
 asset prefix, package root, and Python dependencies. Validate
