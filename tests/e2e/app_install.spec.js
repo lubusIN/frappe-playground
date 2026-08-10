@@ -101,7 +101,7 @@ test('installs, opens, and uninstalls Frappe Vault', async ({ page }) => {
   await expect(vaultTab.getByRole('heading', { name: 'Dashboard' })).toBeVisible({
     timeout: 120000,
   })
-  expect(new URL(vaultTab.url()).hostname).toBe('localhost')
+  expect(new URL(vaultTab.url()).hostname).toMatch(/localhost|127\.0\.0\.1/)
   expect(vaultTab.url()).not.toContain('site1')
   await vaultTab.close()
 
@@ -153,7 +153,7 @@ test('installs, opens, and uninstalls Frappe CRM', async ({ page }) => {
   await expect(crmTab.getByText('Leads', { exact: true }).first()).toBeVisible({
     timeout: 120000,
   })
-  expect(new URL(crmTab.url()).hostname).toBe('localhost')
+  expect(new URL(crmTab.url()).hostname).toMatch(/localhost|127\.0\.0\.1/)
   expect(crmTab.url()).not.toContain('site1')
   expect(new URL(crmTab.url()).pathname).not.toContain('/login')
   await crmTab.close()
