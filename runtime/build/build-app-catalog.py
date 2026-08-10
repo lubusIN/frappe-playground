@@ -60,7 +60,6 @@ def main():
     for app in catalog["apps"]:
         app_dir = bench_dir / "apps" / app["id"]
         clone_at_commit(app["source"]["repository"], app["source"]["ref"], app_dir)
-
         python = bench_dir / "env" / "bin" / "python"
         run([str(python), "-m", "pip", "install", "-e", str(app_dir)])
         if (app_dir / "package.json").is_file():

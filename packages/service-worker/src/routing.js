@@ -7,22 +7,80 @@ import {
 
 export { scopeFromUrl }
 
+export const VIRTUAL_SITE_HOST = 'site1'
+
 export function isSocketIoPath(pathname) {
   return pathname.startsWith('/socket.io/')
 }
 
-export function handleSocketIoRequest(request, url) {
-  if (request.method === 'POST') return new Response('ok', { status: 200 })
+const socketSessions = new Map()
+let nextSocketSessionId = 1
 
-  if (!url.searchParams.has('sid')) {
-    const handshake = '0{"sid":"mock-sid-123","upgrades":[],"pingInterval":25000,"pingTimeout":5000}'
-    return new Response(handshake, {
-      status: 200,
-      headers: { 'Content-Type': 'text/plain' },
-    })
+function socketResponse(body, status = 200) {
+  return new Response(body, {
+    status,
+    headers: { 'Content-Type': 'text/plain; charset=UTF-8' },
+  })
+}
+
+function enqueueSocketPacket(session, packet) {
+  if (session.resolvePoll) {
+    const resolve = session.resolvePoll
+    session.resolvePoll = null
+    clearTimeout(session.pollTimer)
+    resolve(socketResponse(packet))
+    return
+  }
+  session.packets.push(packet)
+}
+
+function socketNamespace(packet) {
+  if (!packet.startsWith('40')) return null
+  const namespace = packet.slice(2).split(',', 1)[0]
+  return namespace.startsWith('/') ? namespace : ''
+}
+
+export async function handleSocketIoRequest(request, url) {
+  const sid = url.searchParams.get('sid')
+
+  if (!sid) {
+    const newSid = `playground-${nextSocketSessionId++}`
+    socketSessions.set(newSid, { packets: [], resolvePoll: null, pollTimer: 0 })
+    return socketResponse(`0${JSON.stringify({
+      sid: newSid,
+      upgrades: [],
+      pingInterval: 25000,
+      pingTimeout: 20000,
+    })}`)
   }
 
-  return new Promise(() => {})
+  const session = socketSessions.get(sid)
+  if (!session) return socketResponse('Unknown Socket.IO session', 400)
+
+  if (request.method === 'POST') {
+    const payload = await request.text()
+    for (const packet of payload.split('\x1e')) {
+      const namespace = socketNamespace(packet)
+      if (namespace !== null) {
+        const prefix = namespace ? `40${namespace},` : '40'
+        enqueueSocketPacket(session, `${prefix}${JSON.stringify({ sid })}`)
+      } else if (packet.startsWith('41')) {
+        socketSessions.delete(sid)
+      }
+    }
+    return socketResponse('ok')
+  }
+
+  if (session.packets.length) return socketResponse(session.packets.join('\x1e'))
+  if (session.resolvePoll) return socketResponse('Polling request already active', 400)
+
+  return new Promise(resolve => {
+    session.resolvePoll = resolve
+    session.pollTimer = setTimeout(() => {
+      session.resolvePoll = null
+      resolve(socketResponse('2'))
+    }, 20000)
+  })
 }
 export const NODE_MODULES_ASSET_PREFIX = '/assets/frappe/node_modules/'
 export const DEPLOY_SAFE_NODE_MODULES_ASSET_PREFIX = '/assets/frappe/runtime_modules/'
@@ -103,7 +161,12 @@ export function scopeRedirectLocation(headers, scope, origin) {
 
   try {
     const scopedLocation = new URL(location, origin)
-    if (scopedLocation.origin !== origin) return
+    if (scopedLocation.origin !== origin) {
+      if (scopedLocation.hostname !== VIRTUAL_SITE_HOST) return
+      const playgroundOrigin = new URL(origin)
+      scopedLocation.protocol = playgroundOrigin.protocol
+      scopedLocation.host = playgroundOrigin.host
+    }
     if (isStaticPath(stripScopeFromPath(scopedLocation.pathname))) return
 
     scopedLocation.pathname = addScopeToPath(scopedLocation.pathname, scope)

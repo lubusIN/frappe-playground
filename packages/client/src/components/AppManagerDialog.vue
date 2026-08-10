@@ -60,25 +60,17 @@
           row-key="id"
         >
           <template #cell="{ item, row, column }">
-            <div v-if="column.key === 'title'" class="min-w-0 py-1">
-              <div class="flex items-center gap-2">
-                <p class="m-0 truncate text-sm font-medium text-ink-gray-9">{{ item }}</p>
-                <Badge v-if="row.experimental" size="sm" theme="orange" variant="subtle">
-                  Experimental
+            <div v-if="column.key === 'app'" class="min-w-0 py-1">
+              <div class="flex min-w-0 flex-wrap items-center gap-1.5">
+                <p class="m-0 truncate text-sm font-medium text-ink-gray-9">{{ row.title }}</p>
+                <Badge size="sm" theme="gray" variant="subtle">
+                  v{{ row.version }}
                 </Badge>
               </div>
-              <p class="m-0 mt-0.5 truncate text-xs text-ink-gray-5">{{ row.description }}</p>
+              <p class="m-0 mt-1 line-clamp-2 text-xs leading-4 text-ink-gray-5">
+                {{ row.description }}
+              </p>
             </div>
-            <span v-else-if="column.key === 'version'" class="text-sm text-ink-gray-6">
-              {{ item }}
-            </span>
-            <Badge
-              v-else-if="column.key === 'status'"
-              :theme="isInstalled(row.id) ? 'green' : 'gray'"
-              variant="subtle"
-            >
-              {{ isInstalled(row.id) ? 'Installed' : 'Available' }}
-            </Badge>
             <div v-else-if="column.key === 'actions'" class="flex justify-end" @click.stop>
               <Button
                 v-if="!isInstalled(row.id)"
@@ -155,9 +147,7 @@ watch(() => props.modelValue, open => {
 })
 
 const columns = [
-  { label: 'App', key: 'title', width: 3 },
-  { label: 'Version', key: 'version', width: '110px' },
-  { label: 'Status', key: 'status', width: '100px' },
+  { label: 'App', key: 'app', width: 1 },
   { label: '', key: 'actions', width: '92px', align: 'right' },
 ]
 
@@ -165,7 +155,7 @@ const listOptions = {
   selectable: false,
   enableActive: false,
   showTooltip: true,
-  rowHeight: 68,
+  rowHeight: 80,
   emptyState: {
     title: 'No apps available',
     description: 'This build does not include any optional apps.',

@@ -122,6 +122,7 @@ class FrappeWSGIHandler:
             "path": environ.get("PATH_INFO", ""),
         }
         body_parts = []
+        user_id = "Guest"
         try:
             result_iter = application(environ, start_response)
             
@@ -139,6 +140,7 @@ class FrappeWSGIHandler:
             for chunk in result_iter:
                 body_parts.append(chunk)
 
+            user_id = str(getattr(frappe.session, "user", "Guest"))
             if hasattr(result_iter, "close"):
                 result_iter.close()
 
@@ -153,6 +155,12 @@ class FrappeWSGIHandler:
             body_parts = [tb.encode("utf-8")]
         finally:
             frappe.destroy()
+
+        # Frappe exposes this non-sensitive cookie to frontend code. Browser
+        # playgrounds keep cookies isolated in the runtime, so pass only the
+        # current UI identity to the scoped HTML compatibility layer.
+        user_id = user_id.replace("\r", "").replace("\n", "")
+        _headers.append(("X-Playground-User-Id", user_id))
 
         return _status, _headers, b"".join(body_parts)
 

@@ -13,7 +13,7 @@ export class PythonBridge {
       this.pyodide.globals.set('temp_cookie_json', this.cookieJarJson)
       await this.pyodide.runPythonAsync(`
 import json
-_cookie_jar = json.loads(temp_cookie_json)
+_handler.cookie_jar = json.loads(temp_cookie_json)
 del temp_cookie_json
       `)
     }
@@ -37,7 +37,7 @@ del temp_cookie_json
     try {
       return await this.pyodide.runPythonAsync(`
 import json
-json.dumps(globals().get('_cookie_jar', {}))
+json.dumps(_handler.cookie_jar)
       `)
     } catch (_) {
       return '{}'

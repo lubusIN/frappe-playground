@@ -303,6 +303,11 @@ rq_mod.queue = create_mock("rq.queue", Queue=DummyQueue)
 
 # ── Optional Integrations (Auto-Mocked) ─────────────────────────────
 
+# Telemetry is disabled in the browser runtime. Mock Frappe's adapter directly
+# because its Integration base class must be a real class, not an absorbing
+# optional-module placeholder.
+create_mock("frappe.utils.sentry", capture_exception=lambda *a, **k: None)
+
 # Automatically mock these entire trees so we don't have to stub them one-by-one.
 sys.meta_path.insert(0, AutoMockFinder([
     "googleapiclient",
