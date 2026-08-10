@@ -283,6 +283,28 @@ test('Python bridge converts requests and releases PyProxy values', () => {
   assert.deepEqual(destroyed, ['request', 'response'])
 })
 
+test('Python bridge restores and exports the WSGI handler cookie jar', async () => {
+  const scripts = []
+  const pyodide = {
+    globals: { set() {} },
+    runPythonAsync: async script => {
+      scripts.push(script)
+      return '{"sid":"session-id"}'
+    },
+  }
+  const bridge = new PythonBridge({
+    pyodide,
+    mocksSource: 'mocks',
+    wsgiSource: 'wsgi',
+    cookieJarJson: '{"sid":"session-id"}',
+  })
+
+  await bridge.configure()
+  assert.match(scripts.at(-1), /_handler\.cookie_jar = json\.loads/)
+  assert.equal(await bridge.exportCookieJar(), '{"sid":"session-id"}')
+  assert.match(scripts.at(-1), /json\.dumps\(_handler\.cookie_jar\)/)
+})
+
 test('request persistence policy covers mutations and session cookies', () => {
   assert.equal(shouldPersistRequest({ method: 'POST' }, { headers: [] }), true)
   assert.equal(shouldPersistRequest({ method: 'GET' }, { headers: [] }), false)

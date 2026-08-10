@@ -12,6 +12,7 @@ import {
 import {
   createBackendProxy,
   rewriteScopedHtml,
+  rewriteVirtualSiteUrls,
 } from '../../packages/service-worker/src/backend-proxy.js'
 import { RuntimeAssetCache, hashString } from '../../packages/service-worker/src/cache.js'
 import { InstanceRegistry } from '../../packages/service-worker/src/instance-registry.js'
@@ -81,7 +82,7 @@ test('routing scopes backend requests and remaps deploy-safe static assets', () 
   )
 })
 
-test('redirect scoping applies only to same-origin backend locations', () => {
+test('redirect scoping preserves same-origin and virtual-site backend locations', () => {
   const headers = new Headers({ Location: '/desk?view=list' })
   scopeRedirectLocation(headers, 'tab-1', 'https://playground.test')
   assert.equal(headers.get('Location'), '/scope:tab-1/desk?view=list')
@@ -93,6 +94,10 @@ test('redirect scoping applies only to same-origin backend locations', () => {
   const external = new Headers({ Location: 'https://example.com/desk' })
   scopeRedirectLocation(external, 'tab-1', 'https://playground.test')
   assert.equal(external.get('Location'), 'https://example.com/desk')
+
+  const virtualSite = new Headers({ Location: 'http://site1/wiki/spaces' })
+  scopeRedirectLocation(virtualSite, 'tab-1', 'https://playground.test')
+  assert.equal(virtualSite.get('Location'), '/scope:tab-1/wiki/spaces')
 })
 
 test('instance registry owns client associations, readiness, and cleanup', async () => {
@@ -143,7 +148,7 @@ test('instance registry owns client associations, readiness, and cleanup', async
   assert.equal(await ready, true)
 })
 
-test('runtime cache identity follows the Frappe assets manifest', async () => {
+test('runtime cache identity follows Frappe assets and the app catalog', async () => {
   const entries = new Map()
   const deleted = []
   const cache = {
@@ -159,6 +164,9 @@ test('runtime cache identity follows the Frappe assets manifest', async () => {
     if (typeof value === 'string' && value.startsWith('/assets/assets.json')) {
       return new Response('{"app.js":"app.123.js"}')
     }
+    if (typeof value === 'string' && value.startsWith('/apps/catalog.json')) {
+      return new Response('{"sourceCatalogSha256":"catalog.456"}')
+    }
     return new Response('asset')
   }
   const runtimeCache = new RuntimeAssetCache({
@@ -170,7 +178,7 @@ test('runtime cache identity follows the Frappe assets manifest', async () => {
 
   assert.equal(
     await runtimeCache.getCacheName(),
-    `frappe-assets-${hashString('{"app.js":"app.123.js"}')}`,
+    `frappe-assets-${hashString('{"app.js":"app.123.js"}\n{"sourceCatalogSha256":"catalog.456"}')}`,
   )
   assert.deepEqual(deleted, ['frappe-assets-old'])
   const request = new Request('https://playground.test/assets/app.js')
@@ -190,11 +198,12 @@ test('backend proxy translates protocol responses and scopes redirects', async (
     port: {
       postMessage(payload, ports) {
         assert.equal(payload.payload.path, '/login')
+        assert.equal(payload.payload.headers['x-frappe-site-name'], 'site1')
         assert.equal(ports[0].name, 'response-port')
         FakeMessageChannel.instance.port1.onmessage({
           data: createBackendResponse({
             status: 302,
-            headers: { Location: '/desk' },
+            headers: { Location: '/desk', 'X-Playground-User-Id': 'Administrator' },
             body: '',
           }),
         })
@@ -209,7 +218,11 @@ test('backend proxy translates protocol responses and scopes redirects', async (
     createAssociateClientMessage,
   })
   const response = await callBackend({
-    request: new Request('https://playground.test/login', { method: 'POST', body: 'usr=admin' }),
+    request: new Request('https://playground.test/login', {
+      method: 'POST',
+      body: 'usr=admin',
+      headers: { 'X-Frappe-Site-Name': 'playground.test' },
+    }),
     instance,
     scope: 'tab-1',
     path: '/login',
@@ -219,6 +232,21 @@ test('backend proxy translates protocol responses and scopes redirects', async (
   assert.equal(response.status, 302)
   assert.equal(response.headers.get('Location'), '/scope:tab-1/desk')
   assert.equal(response.headers.get('Cross-Origin-Embedder-Policy'), 'require-corp')
+  assert.equal(response.headers.has('X-Playground-User-Id'), false)
+})
+
+test('browser responses never expose the virtual site hostname', () => {
+  const headers = new Headers({ 'Content-Type': 'text/html; charset=utf-8' })
+  const body = [
+    'http://site1/wiki/spaces',
+    'https://site1:8000/wiki/spaces',
+    '//site1/wiki/spaces',
+    'http:\\/\\/site1/wiki/spaces',
+  ].join(' ')
+  const rewritten = rewriteVirtualSiteUrls(body, headers, 'http://localhost:5173', 'tab-1')
+
+  assert.doesNotMatch(rewritten, /site1/)
+  assert.match(rewritten, /http:\/\/localhost:5173\/scope:tab-1\/wiki\/spaces/)
 })
 
 test('scoped HTML hides the virtual path before application scripts execute', () => {
@@ -231,6 +259,7 @@ test('scoped HTML hides the virtual path before application scripts execute', ()
     headers,
     'tab-1',
     createAssociateClientMessage('tab-1'),
+    'Administrator',
   )
 
   assert.match(html, /<head><script data-playground-scope-bootstrap>/)
@@ -242,15 +271,35 @@ test('scoped HTML hides the virtual path before application scripts execute', ()
   assert.match(html, /controllerchange/)
   assert.match(html, /\.ready\.then/)
   assert.match(html, /window\.open/)
+  assert.match(html, /window\.fetch/)
+  assert.match(html, /XMLHttpRequest\.prototype\.open/)
   assert.match(html, /target==='_blank'/)
   assert.match(html, /\/scope:tab-1/)
+  assert.match(html, /site1/)
+  assert.match(html, /user_id=/)
+  assert.match(html, /Administrator/)
   assert.equal(headers.has('Content-Length'), false)
 })
 
-test('Socket.IO compatibility returns the expected polling handshake', async () => {
+test('Socket.IO compatibility completes a namespaced polling connection', async () => {
   const url = new URL('https://playground.test/socket.io/?EIO=4&transport=polling')
   assert.equal(isSocketIoPath(url.pathname), true)
-  const response = handleSocketIoRequest(new Request(url), url)
+  const response = await handleSocketIoRequest(new Request(url), url)
   assert.equal(response.status, 200)
-  assert.match(await response.text(), /^0{"sid":"mock-sid-123"/)
+  const handshake = await response.text()
+  assert.match(handshake, /^0{"sid":"playground-/)
+  const sid = JSON.parse(handshake.slice(1)).sid
+  const sessionUrl = new URL(url)
+  sessionUrl.searchParams.set('sid', sid)
+
+  const posted = await handleSocketIoRequest(new Request(sessionUrl, {
+    method: 'POST',
+    body: '40/site1,',
+  }), sessionUrl)
+  assert.equal(posted.status, 200)
+  assert.equal(await posted.text(), 'ok')
+
+  const connected = await handleSocketIoRequest(new Request(sessionUrl), sessionUrl)
+  assert.equal(connected.status, 200)
+  assert.equal(await connected.text(), `40/site1,{"sid":"${sid}"}`)
 })

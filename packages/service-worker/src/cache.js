@@ -23,8 +23,19 @@ export class RuntimeAssetCache {
 
   async initializeCacheName() {
     try {
-      const response = await this.fetchFn(`/assets/assets.json?t=${this.now()}`)
-      const hash = hashString(await response.text())
+      const cacheBuster = this.now()
+      const [assetsResponse, appCatalogResponse] = await Promise.all([
+        this.fetchFn(`/assets/assets.json?t=${cacheBuster}`),
+        this.fetchFn(`/apps/catalog.json?t=${cacheBuster}`),
+      ])
+      if (!assetsResponse.ok || !appCatalogResponse.ok) {
+        throw new Error('Runtime cache manifests are unavailable.')
+      }
+      const identity = [
+        await assetsResponse.text(),
+        await appCatalogResponse.text(),
+      ].join('\n')
+      const hash = hashString(identity)
       this.currentCacheName = `frappe-assets-${hash}`
 
       for (const key of await this.cacheStorage.keys()) {
