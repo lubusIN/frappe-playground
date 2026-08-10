@@ -82,6 +82,7 @@
             <div v-else-if="column.key === 'actions'" class="flex justify-end" @click.stop>
               <Button
                 v-if="!isInstalled(row.id)"
+                :data-testid="`install-app-${row.id}`"
                 size="sm"
                 variant="solid"
                 :loading="installingAppId === row.id"
@@ -92,6 +93,7 @@
               </Button>
               <Button
                 v-else
+                :data-testid="`uninstall-app-${row.id}`"
                 size="sm"
                 theme="red"
                 variant="ghost"

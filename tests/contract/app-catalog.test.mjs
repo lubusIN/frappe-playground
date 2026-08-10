@@ -15,8 +15,8 @@ test('authored app catalog contains pinned and isolated artifacts', async () => 
   ))
 
   assert.equal(validateAppCatalog(catalog), catalog)
-  assert.equal(catalog.apps[0].id, 'wiki')
-  assert.match(catalog.apps[0].source.ref, /^[a-f0-9]{40}$/)
+  assert.deepEqual(catalog.apps.map(app => app.id), ['wiki'])
+  for (const app of catalog.apps) assert.match(app.source.ref, /^[a-f0-9]{40}$/)
   assert.equal(catalogFingerprint(catalog), catalogFingerprint({
     apps: catalog.apps,
     schemaVersion: catalog.schemaVersion,
