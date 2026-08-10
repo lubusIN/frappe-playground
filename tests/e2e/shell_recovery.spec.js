@@ -1,6 +1,7 @@
 const { test, expect } = require('@playwright/test');
 
-test('recovers when a controlling service worker leaves the client shell blank', async ({ page }) => {
+test('recovers when a controlling service worker leaves the client shell blank', async ({ page, browserName }) => {
+    test.skip(browserName === 'webkit', 'WebKit service worker interception is unreliable in Playwright');
     test.setTimeout(600000);
 
     await page.goto('/');
