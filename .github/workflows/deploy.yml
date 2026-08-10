@@ -28,6 +28,13 @@ jobs:
       - name: Install frontend dependencies
         run: npm ci
 
+      - name: Cache Runtime Artifacts
+        id: cache-runtime
+        uses: actions/cache@v4
+        with:
+          path: artifacts/runtime
+          key: ${{ runner.os }}-runtime-${{ hashFiles('runtime/apps/catalog.json', 'runtime/build/Dockerfile', 'scripts/build.sh') }}
+
       - name: Prepare Deploy Assets
         id: check_limits
         run: npm run deploy:prepare
