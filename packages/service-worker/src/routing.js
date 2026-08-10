@@ -71,7 +71,11 @@ export async function handleSocketIoRequest(request, url) {
     return socketResponse('ok')
   }
 
-  if (session.packets.length) return socketResponse(session.packets.join('\x1e'))
+  if (session.packets.length) {
+    const response = socketResponse(session.packets.join('\x1e'))
+    session.packets = []
+    return response
+  }
   if (session.resolvePoll) {
     // A browser may abort a long poll without the service worker observing the
     // cancellation before the replacement request arrives. Retire the stale
