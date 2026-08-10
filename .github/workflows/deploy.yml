@@ -13,6 +13,7 @@ jobs:
     permissions:
       contents: read
       deployments: write
+      pull-requests: write
 
     steps:
       - name: Checkout repository
@@ -58,3 +59,39 @@ jobs:
         run: |
           echo "### Cloudflare Pages deployment" >> "$GITHUB_STEP_SUMMARY"
           echo "${{ steps.deploy.outputs.deployment-url }}" >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Update PR description with deployment URL
+        if: github.event_name == 'pull_request' && steps.deploy.outputs.deployment-url != ''
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const url = '${{ steps.deploy.outputs.deployment-url }}';
+            const prNumber = context.issue.number;
+            const startMarker = '<!-- DEPLOYMENT_URL_START -->';
+            const endMarker = '<!-- DEPLOYMENT_URL_END -->';
+            const newContent = `${startMarker}\n### ⚡ Live Preview\n**URL:** ${url}\n${endMarker}`;
+            
+            const { data: pullRequest } = await github.rest.pulls.get({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              pull_number: prNumber,
+            });
+            
+            let body = pullRequest.body || '';
+            const startIndex = body.indexOf(startMarker);
+            const endIndex = body.indexOf(endMarker);
+            
+            if (startIndex !== -1 && endIndex !== -1 && endIndex > startIndex) {
+              body = body.substring(0, startIndex) + newContent + body.substring(endIndex + endMarker.length);
+            } else if (startIndex !== -1) {
+              body = body.substring(0, startIndex) + newContent;
+            } else {
+              body = body + '\n\n' + newContent;
+            }
+            
+            await github.rest.pulls.update({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              pull_number: prNumber,
+              body: body
+            });
