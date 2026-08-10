@@ -303,3 +303,22 @@ test('Socket.IO compatibility completes a namespaced polling connection', async 
   assert.equal(connected.status, 200)
   assert.equal(await connected.text(), `40/site1,{"sid":"${sid}"}`)
 })
+
+test('Socket.IO compatibility retires an abandoned poll without a reconnect loop', async () => {
+  const handshakeUrl = new URL('https://playground.test/socket.io/?EIO=4&transport=polling')
+  const handshake = await handleSocketIoRequest(new Request(handshakeUrl), handshakeUrl)
+  const sid = JSON.parse((await handshake.text()).slice(1)).sid
+  const pollUrl = new URL(handshakeUrl)
+  pollUrl.searchParams.set('sid', sid)
+
+  const firstPoll = handleSocketIoRequest(new Request(pollUrl), pollUrl)
+  const secondController = new AbortController()
+  const secondPoll = handleSocketIoRequest(
+    new Request(pollUrl, { signal: secondController.signal }),
+    pollUrl,
+  )
+
+  assert.equal(await (await firstPoll).text(), '2')
+  secondController.abort()
+  assert.equal(await (await secondPoll).text(), '2')
+})

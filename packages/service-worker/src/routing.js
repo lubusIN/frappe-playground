@@ -72,11 +72,27 @@ export async function handleSocketIoRequest(request, url) {
   }
 
   if (session.packets.length) return socketResponse(session.packets.join('\x1e'))
-  if (session.resolvePoll) return socketResponse('Polling request already active', 400)
+  if (session.resolvePoll) {
+    // A browser may abort a long poll without the service worker observing the
+    // cancellation before the replacement request arrives. Retire the stale
+    // poll instead of returning an immediate 400 that makes Engine.IO reconnect
+    // in a tight loop.
+    const resolvePreviousPoll = session.resolvePoll
+    session.resolvePoll = null
+    clearTimeout(session.pollTimer)
+    resolvePreviousPoll(socketResponse('2'))
+  }
 
   return new Promise(resolve => {
     session.resolvePoll = resolve
+    request.signal?.addEventListener('abort', () => {
+      if (session.resolvePoll !== resolve) return
+      session.resolvePoll = null
+      clearTimeout(session.pollTimer)
+      resolve(socketResponse('2'))
+    }, { once: true })
     session.pollTimer = setTimeout(() => {
+      if (session.resolvePoll !== resolve) return
       session.resolvePoll = null
       resolve(socketResponse('2'))
     }, 20000)

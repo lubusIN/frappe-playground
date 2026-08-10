@@ -51,14 +51,14 @@
           <Button variant="subtle" @click="$emit('retry')">Try again</Button>
         </div>
 
-        <ListView
-          v-else
-          class="h-64 w-full"
-          :columns="columns"
-          :rows="apps"
-          :options="listOptions"
-          row-key="id"
-        >
+        <div v-else class="h-64 w-full overflow-y-auto">
+          <ListView
+            class="!w-full"
+            :columns="columns"
+            :rows="apps"
+            :options="listOptions"
+            row-key="id"
+          >
           <template #cell="{ item, row, column }">
             <div v-if="column.key === 'app'" class="min-w-0 py-1">
               <div class="flex min-w-0 flex-wrap items-center gap-1.5">
@@ -97,6 +97,7 @@
             </div>
           </template>
         </ListView>
+        </div>
 
         <p
           v-if="installError"
@@ -147,7 +148,7 @@ watch(() => props.modelValue, open => {
 })
 
 const columns = [
-  { label: 'App', key: 'app', width: 1 },
+  { label: 'App', key: 'app', width: 'minmax(0, 1fr)' },
   { label: '', key: 'actions', width: '92px', align: 'right' },
 ]
 
