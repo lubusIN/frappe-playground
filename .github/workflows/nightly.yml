@@ -1,0 +1,40 @@
+name: Nightly E2E Test Matrix
+
+on:
+  schedule:
+    # Run every night at 00:00 UTC
+    - cron: '0 0 * * *'
+  workflow_dispatch:
+
+jobs:
+  nightly-tests:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v6
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Prepare Deploy Assets
+        run: npm run deploy:prepare
+
+      - name: Run fast contract tests
+        run: npm run test:contract
+
+      - name: Verify clean publish assembly
+        run: npm run test:clean-build
+
+      - name: Install Chromium
+        run: npx playwright install --with-deps chromium
+
+      - name: Run full Chromium integration tests
+        # Since this is a schedule event, process.env.GITHUB_EVENT_NAME === 'schedule'
+        # will be true, meaning the heavy apps will NOT be skipped in app_install.spec.js.
+        run: npm run test:e2e:chromium
