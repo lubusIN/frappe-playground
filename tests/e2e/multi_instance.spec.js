@@ -1,5 +1,5 @@
 const { test, expect } = require('@playwright/test')
-const { waitForPlaygroundBoot, getFrappeFrame } = require('./helpers/frappeFlow')
+const { waitForPlaygroundBoot, getFrappeFrame, dismissIntroDialogIfShown } = require('./helpers/frappeFlow')
 
 test('creates and boots an independent playground instance', async ({ page }) => {
   page.on('console', message => console.log(`[BROWSER]: ${message.text()}`))
@@ -12,6 +12,7 @@ test('creates and boots an independent playground instance', async ({ page }) =>
   await page.getByRole('button', { name: 'Create', exact: true }).click()
   await expect(page.locator('#loading-screen')).toBeHidden({ timeout: 600000 })
   await getFrappeFrame(page)
+  await dismissIntroDialogIfShown(page)
 
   const state = await page.evaluate(() => ({
     activeId: localStorage.getItem('frappe_playground_instance_id'),

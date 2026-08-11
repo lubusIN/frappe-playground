@@ -2,7 +2,11 @@ const { test, expect } = require('@playwright/test');
 const { waitForPlaygroundBoot } = require('./helpers/frappeFlow');
 
 test.describe('Static Files serving', () => {
-    test('handles static files correctly', async ({ page }) => {
+    test('handles static files correctly', async ({ page, browserName }) => {
+        test.skip(
+            browserName === 'webkit',
+            'Playwright WebKit is not a reliable proxy for Safari for the full Pyodide/Frappe lifecycle under COEP.'
+        );
         await waitForPlaygroundBoot(page);
 
         // Frappe has a standard file /assets/frappe/js/frappe/api.js mapped by SW to pyodide

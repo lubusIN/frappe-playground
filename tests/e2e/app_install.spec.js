@@ -70,7 +70,11 @@ const APPS_TO_TEST = [
 ]
 
 for (const app of APPS_TO_TEST) {
-  test(`installs, opens, and uninstalls ${app.name}`, async ({ page }) => {
+  test(`installs, opens, and uninstalls ${app.name}`, async ({ page, browserName }) => {
+    test.skip(
+        browserName === 'webkit',
+        'Playwright WebKit is not a reliable proxy for Safari for the full Pyodide/Frappe lifecycle under COEP.'
+    )
     if (app.heavy) {
       test.skip(process.env.CI && process.env.GITHUB_EVENT_NAME !== 'schedule', `Skipping heavy ${app.name} test on PRs`);
     }
@@ -88,7 +92,9 @@ for (const app of APPS_TO_TEST) {
     await expect(page.getByTestId(`install-app-${app.id}`)).toBeVisible()
     const shellReloaded = page.waitForEvent('load', { timeout: 300000 })
     await page.getByTestId(`install-app-${app.id}`).click()
-    await expect(page.getByText('Installing the app and updating its DocTypes.')).toBeVisible()
+    await expect(page.getByRole('dialog')).toContainText('Install app?')
+    await page.getByRole('button', { name: 'Install', exact: true }).click()
+    await expect(page.getByText('This can take several minutes; keep this tab open. The playground will reload automatically when finished.')).toBeVisible()
 
     // Shell reload & Verify
     await shellReloaded
@@ -112,7 +118,7 @@ for (const app of APPS_TO_TEST) {
 
     const shellReloadedAfterUninstall = page.waitForEvent('load', { timeout: 300000 })
     await page.getByRole('button', { name: 'Uninstall', exact: true }).click()
-    await expect(page.getByText('Removing the app and its data.')).toBeVisible()
+    await expect(page.getByText('This can take several minutes; keep this tab open. The playground will reload automatically when finished.')).toBeVisible()
     await shellReloadedAfterUninstall
     await expect(page.locator('#loading-screen')).toBeHidden({ timeout: 600000 })
     await expect(page.locator('#frappe-desk')).toBeVisible({ timeout: 120000 })

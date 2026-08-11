@@ -3,16 +3,16 @@ const { defineConfig, devices } = require('@playwright/test');
 module.exports = defineConfig({
   testDir: './tests/e2e',
   timeout: 600000,
-  fullyParallel: false,
+  fullyParallel: true,
   forbidOnly: !!process.env.CI,
   retries: process.env.CI ? 2 : 0,
-  workers: 1,
+  workers: process.env.CI ? 2 : undefined,
   outputDir: './tests/results',
   reporter: [['html', { outputFolder: './tests/results' }]],
   webServer: process.env.PLAYWRIGHT_BASE_URL ? undefined : {
     command: 'npm run test:serve',
     url: 'http://127.0.0.1:8002',
-    reuseExistingServer: false,
+    reuseExistingServer: true,
     timeout: 120000,
   },
   use: {
