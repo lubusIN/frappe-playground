@@ -44,19 +44,47 @@
               <ArrowRight class="w-4 h-4 text-ink-gray-5 stroke-[1.5]" />
             </a>
           </div>
-          <div v-if="tab.label === 'Credentials'" class="p-5 pt-4 min-h-[220px]">
-            <div class="rounded-md border border-gray-200 bg-gray-50 p-3 text-sm leading-5 text-gray-600">
-              <span class="font-medium text-gray-900 dark:text-gray-100">Default Credentials:</span>
-              <div class="mt-2 flex items-start gap-2">
-                <Badge variant="outline" theme="blue" size="lg" class="font-mono">
-                  <template #prefix><User class="h-3 w-3" /></template>
-                  {{ LOGIN_DEMO.username }}
-                </Badge>
-                <Badge variant="outline" theme="blue" size="lg" class="font-mono">
-                  <template #prefix><Key class="h-3 w-3" /></template>
-                  {{ LOGIN_DEMO.password }}
-                </Badge>
-              </div>
+          <div v-if="tab.label === 'Credentials'" class="p-5 pt-4 min-h-[220px] flex flex-col gap-4">
+            <p class="text-[13px] text-ink-gray-5 leading-relaxed">
+              Use these default credentials to log in to the Admin Desk.
+            </p>
+            <div class="flex flex-col gap-3">
+              <FormControl
+                type="text"
+                label="Username"
+                :modelValue="LOGIN_DEMO.username"
+                disabled
+              >
+                <template #prefix>
+                  <User class="w-4 h-4 text-ink-gray-5" />
+                </template>
+                <template #suffix>
+                  <Button variant="ghost" @click="copyUsername(LOGIN_DEMO.username)">
+                    <template #icon>
+                      <Check v-if="copiedUsername" class="w-4 h-4 text-green-600" />
+                      <Copy v-else class="w-4 h-4 text-ink-gray-5" />
+                    </template>
+                  </Button>
+                </template>
+              </FormControl>
+              <FormControl
+                type="text"
+                label="Password"
+                :modelValue="LOGIN_DEMO.password"
+                disabled
+              >
+                <template #prefix>
+                  <Key class="w-4 h-4 text-ink-gray-5" />
+                </template>
+                <template #suffix>
+                  <Button variant="ghost" @click="copyPassword(LOGIN_DEMO.password)">
+                    <template #icon>
+                      <Check v-if="copiedPassword" class="w-4 h-4 text-green-600" />
+                      <Copy v-else class="w-4 h-4 text-ink-gray-5" />
+                    </template>
+                  </Button>
+                </template>
+              </FormControl>
             </div>
           </div>
           <div v-if="tab.label === 'Insights'" class="p-5 pt-4 min-h-[220px] flex flex-col gap-3 text-left">
@@ -99,11 +127,14 @@
 
 <script setup>
 import { ref, computed } from 'vue'
+import { useClipboard } from '@vueuse/core'
 import Badge from 'frappe-ui/components/Badge/Badge.vue'
 import Button from 'frappe-ui/components/Button/Button.vue'
 import Dialog from 'frappe-ui/components/Dialog/Dialog.vue'
 import Tabs from 'frappe-ui/components/Tabs/Tabs.vue'
-import { User, Key, CheckCircle2, Rocket, Coffee, X, HelpCircle, Bug, Heart, Headphones, ArrowRight } from '@lucide/vue'
+import FormControl from 'frappe-ui/components/FormControl/FormControl.vue'
+import { User, Key, CheckCircle2, Rocket, Coffee, X, HelpCircle, Bug, Heart, Headphones, ArrowRight, Copy, Check } from '@lucide/vue'
+import GithubIcon from './GithubIcon.vue'
 import { LOGIN_DEMO } from '../playground/config.js'
 import pkg from '../../../../package.json'
 import logoUrl from '../../../../.github/logo.svg'
@@ -123,8 +154,11 @@ defineEmits(['update:modelValue'])
 
 const activeTab = ref(0)
 
+const { copy: copyUsername, copied: copiedUsername } = useClipboard()
+const { copy: copyPassword, copied: copiedPassword } = useClipboard()
+
 const aboutLinks = [
-  { label: 'GitHub', icon: HelpCircle, url: 'https://github.com/lubusIN/frappe-playground' },
+  { label: 'GitHub', icon: GithubIcon, url: 'https://github.com/lubusIN/frappe-playground' },
   { label: 'Submit Feedback', icon: Bug, url: 'https://github.com/lubusIN/frappe-playground/issues' },
   { label: 'Buy us a coffee', icon: Heart, url: 'https://github.com/sponsors/lubusIN' },
   { label: 'Get in touch', icon: Headphones, url: 'https://lubus.in' },
