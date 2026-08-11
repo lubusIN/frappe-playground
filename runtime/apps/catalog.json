@@ -13,8 +13,7 @@
       "assetPrefix": "/assets/wiki",
       "packageRoot": "wiki",
       "archiveExcludes": [
-        "benchmarks",
-        "public"
+        "benchmarks"
       ],
       "pythonDependencies": [
         "mistune>=3.0"
