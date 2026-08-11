@@ -48,7 +48,7 @@ const frameSrc = ref('')
 const iframeRef = ref(null)
 const instanceId = ref('')
 const instances = ref([])
-const showIntroDialog = ref(true)
+const showIntroDialog = ref(false)
 const showInstanceManager = ref(false)
 const showAppManager = ref(false)
 const availableApps = ref([])
@@ -196,6 +196,10 @@ async function initPlayground(options = {}) {
     const session = await playground.start()
     instanceId.value = session.id
     instances.value = listInstanceSessions()
+    
+    if (session.freshSession) {
+      showIntroDialog.value = true
+    }
   } catch (_) {
     // The controller emits the user-facing error state.
   }
