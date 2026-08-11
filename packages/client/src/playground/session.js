@@ -1,10 +1,12 @@
 export const PLAYGROUND_SESSION_KEY = 'frappe_playground_instance_id'
 export const PLAYGROUND_INSTANCES_KEY = 'frappe_playground_instances'
 
-function createId({ cryptoApi, now, random }) {
-  return cryptoApi?.randomUUID
-    ? cryptoApi.randomUUID()
-    : `${now()}-${random().toString(16).slice(2)}`
+import { ADJECTIVES, NOUNS } from './names.js'
+
+function createId({ random }) {
+  const adj = ADJECTIVES[Math.floor(random() * ADJECTIVES.length)]
+  const noun = NOUNS[Math.floor(random() * NOUNS.length)]
+  return `${adj}-${noun}`
 }
 
 function parseCatalog(storage) {
@@ -36,9 +38,15 @@ export function createInstanceSession({
   random = Math.random,
   name,
 } = {}) {
-  const id = createId({ cryptoApi, now, random })
-  const createdAt = now()
   const instances = parseCatalog(storage)
+  let id
+  let attempts = 0
+  do {
+    id = createId({ random })
+    attempts++
+  } while (instances.some(i => i.id === id) && attempts < 10)
+
+  const createdAt = now()
   const instance = {
     id,
     name: name?.trim() || `Playground ${instances.length + 1}`,
