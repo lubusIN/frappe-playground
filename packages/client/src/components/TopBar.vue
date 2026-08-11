@@ -19,7 +19,7 @@
     </div>
 
     <form
-      class="grid min-w-0 grid-cols-[32px_minmax(0,1fr)_32px_32px] items-center gap-1.5"
+      class="grid min-w-0 grid-cols-[32px_minmax(0,1fr)_32px_32px_32px] items-center gap-1.5"
       @submit.prevent="$emit('navigate')"
     >
       <Button
@@ -76,6 +76,19 @@
           <Blocks class="h-4 w-4" aria-hidden="true" />
         </template>
       </Button>
+      <Button
+        class="w-8 !text-gray-300 hover:!text-white hover:!bg-gray-800"
+        type="button"
+        variant="ghost"
+        :disabled="!ready"
+        title="Playground info"
+        aria-label="Playground info"
+        @click="$emit('show-info')"
+      >
+        <template #icon>
+          <HelpCircle class="h-4 w-4" aria-hidden="true" />
+        </template>
+      </Button>
     </form>
   </div>
 </template>
@@ -84,7 +97,7 @@
 import Button from 'frappe-ui/components/Button/Button.vue'
 import Badge from 'frappe-ui/components/Badge/Badge.vue'
 import { computed } from 'vue'
-import { Blocks, PanelsTopLeft, RotateCw } from '@lucide/vue'
+import { Blocks, PanelsTopLeft, RotateCw, HelpCircle } from '@lucide/vue'
 import BrandIcon from './BrandIcon.vue'
 
 const props = defineProps({
@@ -113,6 +126,7 @@ const activeInstanceName = computed(() => (
 defineEmits([
   'manage-instances',
   'manage-apps',
+  'show-info',
   'navigate',
   'reload',
   'update:address',

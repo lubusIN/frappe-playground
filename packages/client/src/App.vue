@@ -2,6 +2,7 @@
 import { nextTick, onBeforeUnmount, onMounted, ref } from 'vue'
 import { RuntimeStage } from '../../protocol/src/messages.js'
 import IntroDialog from './components/IntroDialog.vue'
+import InfoDialog from './components/InfoDialog.vue'
 import AppManagerDialog from './components/AppManagerDialog.vue'
 import InstanceManagerDialog from './components/InstanceManagerDialog.vue'
 import LoadingScreen from './components/LoadingScreen.vue'
@@ -49,6 +50,7 @@ const iframeRef = ref(null)
 const instanceId = ref('')
 const instances = ref([])
 const showIntroDialog = ref(false)
+const showInfoDialog = ref(false)
 const showInstanceManager = ref(false)
 const showAppManager = ref(false)
 const availableApps = ref([])
@@ -339,6 +341,7 @@ onBeforeUnmount(() => {
       :ready="ready"
       @manage-instances="showInstanceManager = true"
       @manage-apps="openAppManager"
+      @show-info="showInfoDialog = true"
       @navigate="navigateFrame"
       @reload="reloadFrame"
     />
@@ -362,6 +365,7 @@ onBeforeUnmount(() => {
     />
 
     <IntroDialog v-if="ready" v-model="showIntroDialog" />
+    <InfoDialog v-if="ready" v-model="showInfoDialog" :boot-steps="bootSteps" />
     <AppManagerDialog
       v-if="ready"
       v-model="showAppManager"
