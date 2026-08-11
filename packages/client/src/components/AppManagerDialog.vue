@@ -9,7 +9,7 @@
     <template #actions>
       <div v-if="pendingRemoval || pendingInstall" class="w-full space-y-3 text-left">
         <p v-if="uninstallingAppId || installingAppId" class="m-0 text-sm text-ink-gray-6">
-          {{ uninstallingAppId ? 'Removing' : 'Installing' }} the app and its data. This can take several minutes; keep this tab open. The playground will reload automatically when finished.
+          This can take several minutes; keep this tab open. The playground will reload automatically when finished.
         </p>
         <p
           v-else-if="installError"
