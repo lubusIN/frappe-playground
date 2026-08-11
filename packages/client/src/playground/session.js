@@ -49,7 +49,7 @@ export function createInstanceSession({
   const createdAt = now()
   const instance = {
     id,
-    name: name?.trim() || `Playground ${instances.length + 1}`,
+    name: name?.trim() || (instances.length === 0 ? 'My Playground' : `Playground ${instances.length + 1}`),
     createdAt,
     lastOpenedAt: createdAt,
   }
@@ -123,7 +123,7 @@ export function getOrCreateInstanceSession(options = {}) {
     const timestamp = now()
     const instance = {
       id: activeId,
-      name: 'Playground 1',
+      name: 'My Playground',
       createdAt: timestamp,
       lastOpenedAt: timestamp,
     }

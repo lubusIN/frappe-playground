@@ -83,56 +83,55 @@ test('instance sessions are created once and restored on reload', () => {
   const storage = memoryStorage()
   const options = {
     storage,
-    cryptoApi: { randomUUID: () => 'instance-1' },
     now: () => 100,
   }
 
-  assert.deepEqual(getOrCreateInstanceSession(options), {
-    id: 'instance-1',
-    name: 'Playground 1',
-    createdAt: 100,
-    lastOpenedAt: 100,
-    freshSession: true,
-  })
-  assert.equal(storage.getItem(PLAYGROUND_SESSION_KEY), 'instance-1')
-  assert.deepEqual(getOrCreateInstanceSession(options), {
-    id: 'instance-1',
-    name: 'Playground 1',
-    createdAt: 100,
-    lastOpenedAt: 100,
-    freshSession: false,
-  })
+  const session1 = getOrCreateInstanceSession(options)
+  assert.match(session1.id, /^[a-z]+-[a-z]+$/)
+  assert.equal(session1.name, 'My Playground')
+  assert.equal(session1.createdAt, 100)
+  assert.equal(session1.lastOpenedAt, 100)
+  assert.equal(session1.freshSession, true)
+
+  assert.equal(storage.getItem(PLAYGROUND_SESSION_KEY), session1.id)
+
+  const session2 = getOrCreateInstanceSession(options)
+  assert.equal(session2.id, session1.id)
+  assert.equal(session2.name, 'My Playground')
+  assert.equal(session2.createdAt, 100)
+  assert.equal(session2.lastOpenedAt, 100)
+  assert.equal(session2.freshSession, false)
 })
 
 test('instance catalog creates and selects independent playgrounds', () => {
   const storage = memoryStorage()
-  let id = 0
   let timestamp = 100
   const options = {
     storage,
-    cryptoApi: { randomUUID: () => `instance-${++id}` },
     now: () => timestamp++,
   }
 
   const first = createInstanceSession({ ...options, name: 'Accounting' })
   const second = createInstanceSession(options)
 
+  assert.match(first.id, /^[a-z]+-[a-z]+$/)
+  assert.match(second.id, /^[a-z]+-[a-z]+$/)
+  assert.notEqual(first.id, second.id)
   assert.equal(first.name, 'Accounting')
   assert.equal(second.name, 'Playground 2')
-  assert.equal(storage.getItem(PLAYGROUND_SESSION_KEY), 'instance-2')
-  assert.deepEqual(listInstanceSessions({ storage }).map(instance => instance.id), [
-    'instance-1',
-    'instance-2',
-  ])
+  assert.equal(storage.getItem(PLAYGROUND_SESSION_KEY), second.id)
+  
+  const sessions = listInstanceSessions({ storage }).map(instance => instance.id)
+  assert.deepEqual(sessions, [first.id, second.id])
 
-  assert.deepEqual(selectInstanceSession('instance-1', { storage, now: () => 200 }), {
-    id: 'instance-1',
-    name: 'Accounting',
-    createdAt: 100,
-    lastOpenedAt: 200,
-    freshSession: false,
-  })
-  assert.equal(storage.getItem(PLAYGROUND_SESSION_KEY), 'instance-1')
+  const selectedFirst = selectInstanceSession(first.id, { storage, now: () => 200 })
+  assert.equal(selectedFirst.id, first.id)
+  assert.equal(selectedFirst.name, 'Accounting')
+  assert.equal(selectedFirst.createdAt, 100)
+  assert.equal(selectedFirst.lastOpenedAt, 200)
+  assert.equal(selectedFirst.freshSession, false)
+  
+  assert.equal(storage.getItem(PLAYGROUND_SESSION_KEY), first.id)
   assert.equal(selectInstanceSession('missing', { storage }), null)
 })
 
@@ -149,39 +148,36 @@ test('legacy instance identity is migrated into the catalog', () => {
 
 test('instances can be removed with a safe active-session fallback', () => {
   const storage = memoryStorage()
-  let id = 0
   const options = {
     storage,
-    cryptoApi: { randomUUID: () => `instance-${++id}` },
     now: () => 100,
   }
-  createInstanceSession(options)
-  createInstanceSession(options)
+  const first = createInstanceSession(options)
+  const second = createInstanceSession(options)
 
-  assert.deepEqual(removeInstanceSession('instance-2', { storage }).map(item => item.id), [
-    'instance-1',
+  assert.deepEqual(removeInstanceSession(second.id, { storage }).map(item => item.id), [
+    first.id,
   ])
-  assert.equal(storage.getItem(PLAYGROUND_SESSION_KEY), 'instance-1')
-  assert.deepEqual(removeInstanceSession('instance-1', { storage }), [])
+  assert.equal(storage.getItem(PLAYGROUND_SESSION_KEY), first.id)
+  assert.deepEqual(removeInstanceSession(first.id, { storage }), [])
   assert.equal(storage.getItem(PLAYGROUND_SESSION_KEY), null)
 })
 
 test('instances can be renamed without changing their identity', () => {
   const storage = memoryStorage()
-  createInstanceSession({
+  const first = createInstanceSession({
     storage,
-    cryptoApi: { randomUUID: () => 'instance-1' },
     now: () => 100,
   })
 
-  assert.deepEqual(renameInstanceSession('instance-1', '  Sales Demo  ', { storage }), {
-    id: 'instance-1',
-    name: 'Sales Demo',
-    createdAt: 100,
-    lastOpenedAt: 100,
-  })
-  assert.equal(storage.getItem(PLAYGROUND_SESSION_KEY), 'instance-1')
-  assert.throws(() => renameInstanceSession('instance-1', ' ', { storage }), {
+  const renamed = renameInstanceSession(first.id, '  Sales Demo  ', { storage })
+  assert.equal(renamed.id, first.id)
+  assert.equal(renamed.name, 'Sales Demo')
+  assert.equal(renamed.createdAt, 100)
+  assert.equal(renamed.lastOpenedAt, 100)
+  assert.equal(storage.getItem(PLAYGROUND_SESSION_KEY), first.id)
+  
+  assert.throws(() => renameInstanceSession(first.id, ' ', { storage }), {
     name: 'TypeError',
   })
   assert.equal(renameInstanceSession('missing', 'Name', { storage }), null)
@@ -292,7 +288,6 @@ test('the controller owns lifecycle wiring and emits structured progress', async
     MessageChannelClass: FakeMessageChannel,
     BroadcastChannelClass: FakeBroadcastChannel,
     storage: memoryStorage(),
-    cryptoApi: { randomUUID: () => 'instance-1' },
     setTimeoutFn: (callback, delay) => {
       scheduledDelays.push(delay)
       if (delay === 2000) callback()
@@ -306,8 +301,8 @@ test('the controller owns lifecycle wiring and emits structured progress', async
   controller.on(PlaygroundEventType.READY, event => ready.push(event))
 
   const session = await controller.start()
-  assert.equal(session.id, 'instance-1')
-  assert.equal(session.name, 'Playground 1')
+  assert.match(session.id, /^[a-z]+-[a-z]+$/)
+  assert.equal(session.name, 'My Playground')
   assert.equal(session.freshSession, true)
   assert.equal(typeof session.createdAt, 'number')
   assert.equal(typeof session.lastOpenedAt, 'number')
@@ -317,7 +312,12 @@ test('the controller owns lifecycle wiring and emits structured progress', async
     updateViaCache: 'none',
   })
   assert.equal(FakeWorker.instance.options.type, 'module')
-  assert.match(FakeWorker.instance.url, /^\/worker\.js\?build=test&scope=instance-1&fresh=true$/)
+  
+  const workerUrlObj = new URL(FakeWorker.instance.url, 'http://localhost')
+  assert.equal(workerUrlObj.pathname, '/worker.js')
+  assert.equal(workerUrlObj.searchParams.get('build'), 'test')
+  assert.equal(workerUrlObj.searchParams.get('scope'), session.id)
+  assert.equal(workerUrlObj.searchParams.get('fresh'), 'true')
   assert.equal(serviceWorkerMessages[0][0].type, ProtocolMessageType.INIT_CHANNEL)
   assert.equal(workerMessages[0][0].type, ProtocolMessageType.INIT_CHANNEL)
 
@@ -331,7 +331,7 @@ test('the controller owns lifecycle wiring and emits structured progress', async
   FakeWorker.instance.onmessage({ data: createRuntimeReadyMessage() })
 
   assert.equal(progress.some(event => event.stage === RuntimeStage.PYTHON), true)
-  assert.deepEqual(ready, [{ instanceId: 'instance-1' }])
+  assert.deepEqual(ready, [{ instanceId: session.id }])
 
   const installation = controller.installApp('wiki')
   const installMessage = workerMessages.at(-1)[0]
