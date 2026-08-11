@@ -14,6 +14,8 @@ export const PlaygroundEventType = Object.freeze({
   PROGRESS: 'progress',
   READY: 'ready',
   ERROR: 'error',
+  WAKING_UP: 'waking_up',
+  WOKE_UP: 'woke_up',
 })
 
 export class PlaygroundController {
@@ -162,7 +164,10 @@ export class PlaygroundController {
       }
 
       if (isProtocolMessage(event.data, ProtocolMessageType.RUNTIME_READY)) {
-        if (this.runtimeReady) return
+        if (this.runtimeReady) {
+          this.emit(PlaygroundEventType.WOKE_UP)
+          return
+        }
         this.runtimeReady = true
         this.installedApps = Array.isArray(event.data.payload?.installedApps)
           ? [...event.data.payload.installedApps]
@@ -251,6 +256,7 @@ export class PlaygroundController {
     this.recoveryChannel.onmessage = event => {
       if (isProtocolMessage(event.data, ProtocolMessageType.RECOVERY_REQUEST)) {
         console.log('[Playground] Service Worker requested channel recovery.')
+        this.emit(PlaygroundEventType.WAKING_UP)
         this.setupChannel()
       }
     }

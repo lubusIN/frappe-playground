@@ -44,7 +44,8 @@ const stageIndexes = new Map([
   [RuntimeStage.DATABASE, 3],
   [RuntimeStage.FRAPPE, 4],
 ])
-const address = ref('/')
+const urlParams = new URLSearchParams(window.location.search)
+const address = ref(urlParams.get('path') || '/')
 const frameSrc = ref('')
 const iframeRef = ref(null)
 const instanceId = ref('')
@@ -71,7 +72,7 @@ function resetBootState() {
   booting.value = true
   bootError.value = ''
   frameSrc.value = ''
-  address.value = '/'
+  address.value = new URLSearchParams(window.location.search).get('path') || '/'
   hasPrefilledLogin = false
   clearInterval(addressTimer)
   for (const step of bootSteps.value) {
@@ -188,7 +189,7 @@ async function initPlayground(options = {}) {
     ready.value = true
     installedApps.value = playground.listInstalledApps()
     booting.value = false
-    frameSrc.value = frameUrl('/')
+    frameSrc.value = frameUrl(address.value)
     startAddressSync()
   })
   playground.on(PlaygroundEventType.ERROR, ({ message }) => {

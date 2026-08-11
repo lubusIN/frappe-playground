@@ -150,6 +150,13 @@ async function handleFetch(event, url) {
 
   if (!scope) {
     if (recoveryAttempted) {
+      if (event.request.mode === 'navigate') {
+        console.warn('[SW] Channel recovery timed out; redirecting to shell.')
+        const search = queryWithoutScope(url)
+        const originalPath = requestPath + (search ? `?${search}` : '') + url.hash
+        const redirectUrl = new URL(`/?path=${encodeURIComponent(originalPath)}`, url.origin)
+        return Response.redirect(redirectUrl.href, 302)
+      }
       console.warn('[SW] Channel recovery timed out; rejecting the request.')
       return new Response('Runtime connection unavailable', {
         status: 503,
