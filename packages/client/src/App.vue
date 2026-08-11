@@ -161,12 +161,15 @@ function navigateFrame() {
 }
 
 function reloadFrame() {
-  if (!ready.value) return
+  if (!ready.value || !iframeRef.value) return
 
   try {
-    iframeRef.value?.contentWindow?.location.reload()
+    const url = frameUrl(normalizeAddress(address.value))
+    frameSrc.value = url
+    // Force reload by re-assigning the src property directly on the DOM element
+    iframeRef.value.src = url
   } catch (_) {
-    frameSrc.value = frameUrl(normalizeAddress(address.value))
+    // Ignore transient cross-origin errors
   }
 }
 
