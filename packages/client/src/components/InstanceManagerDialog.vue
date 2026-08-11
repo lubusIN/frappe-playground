@@ -57,17 +57,17 @@
           :options="listOptions"
           row-key="id"
         >
-          <template #cell="{ item, row, column }">
-          <p v-if="column.key === 'name'" class="truncate text-sm font-medium text-ink-gray-9">
-            {{ item }}
-          </p>
-          <Badge
-            v-else-if="column.key === 'status'"
-            :theme="row.id === activeInstanceId ? 'blue' : 'gray'"
-            variant="subtle"
-          >
-            {{ row.id === activeInstanceId ? 'Active' : 'Saved' }}
-          </Badge>
+          <template #cell="{ row, column }">
+          <div v-if="column.key === 'info'" class="flex flex-col gap-0.5 overflow-hidden">
+            <div class="flex items-center gap-2">
+              <p class="truncate text-sm font-medium text-ink-gray-9">
+                {{ row.name }}
+              </p>
+            </div>
+            <span class="text-xs text-ink-gray-5">
+              {{ row.lastOpenedAt ? `Last Accessed ${formatDate(row.lastOpenedAt)}` : 'Never opened' }}
+            </span>
+          </div>
           <div
             v-else-if="column.key === 'actions'"
             class="flex items-center justify-end gap-2"
@@ -81,6 +81,14 @@
             >
               Open
             </Button>
+            <Badge
+              v-if="row.id === activeInstanceId"
+              theme="blue"
+              variant="subtle"
+              size="md"
+            >
+              Active
+            </Badge>
             <Dropdown
               align="end"
               :button="{
@@ -91,7 +99,6 @@
               :options="actionsFor(row)"
             />
           </div>
-          <span v-else class="text-sm text-ink-gray-6">{{ formatDate(item) }}</span>
           </template>
         </ListView>
 
@@ -137,9 +144,7 @@ const renaming = ref(false)
 const renameValue = ref('')
 
 const columns = [
-  { label: 'Playground', key: 'name', width: 3 },
-  { label: 'Last opened', key: 'lastOpenedAt', width: '140px' },
-  { label: 'Status', key: 'status', width: '80px' },
+  { label: 'Saved Playground', key: 'info', width: 3 },
   { label: '', key: 'actions', width: '120px', align: 'right' },
 ]
 
