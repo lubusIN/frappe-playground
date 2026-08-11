@@ -7,9 +7,9 @@
     @update:open="$emit('update:modelValue', $event)"
   >
     <template #actions>
-      <div v-if="pendingRemoval" class="w-full space-y-3 text-left">
-        <p v-if="uninstallingAppId" class="m-0 text-sm text-ink-gray-6">
-          Removing the app and its data. This can take several minutes; keep this tab open…
+      <div v-if="pendingRemoval || pendingInstall" class="w-full space-y-3 text-left">
+        <p v-if="uninstallingAppId || installingAppId" class="m-0 text-sm text-ink-gray-6">
+          {{ uninstallingAppId ? 'Removing' : 'Installing' }} the app and its data. This can take several minutes; keep this tab open. The playground will reload automatically when finished.
         </p>
         <p
           v-else-if="installError"
@@ -18,7 +18,7 @@
         >
           {{ installError }}
         </p>
-        <div class="flex justify-end gap-2">
+        <div v-if="pendingRemoval" class="flex justify-end gap-2">
           <Button variant="subtle" :disabled="Boolean(uninstallingAppId)" @click="pendingRemoval = null">
             Cancel
           </Button>
@@ -30,6 +30,19 @@
             @click="$emit('uninstall', pendingRemoval.id)"
           >
             Uninstall
+          </Button>
+        </div>
+        <div v-if="pendingInstall" class="flex justify-end gap-2">
+          <Button variant="subtle" :disabled="Boolean(installingAppId)" @click="pendingInstall = null">
+            Cancel
+          </Button>
+          <Button
+            variant="solid"
+            :loading="installingAppId === pendingInstall.id"
+            :disabled="Boolean(installingAppId)"
+            @click="$emit('install', pendingInstall.id)"
+          >
+            Install
           </Button>
         </div>
       </div>
@@ -53,7 +66,7 @@
 
         <div v-else class="h-64 w-full overflow-y-auto">
           <ListView
-            class="!w-full"
+            class="!w-full hide-list-header"
             :columns="columns"
             :rows="apps"
             :options="listOptions"
@@ -77,9 +90,8 @@
                 :data-testid="`install-app-${row.id}`"
                 size="sm"
                 variant="solid"
-                :loading="installingAppId === row.id"
-                :disabled="Boolean(installingAppId)"
-                @click="$emit('install', row.id)"
+                :disabled="Boolean(installingAppId || uninstallingAppId)"
+                @click="pendingInstall = row"
               >
                 Install
               </Button>
@@ -99,18 +111,7 @@
         </ListView>
         </div>
 
-        <p
-          v-if="installError"
-          role="alert"
-          class="m-0 mt-3 rounded-md bg-surface-red-2 px-3 py-2 text-sm text-ink-red-8"
-        >
-          {{ installError }}
-        </p>
-        <p v-else-if="installingAppId || uninstallingAppId" class="m-0 mt-3 text-sm text-ink-gray-6">
-          {{ installingAppId
-            ? 'Installing the app and updating its DocTypes. This can take several minutes; keep this tab open…'
-            : 'Removing the app and its data. This can take several minutes; keep this tab open…' }}
-        </p>
+
       </div>
     </template>
   </Dialog>
@@ -138,14 +139,32 @@ const props = defineProps({
 defineEmits(['install', 'retry', 'uninstall', 'update:modelValue'])
 
 const pendingRemoval = ref(null)
-const dialogTitle = computed(() => pendingRemoval.value ? 'Uninstall app?' : 'Apps')
-const dialogMessage = computed(() => pendingRemoval.value
-  ? `Uninstall “${pendingRemoval.value.title}”? Its DocTypes and app data will be permanently removed from this playground.`
-  : 'Add optional apps to this playground. Installed apps and their data stay isolated in this browser.')
+const pendingInstall = ref(null)
+
+const dialogTitle = computed(() => {
+  if (pendingRemoval.value) return 'Uninstall app?'
+  if (pendingInstall.value) return 'Install app?'
+  return 'Apps'
+})
+
+const dialogMessage = computed(() => {
+  if (pendingRemoval.value) {
+    return `Uninstall “${pendingRemoval.value.title}”? This will remove the app and reload the playground.`
+  }
+  if (pendingInstall.value) {
+    return `Install “${pendingInstall.value.title}”? This will add the app and reload the playground.`
+  }
+  return 'Add optional apps to this playground. Installed apps and their data stay isolated in this browser.'
+})
 
 watch(() => props.modelValue, open => {
-  if (!open && !props.uninstallingAppId) pendingRemoval.value = null
+  if (!open && !props.uninstallingAppId && !props.installingAppId) {
+    pendingRemoval.value = null
+    pendingInstall.value = null
+  }
 })
+
+
 
 const columns = [
   { label: 'App', key: 'app', width: 'minmax(0, 1fr)' },
@@ -167,3 +186,9 @@ function isInstalled(appId) {
   return props.installedApps.includes(appId)
 }
 </script>
+
+<style scoped>
+:deep(.hide-list-header > .mb-2.grid) {
+  display: none !important;
+}
+</style>
