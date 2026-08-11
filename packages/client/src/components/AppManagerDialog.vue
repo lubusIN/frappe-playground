@@ -73,16 +73,25 @@
             row-key="id"
           >
           <template #cell="{ item, row, column }">
-            <div v-if="column.key === 'app'" class="min-w-0 py-1">
-              <div class="flex min-w-0 flex-wrap items-center gap-1.5">
-                <p class="m-0 truncate text-sm font-medium text-ink-gray-9">{{ row.title }}</p>
-                <Badge size="sm" theme="gray" variant="subtle">
-                  v{{ row.version }}
-                </Badge>
+            <div v-if="column.key === 'app'" class="flex items-start gap-3 min-w-0 py-1">
+              <Avatar
+                :image="row.logo || null"
+                :label="row.title"
+                shape="square"
+                size="2xl"
+                class="mt-0.5"
+              />
+              <div class="flex flex-col min-w-0">
+                <div class="flex min-w-0 flex-wrap items-center gap-1.5">
+                  <p class="m-0 truncate text-sm font-medium text-ink-gray-9">{{ row.title }}</p>
+                  <Badge size="sm" theme="gray" variant="subtle">
+                    v{{ row.version }}
+                  </Badge>
+                </div>
+                <p class="m-0 mt-1 line-clamp-2 text-xs leading-4 text-ink-gray-5">
+                  {{ row.description }}
+                </p>
               </div>
-              <p class="m-0 mt-1 line-clamp-2 text-xs leading-4 text-ink-gray-5">
-                {{ row.description }}
-              </p>
             </div>
             <div v-else-if="column.key === 'actions'" class="flex justify-end" @click.stop>
               <Button
@@ -118,6 +127,7 @@
 </template>
 
 <script setup>
+import Avatar from 'frappe-ui/components/Avatar/Avatar.vue'
 import Badge from 'frappe-ui/components/Badge/Badge.vue'
 import Button from 'frappe-ui/components/Button/Button.vue'
 import Dialog from 'frappe-ui/components/Dialog/Dialog.vue'

@@ -41,6 +41,14 @@ export function validateAppCatalog(catalog, { generated = false } = {}) {
     for (const key of ['title', 'description', 'version', 'license', 'frappeVersion']) {
       requireString(app[key], `${label}.${key}`)
     }
+    if (app.logo !== undefined) {
+      requireString(app.logo, `${label}.logo`)
+      try {
+        new URL(app.logo)
+      } catch (_) {
+        throw new TypeError(`${label}.logo must be a valid URL`)
+      }
+    }
     if (typeof app.experimental !== 'boolean') {
       throw new TypeError(`${label}.experimental must be a boolean`)
     }
