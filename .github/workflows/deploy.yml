@@ -17,10 +17,10 @@ jobs:
 
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
 
       - name: Setup Node.js
-        uses: actions/setup-node@v5
+        uses: actions/setup-node@v7
         with:
           node-version: 22
           cache: npm
@@ -30,7 +30,7 @@ jobs:
 
       - name: Cache Runtime Artifacts
         id: cache-runtime
-        uses: actions/cache@v4
+        uses: actions/cache@v6
         with:
           path: artifacts/runtime
           key: ${{ runner.os }}-runtime-${{ hashFiles('runtime/apps/catalog.json', 'runtime/build/Dockerfile', 'scripts/build.sh') }}
@@ -69,7 +69,7 @@ jobs:
 
       - name: Update PR description with deployment URL
         if: github.event_name == 'pull_request' && steps.deploy.outputs.deployment-url != ''
-        uses: actions/github-script@v7
+        uses: actions/github-script@v9
         with:
           script: |
             const url = '${{ steps.deploy.outputs.deployment-url }}';
