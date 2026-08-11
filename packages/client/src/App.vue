@@ -72,7 +72,9 @@ function resetBootState() {
   booting.value = true
   bootError.value = ''
   frameSrc.value = ''
-  address.value = new URLSearchParams(window.location.search).get('path') || '/'
+  let path = new URLSearchParams(window.location.search).get('path') || '/'
+  if (path === '/blank') path = '/'
+  address.value = path
   hasPrefilledLogin = false
   clearInterval(addressTimer)
   for (const step of bootSteps.value) {
@@ -143,7 +145,7 @@ function prefillLoginIfApplicable() {
 function syncAddressFromFrame() {
   try {
     const href = iframeRef.value?.contentWindow?.location?.href
-    if (href) address.value = stripScope(href)
+    if (href && !href.startsWith('about:')) address.value = stripScope(href)
     prefillLoginIfApplicable()
   } catch (_) {
     // The playground is expected to be same-origin, but frame swaps are transient.
