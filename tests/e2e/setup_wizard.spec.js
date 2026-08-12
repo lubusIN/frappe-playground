@@ -10,11 +10,6 @@ const {
 } = require('./helpers/frappeFlow');
 
 test('Frappe Setup Wizard Completion', async ({ page, browserName }) => {
-    test.skip(
-        browserName === 'webkit',
-        'Playwright WebKit blocks the module worker reload path under COEP even though real Safari allows it.'
-    );
-
     test.setTimeout(600000);
     const navigations = collectFrameNavigations(page);
 

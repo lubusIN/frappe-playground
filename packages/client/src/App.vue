@@ -157,8 +157,19 @@ function injectSafariPasswordFix() {
 
 function syncAddressFromFrame() {
   try {
-    const href = iframeRef.value?.contentWindow?.location?.href
-    if (href && !href.startsWith('about:')) address.value = stripScope(href)
+    const iframeWindow = iframeRef.value?.contentWindow
+    const href = iframeWindow?.location?.href
+    if (href && !href.startsWith('about:')) {
+      let displayHref = href
+      if (displayHref.includes('_frappe_playground_bounce=')) {
+        try {
+          const url = new URL(displayHref)
+          url.searchParams.delete('_frappe_playground_bounce')
+          displayHref = url.href
+        } catch (_) {}
+      }
+      address.value = stripScope(displayHref)
+    }
     prefillLoginIfApplicable()
     injectSafariPasswordFix()
   } catch (_) {
@@ -336,7 +347,20 @@ async function deleteInstance(id) {
   }
 }
 
-onMounted(initPlayground)
+onMounted(() => {
+  window.addEventListener('message', (event) => {
+    if (event.data?.type === 'frappe-playground-nested-shell') {
+      console.warn('[Playground] Parent caught nested shell. Fixing iframe URL...')
+      let targetUrl = frameUrl(normalizeAddress(event.data.href))
+      // Append a cache buster so Vue's reactivity guarantees a DOM update and navigation
+      const separator = targetUrl.includes('?') ? '&' : '?'
+      targetUrl += `${separator}_frappe_playground_bounce=${Date.now()}`
+      frameSrc.value = targetUrl
+    }
+  })
+
+  initPlayground()
+})
 
 onBeforeUnmount(() => {
   clearInterval(addressTimer)

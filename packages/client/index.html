@@ -1,6 +1,21 @@
 <!doctype html>
 <html lang="en">
   <head>
+    <!--
+      Safari aggressively strips context from iframe requests inside the Service Worker,
+      causing it to mistakenly serve this Vue shell instead of backend routes.
+      This synchronous script catches the error instantly before the DOM renders,
+      hides the document to prevent UI flashing, and triggers the parent to fix the URL.
+    -->
+    <script>
+      if (window.top !== window.self) {
+        document.documentElement.style.display = 'none';
+        window.parent.postMessage({
+          type: 'frappe-playground-nested-shell',
+          href: window.location.href,
+        }, '*');
+      }
+    </script>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Frappe Playground</title>

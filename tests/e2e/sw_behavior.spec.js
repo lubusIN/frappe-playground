@@ -2,8 +2,6 @@ const { test, expect } = require('@playwright/test');
 const { waitForPlaygroundBoot, loginAsAdministrator } = require('./helpers/frappeFlow');
 
 test.describe('Service Worker Resiliency', () => {
-    test.skip(({ browserName }) => browserName === 'webkit', 'WebKit SW behavior varies heavily under COEP isolation');
-
     test('recovers connection if BroadcastChannel requests re-init', async ({ page }) => {
         page.on('console', msg => console.log(`[PAGE] ${msg.type()}: ${msg.text()}`));
         page.on('worker', worker => {

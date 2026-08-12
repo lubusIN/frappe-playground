@@ -8,11 +8,6 @@ const {
 } = require('./helpers/frappeFlow');
 
 test('full boot login setup desk flow reaches stable Desk without redirect loop', async ({ page, browserName }) => {
-    test.skip(
-        browserName === 'webkit',
-        'Playwright WebKit is not a reliable proxy for Safari for the full Pyodide/Frappe lifecycle under COEP.'
-    );
-
     test.setTimeout(600000);
 
     const navigations = collectFrameNavigations(page);

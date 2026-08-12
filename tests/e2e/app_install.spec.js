@@ -71,10 +71,6 @@ const APPS_TO_TEST = [
 
 for (const app of APPS_TO_TEST) {
   test(`installs, opens, and uninstalls ${app.name}`, async ({ page, browserName }) => {
-    test.skip(
-        browserName === 'webkit',
-        'Playwright WebKit is not a reliable proxy for Safari for the full Pyodide/Frappe lifecycle under COEP.'
-    )
     if (app.heavy) {
       test.skip(process.env.CI && process.env.GITHUB_EVENT_NAME !== 'schedule', `Skipping heavy ${app.name} test on PRs`);
     }
