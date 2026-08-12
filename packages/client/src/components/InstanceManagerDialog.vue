@@ -65,7 +65,7 @@
 
       <div v-else class="-mt-5 w-full space-y-3 text-left">
         <ListView
-          class="h-64 w-full"
+          class="h-64 w-full hide-list-header"
           :columns="columns"
           :rows="instances"
           :options="listOptions"
@@ -270,3 +270,9 @@ function confirmAction() {
   pendingAction.value = ''
 }
 </script>
+
+<style scoped>
+:deep(.hide-list-header > .mb-2.grid) {
+  display: none !important;
+}
+</style>
