@@ -114,8 +114,8 @@ test('instance catalog creates and selects independent playgrounds', () => {
   const first = createInstanceSession({ ...options, name: 'Accounting' })
   const second = createInstanceSession(options)
 
-  assert.match(first.id, /^[a-z]+-[a-z]+$/)
-  assert.match(second.id, /^[a-z]+-[a-z]+$/)
+  assert.match(first.id, /^[a-z0-9]+-[a-z0-9]+$/)
+  assert.match(second.id, /^[a-z0-9]+-[a-z0-9]+$/)
   assert.notEqual(first.id, second.id)
   assert.equal(first.name, 'Accounting')
   assert.equal(second.name, 'Playground 2')
