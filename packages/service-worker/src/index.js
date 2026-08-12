@@ -110,6 +110,7 @@ async function handleFetch(event, url) {
   const client = event.clientId ? await getClientContext(event.clientId) : null
   const servesShell = isShellNavigation({
     mode: event.request.mode,
+    destination: event.request.destination,
     pathname: requestPath,
     explicitScope,
     clientFrameType: client?.frameType,

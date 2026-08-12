@@ -151,10 +151,11 @@ export function isDevelopmentPath(pathname) {
   return DEVELOPMENT_PATH_PREFIXES.some(prefix => pathname.startsWith(prefix))
 }
 
-export function isShellNavigation({ mode, pathname, explicitScope, clientFrameType }) {
+export function isShellNavigation({ mode, destination, pathname, explicitScope, clientFrameType }) {
   return mode === 'navigate'
     && pathname === '/'
     && !explicitScope
+    && destination !== 'iframe'
     && clientFrameType !== 'nested'
 }
 
