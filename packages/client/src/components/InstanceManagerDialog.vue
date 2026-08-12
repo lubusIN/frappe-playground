@@ -2,10 +2,23 @@
   <Dialog
     :open="modelValue"
     size="xl"
-    :title="dialogTitle"
     :message="dialogMessage"
     @update:open="$emit('update:modelValue', $event)"
   >
+    <template #title>
+      <div class="flex items-center gap-2">
+        <h3 class="text-2xl-semibold leading-6 text-ink-gray-8">
+          {{ dialogTitle }}
+        </h3>
+        <Badge
+          v-if="!creating && !renaming && !pendingAction"
+          theme="gray"
+          size="sm"
+        >
+          {{ instances.length }}
+        </Badge>
+      </div>
+    </template>
     <template #actions>
       <form
         v-if="creating"
@@ -102,10 +115,7 @@
           </template>
         </ListView>
 
-        <div class="flex items-center justify-between gap-3">
-          <p class="text-sm text-ink-gray-6">
-            {{ instances.length }} {{ instances.length === 1 ? 'playground' : 'playgrounds' }}
-          </p>
+        <div class="flex justify-end">
           <Button variant="solid" @click="creating = true">New Playground</Button>
         </div>
       </div>

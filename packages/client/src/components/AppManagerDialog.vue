@@ -2,10 +2,23 @@
   <Dialog
     :open="modelValue"
     size="lg"
-    :title="dialogTitle"
     :message="dialogMessage"
     @update:open="$emit('update:modelValue', $event)"
   >
+    <template #title>
+      <div class="flex items-center gap-2">
+        <h3 class="text-2xl-semibold leading-6 text-ink-gray-8">
+          {{ dialogTitle }}
+        </h3>
+        <Badge
+          v-if="!pendingRemoval && !pendingInstall"
+          theme="gray"
+          size="sm"
+        >
+          {{ apps.length }}
+        </Badge>
+      </div>
+    </template>
     <template #actions>
       <div v-if="pendingRemoval || pendingInstall" class="w-full space-y-3 text-left">
         <p v-if="uninstallingAppId || installingAppId" class="m-0 text-sm text-ink-gray-6">
