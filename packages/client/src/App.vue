@@ -142,11 +142,25 @@ function prefillLoginIfApplicable() {
   }
 }
 
+function injectSafariPasswordFix() {
+  try {
+    const doc = iframeRef.value?.contentWindow?.document
+    if (!doc || !doc.head || doc.getElementById('safari-pwd-fix')) return
+    const style = doc.createElement('style')
+    style.id = 'safari-pwd-fix'
+    style.textContent = 'input[type="password"] { font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif !important; }'
+    doc.head.appendChild(style)
+  } catch (_) {
+    // Ignore cross-origin or transient access errors.
+  }
+}
+
 function syncAddressFromFrame() {
   try {
     const href = iframeRef.value?.contentWindow?.location?.href
     if (href && !href.startsWith('about:')) address.value = stripScope(href)
     prefillLoginIfApplicable()
+    injectSafariPasswordFix()
   } catch (_) {
     // The playground is expected to be same-origin, but frame swaps are transient.
   }
