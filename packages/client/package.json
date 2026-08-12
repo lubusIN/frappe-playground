@@ -1,5 +1,6 @@
 {
   "name": "@frappe-playground/client",
   "private": true,
-  "type": "module"
+  "type": "module",
+  "version": "0.5.0"
 }

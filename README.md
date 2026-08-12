@@ -119,7 +119,7 @@ Open `http://localhost:8000/`.
 To run the complete deploy preparation flow in one command:
 
 ```bash
-npm run deploy:prepare
+npm run predeploy
 ```
 
 This rebuilds the runtime artifacts, builds the frontend shell into a clean `dist/`, assembles the authored runtime files, and checks published asset limits.
@@ -181,7 +181,7 @@ provide remote synchronization or server-side backups.
 
 ## Testing
 
-The Playwright suite starts and owns an isolated production preview at `http://127.0.0.1:8002`, so an existing development server cannot affect test results. After assembling `dist/` with `npm run build` or `npm run deploy:prepare`, run:
+The Playwright suite starts and owns an isolated production preview at `http://127.0.0.1:8002`, so an existing development server cannot affect test results. After assembling `dist/` with `npm run build` or `npm run predeploy`, run:
 
 ```bash
 npm run test
@@ -218,7 +218,7 @@ CI runs the fast tests, clean-build verification, and the complete Chromium Play
 Build the deployable `dist/` tree without publishing:
 
 ```bash
-npm run deploy:prepare
+npm run predeploy
 ```
 
 Deploy to Cloudflare Pages:
