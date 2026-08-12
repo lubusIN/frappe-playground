@@ -23,7 +23,7 @@ jobs:
         run: npm ci
 
       - name: Prepare Deploy Assets
-        run: npm run deploy:prepare
+        run: npm run predeploy
 
       - name: Run fast contract tests
         run: npm run test:contract

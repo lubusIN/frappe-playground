@@ -37,7 +37,7 @@ jobs:
 
       - name: Prepare Deploy Assets
         id: check_limits
-        run: npm run deploy:prepare
+        run: npm run predeploy
 
       - name: Run fast contract tests
         run: npm run test:contract
