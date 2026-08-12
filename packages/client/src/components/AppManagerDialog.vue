@@ -2,6 +2,7 @@
   <Dialog
     :open="modelValue"
     size="lg"
+    :title="dialogTitle"
     :message="dialogMessage"
     @update:open="$emit('update:modelValue', $event)"
   >

@@ -5,6 +5,10 @@
     size="sm"
     @update:open="$emit('update:modelValue', $event)"
   >
+    <VisuallyHidden>
+      <DialogTitle>About Frappe Playground</DialogTitle>
+      <DialogDescription>Information about the playground, including installed apps and documentation.</DialogDescription>
+    </VisuallyHidden>
     <div class="bg-surface-elevation-1 rounded-xl shadow-xl overflow-hidden flex flex-col relative text-left">
       <Button
         variant="ghost"
@@ -128,6 +132,7 @@
 <script setup>
 import { ref, computed } from 'vue'
 import { useClipboard } from '@vueuse/core'
+import { DialogTitle, DialogDescription, VisuallyHidden } from 'reka-ui'
 import Badge from 'frappe-ui/components/Badge/Badge.vue'
 import Button from 'frappe-ui/components/Button/Button.vue'
 import Dialog from 'frappe-ui/components/Dialog/Dialog.vue'
