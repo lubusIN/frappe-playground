@@ -34,7 +34,7 @@
           required
         />
         <div class="flex justify-end gap-2">
-          <Button variant="subtle" type="button" @click="creating = false">Cancel</Button>
+          <Button variant="subtle" type="button" @click="handleCancelCreate">Cancel</Button>
           <Button variant="solid" type="submit" :disabled="!newName.trim()">Create</Button>
         </div>
       </form>
@@ -151,8 +151,16 @@ const newName = ref('')
 const selectedId = ref('')
 const pendingAction = ref('')
 const creating = ref(false)
+const directCreate = ref(false)
 const renaming = ref(false)
 const renameValue = ref('')
+
+defineExpose({
+  startCreating: () => { 
+    creating.value = true 
+    directCreate.value = true
+  }
+})
 
 const columns = [
   { label: 'Saved Playground', key: 'info', width: 'minmax(0, 1fr)' },
@@ -199,11 +207,22 @@ const dialogMessage = computed(() => {
 watch(() => props.modelValue, open => {
   if (open) selectedId.value = props.activeInstanceId
   else {
-    creating.value = false
-    renaming.value = false
-    pendingAction.value = ''
+    setTimeout(() => {
+      creating.value = false
+      directCreate.value = false
+      renaming.value = false
+      pendingAction.value = ''
+    }, 300)
   }
 })
+
+function handleCancelCreate() {
+  if (directCreate.value) {
+    emit('update:modelValue', false)
+  } else {
+    creating.value = false
+  }
+}
 
 function createInstance() {
   const name = newName.value.trim()
