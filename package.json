@@ -38,7 +38,7 @@
   },
   "dependencies": {
     "@lucide/vue": "^1.17.0",
-    "frappe-ui": "^1.0.0-beta.40",
+    "frappe-ui": "^1.0.0-beta.53",
     "vue": "^3.5.35",
     "vue-router": "^4.6.4"
   }

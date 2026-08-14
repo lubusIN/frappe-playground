@@ -8,7 +8,7 @@
   >
     <template #actions>
       <div class="w-full text-left text-gray-900 dark:text-gray-100">
-        <div v-if="LOGIN_DEMO.prefill" class="rounded-md border border-gray-200 bg-gray-50 p-3 text-sm leading-5 text-gray-600">
+        <div v-if="LOGIN_DEMO.prefill" class="rounded-4 border border-gray-200 bg-gray-50 p-3 text-sm leading-5 text-gray-600">
           <span class="font-medium text-gray-900 dark:text-gray-100">Default Credentials:</span>
           <div class="mt-2 flex items-start gap-2">
             <Badge variant="outline" theme="blue" size="lg" class="font-mono">

@@ -1,7 +1,7 @@
 <template>
   <Dialog
     :open="modelValue"
-    size="xl"
+    size="lg"
     :title="dialogTitle"
     :message="dialogMessage"
     @update:open="$emit('update:modelValue', $event)"
@@ -65,20 +65,20 @@
 
       <div v-else class="-mt-5 w-full space-y-3 text-left">
         <ListView
-          class="h-64 w-full hide-list-header"
+          class="h-64 !w-full hide-list-header"
           :columns="columns"
           :rows="instances"
           :options="listOptions"
           row-key="id"
         >
           <template #cell="{ row, column }">
-          <div v-if="column.key === 'info'" class="flex flex-col gap-0.5 overflow-hidden">
+          <div v-if="column.key === 'info'" class="flex flex-col gap-0.5 overflow-hidden text-left">
             <div class="flex items-center gap-2">
               <p class="truncate text-sm font-medium text-ink-gray-9">
                 {{ row.name }}
               </p>
             </div>
-            <span class="text-xs text-ink-gray-5">
+            <span class="text-xs text-ink-gray-5 text-left">
               {{ row.lastOpenedAt ? `Last Accessed ${formatDate(row.lastOpenedAt)}` : 'Never opened' }}
             </span>
           </div>
@@ -130,7 +130,7 @@ import Badge from 'frappe-ui/components/Badge/Badge.vue'
 import Button from 'frappe-ui/components/Button/Button.vue'
 import Dialog from 'frappe-ui/components/Dialog/Dialog.vue'
 import Dropdown from 'frappe-ui/components/Dropdown/Dropdown.vue'
-import ListView from 'frappe-ui/components/ListView/ListView.vue'
+import { ListView } from 'frappe-ui/experimental'
 import TextInput from 'frappe-ui/components/TextInput/TextInput.vue'
 
 const props = defineProps({
@@ -155,7 +155,7 @@ const renaming = ref(false)
 const renameValue = ref('')
 
 const columns = [
-  { label: 'Saved Playground', key: 'info', width: 3 },
+  { label: 'Saved Playground', key: 'info', width: 'minmax(0, 1fr)' },
   { label: '', key: 'actions', width: '120px', align: 'right' },
 ]
 
