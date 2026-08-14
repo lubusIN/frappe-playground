@@ -6,7 +6,7 @@ import InfoDialog from './components/InfoDialog.vue'
 import AppManagerDialog from './components/AppManagerDialog.vue'
 import InstanceManagerDialog from './components/InstanceManagerDialog.vue'
 import LoadingScreen from './components/LoadingScreen.vue'
-import TopBar from './components/TopBar.vue'
+import Dock from './components/Dock.vue'
 import { LOGIN_DEMO } from './playground/config.js'
 import { loadAppCatalog } from './playground/apps.js'
 import {
@@ -48,6 +48,7 @@ const urlParams = new URLSearchParams(window.location.search)
 const address = ref(urlParams.get('path') || '/')
 const frameSrc = ref('')
 const iframeRef = ref(null)
+const instanceManagerRef = ref(null)
 const instanceId = ref('')
 const instances = ref([])
 const showIntroDialog = ref(false)
@@ -369,20 +370,14 @@ onBeforeUnmount(() => {
 </script>
 
 <template>
-  <main
-    class="grid h-screen w-screen overflow-hidden bg-gray-50 dark:bg-gray-900 supports-[height:100dvh]:h-dvh"
-    :class="
-      ready
-        ? 'grid-rows-[44px_minmax(0,1fr)] max-sm:grid-rows-[84px_minmax(0,1fr)]'
-        : 'grid-rows-[minmax(0,1fr)]'
-    "
-  >
-    <TopBar
+  <main class="relative flex h-screen w-screen flex-col overflow-hidden bg-gray-50 dark:bg-gray-900 supports-[height:100dvh]:h-dvh">
+    <Dock
       v-show="ready"
       v-model:address="address"
       :active-instance-id="instanceId"
       :instances="instances"
       :ready="ready"
+      @create-instance="showInstanceManager = true; instanceManagerRef?.startCreating()"
       @manage-instances="showInstanceManager = true"
       @manage-apps="openAppManager"
       @show-info="showInfoDialog = true"
@@ -425,6 +420,7 @@ onBeforeUnmount(() => {
       @uninstall="uninstallApp"
     />
     <InstanceManagerDialog
+      ref="instanceManagerRef"
       v-if="ready"
       v-model="showInstanceManager"
       :active-instance-id="instanceId"
