@@ -28,7 +28,7 @@
         <p
           v-else-if="installError"
           role="alert"
-          class="m-0 rounded-md bg-surface-red-2 px-3 py-2 text-sm text-ink-red-8"
+          class="m-0 rounded-4 bg-surface-red-2 px-3 py-2 text-sm text-ink-red-8"
         >
           {{ installError }}
         </p>
@@ -72,7 +72,7 @@
 
         <div
           v-else-if="error"
-          class="flex h-48 flex-col items-center justify-center gap-3 rounded-lg border border-outline-gray-2 bg-surface-gray-1 px-6 text-center"
+          class="flex h-48 flex-col items-center justify-center gap-3 rounded-5 border border-outline-gray-2 bg-surface-gray-1 px-6 text-center"
         >
           <p class="m-0 text-sm text-ink-gray-7">{{ error }}</p>
           <Button variant="subtle" @click="$emit('retry')">Try again</Button>
@@ -95,14 +95,14 @@
                 size="2xl"
                 class="mt-0.5"
               />
-              <div class="flex flex-col min-w-0">
+              <div class="flex flex-col min-w-0 text-left">
                 <div class="flex min-w-0 flex-wrap items-center gap-1.5">
                   <p class="m-0 truncate text-sm font-medium text-ink-gray-9">{{ row.title }}</p>
                   <Badge size="sm" theme="gray" variant="subtle">
                     v{{ row.version }}
                   </Badge>
                 </div>
-                <p class="m-0 mt-1 line-clamp-2 text-xs leading-4 text-ink-gray-5">
+                <p class="m-0 mt-1 line-clamp-2 text-xs leading-4 text-ink-gray-5 text-left">
                   {{ row.description }}
                 </p>
               </div>
@@ -145,7 +145,7 @@ import Avatar from 'frappe-ui/components/Avatar/Avatar.vue'
 import Badge from 'frappe-ui/components/Badge/Badge.vue'
 import Button from 'frappe-ui/components/Button/Button.vue'
 import Dialog from 'frappe-ui/components/Dialog/Dialog.vue'
-import ListView from 'frappe-ui/components/ListView/ListView.vue'
+import { ListView } from 'frappe-ui/experimental'
 import Spinner from 'frappe-ui/components/Spinner/Spinner.vue'
 import { computed, ref, watch } from 'vue'
 
