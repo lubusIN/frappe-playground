@@ -214,7 +214,7 @@ function createInstance() {
 }
 
 function formatDate(timestamp) {
-  return timestamp ? new Date(timestamp).toLocaleString([], { dateStyle: 'medium' }) : '—'
+  return timestamp ? new Date(timestamp).toLocaleString([], { dateStyle: 'medium', timeStyle: 'short' }) : '—'
 }
 
 function askConfirmation(action) {
