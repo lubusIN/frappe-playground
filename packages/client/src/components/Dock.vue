@@ -1,7 +1,7 @@
 <template>
   <div 
     :class="[
-      'fixed z-50 overflow-hidden border-gray-700/60 bg-gray-900 shadow-2xl backdrop-blur-xl transition-all duration-200',
+      'fixed z-50 overflow-hidden border-gray-700/60 bg-gray-950 transition-all duration-200',
       isFullWidth || isMobile ? 'bottom-0 inset-x-0 w-full rounded-none border-t pb-safe' : 'bottom-6 left-1/2 w-fit -translate-x-1/2 rounded-6 border'
     ]"
   >
@@ -34,13 +34,13 @@
         type="text"
         :value="address"
         :disabled="!ready"
+        readonly
         placeholder="Current Frappe path"
         aria-label="Current Frappe path"
         :class="[
-          'rounded-4 border border-transparent bg-gray-800 px-2 py-0.5 font-mono text-[13px] text-gray-200 placeholder-gray-500 focus:bg-gray-700 focus:outline-none focus:ring-0 disabled:opacity-50 transition-colors',
+          'rounded-4 border border-transparent bg-gray-800 px-2 py-0.5 font-mono text-[13px] text-gray-200 placeholder-gray-500 focus:outline-none focus:ring-0 disabled:opacity-50 transition-colors cursor-default',
           isFullWidth || isMobile ? 'flex-1' : 'w-64'
         ]"
-        @input="$emit('update:address', $event.target.value)"
       />
 
       <div
