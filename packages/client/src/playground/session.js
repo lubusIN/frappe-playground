@@ -78,8 +78,14 @@ export function removeInstanceSession(id, { storage = globalThis.localStorage } 
   const instances = parseCatalog(storage).filter(instance => instance.id !== id)
   saveCatalog(storage, instances)
   if (storage.getItem(PLAYGROUND_SESSION_KEY) === id) {
-    if (instances[0]) storage.setItem(PLAYGROUND_SESSION_KEY, instances[0].id)
-    else storage.removeItem(PLAYGROUND_SESSION_KEY)
+    if (instances.length > 0) {
+      const lastOpened = instances.reduce((latest, current) =>
+        (current.lastOpenedAt || 0) > (latest.lastOpenedAt || 0) ? current : latest
+      )
+      storage.setItem(PLAYGROUND_SESSION_KEY, lastOpened.id)
+    } else {
+      storage.removeItem(PLAYGROUND_SESSION_KEY)
+    }
   }
   return instances
 }
@@ -114,9 +120,18 @@ export function getOrCreateInstanceSession(options = {}) {
     now = Date.now,
     random = Math.random,
   } = options
+
   const activeId = storage.getItem(PLAYGROUND_SESSION_KEY)
   const selected = activeId && selectInstanceSession(activeId, { storage, now })
   if (selected) return selected
+
+  const instances = parseCatalog(storage)
+  if (instances.length > 0) {
+    const lastOpened = instances.reduce((latest, current) =>
+      (current.lastOpenedAt || 0) > (latest.lastOpenedAt || 0) ? current : latest
+    )
+    return selectInstanceSession(lastOpened.id, { storage, now })
+  }
 
   // Adopt the pre-catalog session so existing playground data remains reachable.
   if (activeId) {
@@ -127,7 +142,7 @@ export function getOrCreateInstanceSession(options = {}) {
       createdAt: timestamp,
       lastOpenedAt: timestamp,
     }
-    saveCatalog(storage, [...parseCatalog(storage), instance])
+    saveCatalog(storage, [instance])
     return { ...instance, freshSession: false }
   }
 
