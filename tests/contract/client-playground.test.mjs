@@ -35,6 +35,8 @@ import {
 } from '../../packages/client/src/playground/runtime-version.js'
 import { loadAppCatalog } from '../../packages/client/src/playground/apps.js'
 
+const INSTANCE_ID_REGEX = /^[a-z0-9]+-[a-z0-9]+$/
+
 function memoryStorage() {
   const values = new Map()
   return {
@@ -87,7 +89,7 @@ test('instance sessions are created once and restored on reload', () => {
   }
 
   const session1 = getOrCreateInstanceSession(options)
-  assert.match(session1.id, /^[a-z]+-[a-z]+$/)
+  assert.match(session1.id, INSTANCE_ID_REGEX)
   assert.equal(session1.name, 'My Playground')
   assert.equal(session1.createdAt, 100)
   assert.equal(session1.lastOpenedAt, 100)
@@ -114,8 +116,8 @@ test('instance catalog creates and selects independent playgrounds', () => {
   const first = createInstanceSession({ ...options, name: 'Accounting' })
   const second = createInstanceSession(options)
 
-  assert.match(first.id, /^[a-z0-9]+-[a-z0-9]+$/)
-  assert.match(second.id, /^[a-z0-9]+-[a-z0-9]+$/)
+  assert.match(first.id, INSTANCE_ID_REGEX)
+  assert.match(second.id, INSTANCE_ID_REGEX)
   assert.notEqual(first.id, second.id)
   assert.equal(first.name, 'Accounting')
   assert.equal(second.name, 'Playground 2')
@@ -301,7 +303,7 @@ test('the controller owns lifecycle wiring and emits structured progress', async
   controller.on(PlaygroundEventType.READY, event => ready.push(event))
 
   const session = await controller.start()
-  assert.match(session.id, /^[a-z]+-[a-z]+$/)
+  assert.match(session.id, INSTANCE_ID_REGEX)
   assert.equal(session.name, 'My Playground')
   assert.equal(session.freshSession, true)
   assert.equal(typeof session.createdAt, 'number')
