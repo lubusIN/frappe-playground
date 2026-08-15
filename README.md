@@ -13,7 +13,7 @@ Run the Frappe Framework entirely in the browser with Pyodide and WebAssembly. A
 
 The playground has five main pieces:
 
-1. **Vue shell (`packages/client/`)**: Renders boot progress, the top bar, the instance manager, and the Frappe iframe. `packages/client/src/playground/` owns runtime lifecycle, the persistent instance catalog, Service Worker coordination, and scoped iframe navigation independently of Vue components. Vite emits shell assets into `dist/frontend/`.
+1. **Vue shell (`packages/client/`)**: Renders boot progress, the dock, the instance manager, and the Frappe iframe. `packages/client/src/playground/` owns runtime lifecycle, the persistent instance catalog, Service Worker coordination, and scoped iframe navigation independently of Vue components. Vite emits shell assets into `dist/frontend/`.
 2. **Service Worker (`packages/service-worker/`)**: Routes each scoped request to the correct server worker, associates browser clients with instances, caches runtime assets, preserves scoped redirects, and supports channel recovery across reloads. One Service Worker is shared by every instance on the origin.
 3. **Pyodide server (`packages/server/`)**: Each playground starts a dedicated worker that composes the Pyodide loader, filesystem installer, scoped IndexedDB persistence, database lifecycle, Python bridge, and serial WSGI request executor. Browser-specific Python sources in `runtime/python/` are converted into a build-time JavaScript module.
 4. **Shared protocol (`packages/protocol/`)**: Defines the versioned messages exchanged by the shell, Service Worker, and Pyodide server.
@@ -34,7 +34,7 @@ Vite sets these headers during local development and preview. Cloudflare Pages u
 
 - Run Frappe Desk and Python WSGI entirely in the browser.
 - Create and name multiple isolated playground instances.
-- Switch, rename, reset, and delete saved playgrounds from the top bar.
+- Switch, rename, reset, and delete saved playgrounds from the dock.
 - Browse, install, and uninstall curated optional apps in each playground.
 - Persist each instance's SQLite database, cookies, and uploaded site files in IndexedDB.
 - Preserve Frappe navigation and redirects behind scoped paths such as `/scope:<instance-id>/...`.
@@ -78,7 +78,7 @@ The Frappe Playground supports URL query parameters to automatically configure a
 Supported parameters:
 | Parameter | Description |
 | :--- | :--- |
-| `apps` | Comma-separated list of app IDs to automatically install (e.g., `?apps=crm,helpdesk`). |
+| `apps` | Comma-separated list of app IDs to automatically install (e.g., `?apps=crm,wiki,frappe_vault`). |
 | `login` | Set to `1`, `true`, or `auto` to automatically log in as the default Administrator. |
 | `onboarding` | Set to `0` or `false` to auto-login, automatically complete the Frappe setup wizard with localized defaults, and land directly on the desk. |
 | `path` | The URL path to land on after booting (e.g., `?path=/app/todo`). Defaults to `/desk` if auto-logged in, or `/` otherwise. |
@@ -119,7 +119,7 @@ catalog without running Docker using `npm run validate:apps`. The runtime build
 fetches immutable commits, builds their frontend assets, and emits deterministic
 install archives under `artifacts/runtime/apps/`. The server runtime can verify
 and install those archives into a selected playground through its versioned
-worker protocol. The top-bar app manager exposes that catalog and reloads the
+worker protocol. The dock app manager exposes that catalog and reloads the
 playground after app changes so Frappe starts with the correct hooks and
 DocTypes. Build verification fingerprints the authored catalog and rejects
 stale generated app archives in CI.
