@@ -1,34 +1,23 @@
 <template>
   <svg
     class="block"
-    :class="sizeClass"
     fill="none"
-    viewBox="0 0 25 25"
+    viewBox="0 0 375 375"
     xmlns="http://www.w3.org/2000/svg"
     aria-hidden="true"
   >
-    <g :clip-path="`url(#${clipId})`">
-      <path
-        d="M19.9624 0.763672H5.83963C3.31294 0.763672 1.26465 2.81189 1.26465 5.33849V19.4608C1.26465 21.9874 3.31294 24.0356 5.83963 24.0356H19.9624C22.4891 24.0356 24.5374 21.9874 24.5374 19.4608V5.33849C24.5374 2.81189 22.4891 0.763672 19.9624 0.763672Z"
-        fill="currentColor"
-      />
-      <path d="M9.17773 7.97852H16.625" :class="markClass" stroke-width="2.10048" />
-      <path
-        d="M10.2246 17.8705V12.9834H16.0428"
-        :class="markClass"
-        stroke-width="2.10048"
-      />
-    </g>
+    <rect v-if="!bare" width="375" height="375" rx="80" fill="#171717" />
     <defs>
-      <clipPath :id="clipId">
-        <rect
-          fill="white"
-          height="23.9992"
-          transform="translate(0.901367 0.400391)"
-          width="24"
-        />
+      <clipPath :id="`${clipId}-mark`">
+        <path d="M77.7 79.695H297V292H77.7Zm0 0"/>
       </clipPath>
     </defs>
+    <g :clip-path="`url(#${clipId}-mark)`">
+      <path
+        :class="markClass"
+        d="M226.27 291.34c-12.793-74.207-34.184-113.746-86.356-141.942l22.492-4.601c12.254 8.043 22.906 17.086 32.137 27.527 15.367 17.39 26.168 37.95 34.227 62.613l44.96-134.726-140.246 28.68.024.011-26.836 5.489c-8.914-3.41-18.496-6.696-28.8-9.903l219.03-44.793Zm0 0"
+      />
+    </g>
   </svg>
 </template>
 
@@ -36,10 +25,9 @@
 import { computed } from 'vue'
 
 const props = defineProps({
-  size: {
-    type: String,
-    default: 'md',
-    validator: value => ['md', 'lg', 'xl'].includes(value),
+  bare: {
+    type: Boolean,
+    default: false,
   },
   clipId: {
     type: String,
@@ -52,13 +40,5 @@ const props = defineProps({
   },
 })
 
-const markClass = computed(() => (
-  props.markColor === 'light' ? 'stroke-white' : 'stroke-white dark:stroke-gray-900'
-))
-
-const sizeClass = computed(() => {
-  if (props.size === 'xl') return 'h-14 w-14'
-  if (props.size === 'lg') return 'h-10 w-10'
-  return 'h-6 w-6'
-})
+const markClass = computed(() => 'fill-white')
 </script>

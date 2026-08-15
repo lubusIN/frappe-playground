@@ -22,8 +22,8 @@
 
       <div class="p-5 pb-0">
         <div class="flex flex-col items-center justify-center pt-3 pb-4">
-          <div class="w-12 h-14 overflow-hidden mb-3 rounded-5 flex items-center justify-start">
-            <img :src="logoUrl" alt="Frappe Vault" class="h-12 max-w-none" />
+          <div class="mb-4 flex items-center justify-center">
+            <BrandIcon class="h-14 w-14" clipId="info-dialog-clip" />
           </div>
           <div class="flex items-center gap-2">
             <span class="text-lg font-semibold text-ink-gray-9">Frappe Playground</span>
@@ -115,18 +115,14 @@
         </Tabs>
       </div>
 
-      <div class="px-5 py-3 border-t border-surface-gray-2 bg-surface-gray-50 text-center text-[13px] text-ink-gray-5">
-        \ Made by
-        <a
-          href="https://lubus.in"
-          target="_blank"
-          rel="noopener noreferrer"
-          class="text-ink-gray-8 hover:text-ink-gray-9 hover:underline transition-colors"
-        >
-          lubus
-        </a>
-        /
-      </div>
+      <a
+        href="https://lubus.in"
+        target="_blank"
+        rel="noopener noreferrer"
+        class="block px-5 py-3 border-t border-surface-gray-2 bg-surface-gray-50 text-center text-[13px] text-ink-gray-5 hover:text-ink-gray-9 hover:underline transition-colors group"
+      >
+        \ Made by lubus /
+      </a>
     </div>
   </Dialog>
 </template>
@@ -141,9 +137,9 @@ import Tabs from 'frappe-ui/components/Tabs/Tabs.vue'
 import FormControl from 'frappe-ui/components/FormControl/FormControl.vue'
 import { User, Key, CheckCircle2, Rocket, Coffee, X, HelpCircle, Bug, Heart, Headphones, ArrowRight, Copy, Check } from '@lucide/vue'
 import GithubIcon from './GithubIcon.vue'
+import BrandIcon from './BrandIcon.vue'
 import { LOGIN_DEMO } from '../playground/config.js'
 import pkg from '../../../../package.json'
-import logoUrl from '../../../../.github/logo.svg'
 
 const props = defineProps({
   modelValue: {

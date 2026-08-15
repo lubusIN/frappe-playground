@@ -110,7 +110,7 @@
         :key="action.id"
         :variant="action.primary ? 'solid' : 'ghost'"
         class="group !flex !h-auto flex-1 sm:flex-none sm:!w-16 !flex-col !items-center !justify-center !gap-1 !px-2 !py-1.5 focus:outline-none !rounded-5"
-        :class="action.primary ? '!bg-blue-600 !text-white hover:!bg-blue-700 border-transparent' : '!text-gray-400 hover:!bg-gray-800 hover:!text-white'"
+        :class="action.primary ? '!bg-blue-800 !text-white hover:!bg-blue-700 border-transparent' : '!text-gray-400 hover:!bg-gray-800 hover:!text-white'"
         :disabled="!ready"
         :title="action.title"
         :aria-label="action.title"
@@ -130,11 +130,11 @@
   <button
     v-else
     @click="isMinimized = false"
-    class="fixed bottom-4 right-4 z-50 flex h-11 w-11 items-center justify-center rounded-full bg-gray-900 border border-blue-500/50 text-gray-300 shadow-[0_0_35px_#3b82f680] hover:bg-gray-800 hover:text-white !outline-none !ring-0 focus:!outline-none focus:!ring-0 transition-all sm:bottom-6 sm:right-6"
+    class="fixed bottom-4 right-4 z-50 flex h-12 w-12 items-center justify-center rounded-full shadow-[0_0_35px_#3b82f680] hover:scale-105 hover:shadow-[0_0_40px_#3b82f6aa] !outline-none !ring-0 focus:!outline-none focus:!ring-0 transition-all sm:bottom-6 sm:right-6 overflow-hidden bg-[#171717]"
     style="-webkit-tap-highlight-color: transparent;"
     title="Expand Playground Dock"
   >
-    <Terminal class="h-5 w-5" />
+    <BrandIcon bare clipId="dock-minimized-clip" class="h-10 w-10" />
   </button>
   </Transition>
 </template>
@@ -143,9 +143,10 @@
 import { computed, ref, onMounted, onUnmounted } from 'vue'
 import Button from 'frappe-ui/components/Button/Button.vue'
 import { RotateCw, PanelsTopLeft, Blocks, HelpCircle, ChevronDown, ChevronUp, Maximize, Minimize, Plus, Terminal, Minus } from '@lucide/vue'
+import BrandIcon from './BrandIcon.vue'
 
 const dockActions = [
-  { id: 'new', label: 'New', icon: Plus, event: 'create-instance', title: 'Create new playground' },
+  { id: 'new', label: 'New', icon: Plus, event: 'create-instance', title: 'Create new playground', primary: true },
   { id: 'sites', label: 'Sites', icon: PanelsTopLeft, event: 'manage-instances', title: 'Manage playgrounds' },
   { id: 'apps', label: 'Apps', icon: Blocks, event: 'manage-apps', title: 'Manage apps' },
   { id: 'info', label: 'Info', icon: HelpCircle, event: 'show-info', title: 'Playground info' }
