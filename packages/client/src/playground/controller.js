@@ -216,7 +216,11 @@ export class PlaygroundController {
     }
 
     this.worker.onerror = error => {
-      this.emitError(new Error(error.message || 'Frappe runtime failed to start.'))
+      let msg = error.message || 'Frappe runtime failed to start.'
+      if (msg.includes("Unexpected token '{'") || msg.includes('SyntaxError') || msg.includes('import declarations')) {
+        msg = 'Your browser is too old to run the Frappe Playground. Please update your device or switch to a modern browser.'
+      }
+      this.emitError(new Error(msg))
     }
   }
 
