@@ -24,8 +24,11 @@
       html, body, #app { width: 100%; min-height: 100%; margin: 0; }
       #playground-shell-placeholder {
         box-sizing: border-box; min-height: 100vh; display: flex; flex-direction: column;
-        align-items: center; padding: 64px 24px; background: #f7f7f7;
-        color: #171717; font-family: Inter, ui-sans-serif, system-ui, sans-serif;
+        align-items: center; padding: 64px 24px 24px 24px; background: oklch(0.964 0 0);
+        color: #171717; font-family: InterVar, Inter, ui-sans-serif, system-ui, sans-serif;
+        font-variation-settings: "opsz" 24, "cv11" 1;
+        -webkit-font-smoothing: antialiased;
+        -moz-osx-font-smoothing: grayscale;
       }
       #playground-shell-placeholder svg { width: 56px; height: 56px; }
       #playground-shell-placeholder .loading-title {
@@ -44,19 +47,34 @@
       @media (prefers-reduced-motion: reduce) {
         #playground-shell-placeholder .loading-spinner { animation: none; }
       }
+      .credits-link {
+        margin-top: auto; padding-top: 32px; font-size: 14px; color: oklch(0.586 0 0);
+        text-decoration: none; transition: color 0.15s; display: block;
+      }
+      .credits-link:hover { color: oklch(0.168 0 0); text-decoration: underline; }
     </style>
   </head>
   <body>
     <div id="app">
       <section id="playground-shell-placeholder" aria-label="Loading Frappe Playground">
-        <svg fill="none" viewBox="0 0 25 25" aria-hidden="true">
-          <path d="M19.9624.7637H5.8396A4.575 4.575 0 0 0 1.2646 5.3385v14.1223a4.575 4.575 0 0 0 4.575 4.5748h14.1228a4.575 4.575 0 0 0 4.575-4.5748V5.3385a4.575 4.575 0 0 0-4.575-4.5748Z" fill="currentColor"/>
-          <path d="M9.1777 7.9785H16.625M10.2246 17.8705v-4.8871h5.8182" stroke="white" stroke-width="2.1005"/>
+        <svg fill="none" viewBox="0 0 375 375" aria-hidden="true">
+          <rect width="375" height="375" rx="80" fill="#171717" />
+          <defs>
+            <clipPath id="frappe-logo-mark-clip">
+              <path d="M77.7 79.695H297V292H77.7Zm0 0"/>
+            </clipPath>
+          </defs>
+          <g clip-path="url(#frappe-logo-mark-clip)">
+            <path fill="#fff" d="M226.27 291.34c-12.793-74.207-34.184-113.746-86.356-141.942l22.492-4.601c12.254 8.043 22.906 17.086 32.137 27.527 15.367 17.39 26.168 37.95 34.227 62.613l44.96-134.726-140.246 28.68.024.011-26.836 5.489c-8.914-3.41-18.496-6.696-28.8-9.903l219.03-44.793Zm0 0"/>
+          </g>
         </svg>
         <p class="loading-title">
           <span class="loading-spinner" aria-hidden="true"></span>
           <span>Warming up the espresso machine…</span>
         </p>
+        <a href="https://lubus.in" target="_blank" rel="noopener noreferrer" class="credits-link">
+          \ Made by lubus /
+        </a>
       </section>
     </div>
     <!--

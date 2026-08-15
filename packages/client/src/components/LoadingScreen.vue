@@ -1,7 +1,7 @@
 <template>
   <section id="loading-screen" class="relative flex min-h-screen supports-[height:100dvh]:min-h-[100dvh] flex-col items-center pt-10 sm:pt-16 bg-surface-gray-2 p-6">
     <div class="grid w-full max-w-[420px] justify-items-center gap-2.5 text-center">
-      <BrandIcon clip-id="frappe-loading-brand-clip" size="xl" class="mb-1.5 text-ink-gray-9" />
+      <BrandIcon clip-id="frappe-loading-brand-clip" class="h-14 w-14 mb-1.5 text-ink-gray-9" />
       <div class="mt-4 flex w-full max-w-[320px] flex-col gap-3 rounded-6 bg-surface-base p-5 text-left shadow-sm">
         <div class="mb-1">
           <p class="m-0 text-base font-semibold text-ink-gray-9 mb-3">Brewing your Frappe</p>
@@ -32,18 +32,14 @@
       </div>
     </div>
 
-    <div class="mt-auto pt-8 text-[13px] text-ink-gray-5">
-      \ Made by
-      <a
-        href="https://lubus.in"
-        target="_blank"
-        rel="noopener noreferrer"
-        class="text-ink-gray-8 hover:text-ink-gray-9 hover:underline transition-colors"
-      >
-        lubus
-      </a>
-      /
-    </div>
+    <a
+      href="https://lubus.in"
+      target="_blank"
+      rel="noopener noreferrer"
+      class="mt-auto pt-8 text-[13px] text-ink-gray-5 hover:text-ink-gray-9 hover:underline transition-colors group block"
+    >
+      \ Made by lubus /
+    </a>
   </section>
 </template>
 
