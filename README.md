@@ -41,6 +41,14 @@ Vite sets these headers during local development and preview. Cloudflare Pages u
 - Recover runtime channels and Service Worker state across normal and cache-bypassing reloads.
 - Display structured progress while Pyodide, Frappe assets, and the site database initialize.
 
+## Browser Support
+
+Frappe Playground heavily relies on modern Web APIs, including WebAssembly and ES Module Workers, to boot the Python environment. It requires a modern browser to run:
+
+- **Chrome / Edge:** Version 80 or newer (2020+)
+- **Safari / iOS:** Version 15 or newer (2021+)
+- **Firefox:** Version 114 or newer (2023+)
+
 ## Runtime flow
 
 ```text
