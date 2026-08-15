@@ -71,6 +71,23 @@ Password: admin
 These presentation defaults live in `packages/client/src/playground/config.js`.
 The credentials are intended only for browser-local playground data.
 
+## Boot Flags (URL Configuration)
+
+The Frappe Playground supports URL query parameters to automatically configure and boot the playground into a specific state.
+
+Supported parameters:
+| Parameter | Description |
+| :--- | :--- |
+| `apps` | Comma-separated list of app IDs to automatically install (e.g., `?apps=crm,helpdesk`). |
+| `login` | Set to `1`, `true`, or `auto` to automatically log in as the default Administrator. |
+| `onboarding` | Set to `0` or `false` to auto-login, automatically complete the Frappe setup wizard with localized defaults, and land directly on the desk. |
+| `path` | The URL path to land on after booting (e.g., `?path=/app/todo`). Defaults to `/desk` if auto-logged in, or `/` otherwise. |
+| `name` | The name of the playground instance to load or create. |
+
+**Example:**
+`http://localhost:5173/?name=Demo&apps=crm&onboarding=0`
+*Creates a new playground named "Demo", installs the CRM app, auto-logs in as Administrator, completely skips the setup wizard, and drops the user straight into Frappe Desk.*
+
 ## Getting Started
 
 Install dependencies:
@@ -228,6 +245,10 @@ npm run deploy
 ```
 
 `npm run deploy` also runs `predeploy`, which prepares the runtime and frontend before publishing with `scripts/deploy.sh`.
+
+## Acknowledgements
+
+Frappe Playground is heavily inspired by the amazing foundational work done by the [WordPress Playground](https://github.com/WordPress/wordpress-playground) team in bringing full-stack web applications into the browser via WebAssembly.
 
 ## Meet Your Artisans
 
