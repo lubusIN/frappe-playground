@@ -51,7 +51,7 @@
       "id": "frappe_vault",
       "title": "Frappe Vault",
       "description": "A password and secrets manager.",
-      "version": "1.0.1",
+      "version": "1.1.0",
       "license": "MIT",
       "experimental": true,
       "logo": "https://raw.githubusercontent.com/lubusIN/frappe-vault/refs/heads/main/frappe_vault/public/images/vault-logo.svg",
@@ -65,7 +65,7 @@
       "pythonDependencies": [],
       "source": {
         "repository": "https://github.com/lubusIN/frappe-vault.git",
-        "ref": "91459ab1d841ce3933e7ed974ce52b71ba62d44c"
+        "ref": "c7b1aa4d7cd990a8b9c2d9b93735b6f09544f22b"
       }
     }
   ]
