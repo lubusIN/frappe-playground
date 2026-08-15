@@ -175,6 +175,17 @@ function syncAddressFromFrame() {
     }
     prefillLoginIfApplicable()
     injectSafariPasswordFix()
+    
+    // Sync dark mode from Frappe to the parent shell to prevent white flashes
+    const doc = iframeWindow?.document
+    if (doc) {
+      const isDark = doc.documentElement.getAttribute('data-theme') === 'dark' || doc.documentElement.classList.contains('dark')
+      if (isDark) {
+        document.documentElement.classList.add('dark')
+      } else {
+        document.documentElement.classList.remove('dark')
+      }
+    }
   } catch (_) {
     // The playground is expected to be same-origin, but frame swaps are transient.
   }
@@ -441,19 +452,7 @@ onBeforeUnmount(() => {
 
 <template>
   <main class="relative flex h-screen w-screen flex-col overflow-hidden bg-gray-50 dark:bg-gray-900 supports-[height:100dvh]:h-dvh">
-    <Dock
-      v-show="ready"
-      v-model:address="address"
-      :active-instance-id="instanceId"
-      :instances="instances"
-      :ready="ready"
-      @create-instance="showInstanceManager = true; instanceManagerRef?.startCreating()"
-      @manage-instances="showInstanceManager = true"
-      @manage-apps="openAppManager"
-      @show-info="showInfoDialog = true"
-      @navigate="navigateFrame"
-      @reload="reloadFrame"
-    />
+
 
     <LoadingScreen
       v-show="!ready"
@@ -467,10 +466,24 @@ onBeforeUnmount(() => {
       id="frappe-desk"
       ref="iframeRef"
       :src="frameSrc"
-      class="h-full min-h-0 w-full border-0 bg-white dark:bg-gray-900"
+      class="flex-1 min-h-0 w-full border-0 bg-transparent dark:bg-gray-900"
       :class="ready ? 'block' : 'hidden'"
       title="Frappe Desk"
       @load="syncAddressFromFrame"
+    />
+
+    <Dock
+      v-show="ready"
+      v-model:address="address"
+      :active-instance-id="instanceId"
+      :instances="instances"
+      :ready="ready"
+      @create-instance="showInstanceManager = true; instanceManagerRef?.startCreating()"
+      @manage-instances="showInstanceManager = true"
+      @manage-apps="openAppManager"
+      @show-info="showInfoDialog = true"
+      @navigate="navigateFrame"
+      @reload="reloadFrame"
     />
 
     <IntroDialog v-if="ready" v-model="showIntroDialog" />

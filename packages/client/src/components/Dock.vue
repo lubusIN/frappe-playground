@@ -1,8 +1,16 @@
 <template>
-  <div 
+  <Transition 
+    enter-active-class="transition-all duration-150 ease-out"
+    leave-active-class="transition-all duration-150 ease-in"
+    enter-from-class="opacity-0 translate-y-2.5 scale-95"
+    leave-to-class="opacity-0 translate-y-2.5 scale-95"
+    mode="out-in"
+  >
+    <div 
+      v-if="!isMinimized"
     :class="[
-      'fixed z-50 overflow-hidden border-gray-700/60 bg-gray-950 transition-all duration-200',
-      isFullWidth || isMobile ? 'bottom-0 inset-x-0 w-full rounded-none border-t pb-safe' : 'bottom-6 left-1/2 w-fit -translate-x-1/2 rounded-6 border'
+      'z-50 overflow-hidden bg-gray-950 transition duration-200',
+      isFullWidth || isMobile ? 'w-full shrink-0 rounded-none border-t border-blue-500/40 pb-safe shadow-[0_-5px_35px_#3b82f64d]' : 'fixed bottom-6 left-1/2 w-fit -translate-x-1/2 rounded-6 border border-blue-500/40 shadow-[0_0_35px_#3b82f666]'
     ]"
   >
     <!-- Top row: Address bar and status -->
@@ -64,7 +72,18 @@
           </template>
         </Button>
 
-        <Button
+         <Button
+          variant="ghost"
+          class="!text-gray-400 hover:!bg-gray-700 hover:!text-white focus:outline-none !h-7 !w-7"
+          title="Minimize Dock"
+          @click="isMinimized = true"
+        >
+          <template #icon>
+            <Minus class="h-3.5 w-3.5" aria-hidden="true" />
+          </template>
+        </Button>
+
+         <Button
           v-if="!isMobile"
           variant="ghost"
           class="!text-gray-400 hover:!bg-gray-700 hover:!text-white focus:outline-none !h-7 !w-7"
@@ -80,8 +99,13 @@
     </form>
 
     <!-- Bottom row: Actions -->
-    <div v-show="showActions" class="flex items-center justify-center gap-1 sm:gap-2 px-2 py-1.5 transition-all">
-      <Button
+    <div
+      class="grid transition-all duration-200 ease-in-out"
+      :class="showActions ? 'grid-rows-[1fr] opacity-100' : 'grid-rows-[0fr] opacity-0'"
+    >
+      <div class="overflow-hidden">
+        <div class="flex items-center justify-center gap-1 sm:gap-2 px-2 py-1.5">
+        <Button
         v-for="action in dockActions"
         :key="action.id"
         :variant="action.primary ? 'solid' : 'ghost'"
@@ -96,15 +120,29 @@
           <component :is="action.icon" class="h-4 w-4 sm:h-4 sm:w-4 group-hover:text-white" aria-hidden="true" />
         </template>
         <span class="text-[10px] font-medium leading-none tracking-wide group-hover:text-white">{{ action.label }}</span>
-      </Button>
+        </Button>
+        </div>
+      </div>
     </div>
   </div>
+
+  <!-- Minimized Floating Button -->
+  <button
+    v-else
+    @click="isMinimized = false"
+    class="fixed bottom-4 right-4 z-50 flex h-11 w-11 items-center justify-center rounded-full bg-gray-900 border border-blue-500/50 text-gray-300 shadow-[0_0_35px_#3b82f680] hover:bg-gray-800 hover:text-white !outline-none !ring-0 focus:!outline-none focus:!ring-0 transition-all sm:bottom-6 sm:right-6"
+    style="-webkit-tap-highlight-color: transparent;"
+    title="Expand Playground Dock"
+  >
+    <Terminal class="h-5 w-5" />
+  </button>
+  </Transition>
 </template>
 
 <script setup>
 import { computed, ref, onMounted, onUnmounted } from 'vue'
 import Button from 'frappe-ui/components/Button/Button.vue'
-import { RotateCw, PanelsTopLeft, Blocks, HelpCircle, ChevronDown, ChevronUp, Maximize, Minimize, Plus } from '@lucide/vue'
+import { RotateCw, PanelsTopLeft, Blocks, HelpCircle, ChevronDown, ChevronUp, Maximize, Minimize, Plus, Terminal, Minus } from '@lucide/vue'
 
 const dockActions = [
   { id: 'new', label: 'New', icon: Plus, event: 'create-instance', title: 'Create new playground' },
@@ -135,6 +173,7 @@ const props = defineProps({
 // Layout State
 const showActions = ref(true)
 const isFullWidth = ref(false)
+const isMinimized = ref(false)
 
 // Mobile responsiveness
 const windowWidth = ref(1024)
