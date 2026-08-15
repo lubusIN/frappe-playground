@@ -18,12 +18,14 @@ import {
   scopedFrameUrl,
   stripScope,
 } from './playground/iframe-navigation.js'
+import { processBootFlags } from './playground/boot-flags.js'
 import {
   createInstanceSession,
   deleteInstanceData,
   listInstanceSessions,
   removeInstanceSession,
   renameInstanceSession,
+  selectInstanceSession,
 } from './playground/session.js'
 
 
@@ -211,19 +213,20 @@ async function initPlayground(options = {}) {
   playground?.dispose()
   playground = createPlayground(options)
   playground.on(PlaygroundEventType.PROGRESS, handleProgress)
-  playground.on(PlaygroundEventType.READY, ({ instanceId: id }) => {
-    instanceId.value = id
-    instances.value = listInstanceSessions()
-    ready.value = true
-    installedApps.value = playground.listInstalledApps()
-    booting.value = false
-    frameSrc.value = frameUrl(address.value)
-    startAddressSync()
-  })
-  playground.on(PlaygroundEventType.ERROR, ({ message }) => {
-    ready.value = false
-    booting.value = false
-    bootError.value = message
+  const backendReady = new Promise((resolve, reject) => {
+    const offReady = playground.on(PlaygroundEventType.READY, ({ instanceId: id }) => {
+      offReady()
+      offError()
+      resolve(id)
+    })
+    const offError = playground.on(PlaygroundEventType.ERROR, ({ message }) => {
+      ready.value = false
+      booting.value = false
+      bootError.value = message
+      offReady()
+      offError()
+      reject(new Error(message))
+    })
   })
 
   try {
@@ -231,11 +234,59 @@ async function initPlayground(options = {}) {
     instanceId.value = session.id
     instances.value = listInstanceSessions()
     
-    if (session.freshSession) {
+    await backendReady
+    installedApps.value = playground.listInstalledApps()
+    
+    const params = new URLSearchParams(window.location.search)
+
+    const result = await processBootFlags(params, {
+      playground,
+      instanceId: instanceId.value,
+      installApp: async (appId) => {
+        if (!appCatalogLoaded && !appCatalogLoading.value) {
+          appCatalogLoading.value = true
+          try {
+            const catalog = await loadAppCatalog()
+            availableApps.value = catalog.apps
+            appCatalogLoaded = true
+          } catch (_) {}
+          appCatalogLoading.value = false
+        }
+        installingAppId.value = appId
+        try {
+          await playground.installApp(appId)
+        } catch (e) {
+          throw new Error(`Failed to install app '${appId}': ${e.message}`)
+        } finally {
+          installingAppId.value = ''
+        }
+      }
+    })
+
+    installedApps.value = playground.listInstalledApps()
+    address.value = result.initialPath
+
+    ready.value = true
+    booting.value = false
+    frameSrc.value = frameUrl(address.value)
+    startAddressSync()
+    
+    if (session.freshSession && !result.autoLogin && !result.skipOnboarding) {
       showIntroDialog.value = true
     }
-  } catch (_) {
-    // The controller emits the user-facing error state.
+  } catch (error) {
+    if (!bootError.value && error) {
+      ready.value = false
+      booting.value = false
+      bootError.value = error.message || 'Playground initialization failed.'
+
+      // If it failed during a fresh session setup, delete the corrupt session
+      if (instanceId.value && playground?.session?.freshSession) {
+        playground.dispose()
+        deleteInstanceData(instanceId.value).catch(() => {})
+        instances.value = removeInstanceSession(instanceId.value)
+      }
+    }
   }
 }
 
@@ -360,7 +411,26 @@ onMounted(() => {
     }
   })
 
-  initPlayground()
+  const params = new URLSearchParams(window.location.search)
+  let sessionToBoot = undefined
+  
+  const name = params.get('name')
+  if (name) {
+    const existing = listInstanceSessions().find(i => i.name === name)
+    if (existing) {
+      sessionToBoot = selectInstanceSession(existing.id)
+    } else {
+      sessionToBoot = createInstanceSession({ name })
+    }
+  } else if (params.get('onboarding') || params.get('apps')) {
+    sessionToBoot = createInstanceSession()
+  }
+
+  if (sessionToBoot) {
+    initPlayground({ session: sessionToBoot })
+  } else {
+    initPlayground()
+  }
 })
 
 onBeforeUnmount(() => {
