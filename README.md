@@ -86,15 +86,15 @@ The Frappe Playground supports URL query parameters to automatically configure a
 Supported parameters:
 | Parameter | Description |
 | :--- | :--- |
-| `apps` | Comma-separated list of app IDs to automatically install (e.g., `?apps=crm,wiki,frappe_vault`). |
+| `apps` | Comma-separated list of app IDs to automatically install (e.g., `?apps=erpnext,crm,wiki,frappe_vault`). |
 | `login` | Set to `1`, `true`, or `auto` to automatically log in as the default Administrator. |
 | `onboarding` | Set to `0` or `false` to auto-login, automatically complete the Frappe setup wizard with localized defaults, and land directly on the desk. |
 | `path` | The URL path to land on after booting (e.g., `?path=/app/todo`). Defaults to `/desk` if auto-logged in, or `/` otherwise. |
 | `name` | The name of the playground instance to load or create. |
 
 **Example:**
-`http://localhost:5173/?name=Demo&apps=crm&onboarding=0`
-*Creates a new playground named "Demo", installs the CRM app, auto-logs in as Administrator, completely skips the setup wizard, and drops the user straight into Frappe Desk.*
+`http://localhost:5173/?name=Demo&apps=erpnext&onboarding=0`
+*Creates a new playground named "Demo", installs ERPNext, auto-logs in as Administrator, completely skips the setup wizard, and drops the user straight into Frappe Desk.*
 
 ## Getting Started
 

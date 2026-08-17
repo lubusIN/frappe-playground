@@ -65,6 +65,10 @@ test('generated Python text module exactly matches authored Python sources', asy
   ])
   assert.equal(FRAPPE_MOCKS_SOURCE, mocks)
   assert.equal(WSGI_SERVER_SOURCE, wsgi)
+  assert.match(mocks, /create_mock\(\s*"resource"/)
+  assert.match(mocks, /RUSAGE_SELF=0/)
+  assert.match(mocks, /ru_maxrss = 0/)
+  assert.match(mocks, /threading\.Timer = DummyTimer/)
 })
 
 test('source-only Python packages are bundled instead of sent to micropip', async () => {

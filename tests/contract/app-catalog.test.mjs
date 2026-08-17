@@ -13,10 +13,22 @@ test('authored app catalog contains pinned and isolated artifacts', async () => 
     new URL('../../runtime/apps/catalog.json', import.meta.url),
     'utf8',
   ))
+  const runtimeDockerfile = await readFile(
+    new URL('../../runtime/build/Dockerfile', import.meta.url),
+    'utf8',
+  )
 
   assert.equal(validateAppCatalog(catalog), catalog)
-  assert.deepEqual(catalog.apps.map(app => app.id), ['crm', 'wiki', 'frappe_vault'])
+  assert.deepEqual(catalog.apps.map(app => app.id), ['erpnext', 'crm', 'wiki', 'frappe_vault'])
   for (const app of catalog.apps) assert.match(app.source.ref, /^[a-f0-9]{40}$/)
+  const erpnext = catalog.apps.find(app => app.id === 'erpnext')
+  assert.equal(erpnext.pythonDependencies.some(dependency => (
+    dependency.startsWith('googlemaps') || dependency.startsWith('rapidfuzz')
+  )), false)
+  assert.match(runtimeDockerfile, /googlemaps==4\.10\.0/)
+  assert.match(runtimeDockerfile, /rapidfuzz==3\.14\.3/)
+  assert.match(runtimeDockerfile, /RAPIDFUZZ_BUILD_EXTENSION=0 pip wheel/)
+  assert.match(runtimeDockerfile, /--no-binary=rapidfuzz/)
   assert.equal(catalogFingerprint(catalog), catalogFingerprint({
     apps: catalog.apps,
     schemaVersion: catalog.schemaVersion,

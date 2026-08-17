@@ -7,6 +7,17 @@ const {
 
 const APPS_TO_TEST = [
   {
+    id: 'erpnext',
+    name: 'ERPNext',
+    heavy: true,
+    async customAssertions(_page, restoredFrame) {
+      await restoredFrame.goto('/app')
+      await expect(restoredFrame.getByText('ERPNext', { exact: true }).first()).toBeVisible({
+        timeout: 120000,
+      })
+    }
+  },
+  {
     id: 'wiki',
     name: 'Frappe Wiki',
     heavy: true,
