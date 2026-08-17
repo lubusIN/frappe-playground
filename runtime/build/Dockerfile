@@ -26,7 +26,8 @@ RUN pip wheel \
     --no-deps \
     --wheel-dir /workspace/dependencies \
     docopt==0.6.2 \
-    num2words==0.5.14
+    num2words==0.5.14 \
+    PyQRCode==1.2.1
 
 # 3. Clone and clean Frappe Core
 RUN git clone --branch ${FRAPPE_VERSION} --depth 1 https://github.com/frappe/frappe.git /workspace/frappe_src \

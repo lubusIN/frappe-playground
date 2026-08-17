@@ -67,6 +67,16 @@ test('generated Python text module exactly matches authored Python sources', asy
   assert.equal(WSGI_SERVER_SOURCE, wsgi)
 })
 
+test('source-only Python packages are bundled instead of sent to micropip', async () => {
+  const [packagesSource, dockerfile] = await Promise.all([
+    readFile(new URL('../../runtime/config/packages.js', import.meta.url), 'utf8'),
+    readFile(new URL('../../runtime/build/Dockerfile', import.meta.url), 'utf8'),
+  ])
+
+  assert.doesNotMatch(packagesSource, /['"]pyqrcode['"]/i)
+  assert.match(dockerfile, /PyQRCode==1\.2\.1/)
+})
+
 test('runtime filesystem utilities are deterministic and tolerate existing directories', () => {
   const created = []
   const fs = {
