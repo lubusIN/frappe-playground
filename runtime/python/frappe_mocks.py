@@ -152,6 +152,25 @@ class DummyThread:
     def is_alive(self):
         return True
 
+# Script reports start a Timer that only flips the report to prepared mode after
+# 15 seconds. Pyodide has no OS threads, and reports already execute serially in
+# the server worker, so disable that asynchronous watcher while preserving its
+# start/cancel lifecycle.
+class DummyTimer:
+    def __init__(self, interval, function, args=None, kwargs=None):
+        self.interval = interval
+        self.function = function
+        self.args = args or []
+        self.kwargs = kwargs or {}
+        self.daemon = False
+    def start(self):
+        return None
+    def cancel(self):
+        return None
+
+import threading
+threading.Timer = DummyTimer
+
 import redis.client
 if hasattr(redis.client, "PubSub"):
     def dummy_run_in_thread(self, *args, **kwargs):
@@ -196,6 +215,18 @@ sys.modules["psutil"].NoSuchProcess = create_exception_mock("NoSuchProcess")
 # Frappe relies on pwd/grp for unix user checks which don't exist in Pyodide
 create_mock("pwd", getpwuid=lambda x: AbsorbingMock())
 create_mock("grp", getgrgid=lambda x: AbsorbingMock())
+
+# Python's Unix-only resource module is unavailable in Pyodide. Frappe uses it
+# only to record peak memory for prepared reports; process RSS is not exposed by
+# the browser runtime, so report a stable zero value.
+class DummyResourceUsage:
+    ru_maxrss = 0
+
+create_mock(
+    "resource",
+    RUSAGE_SELF=0,
+    getrusage=lambda who: DummyResourceUsage(),
+)
 
 # ── orjson Mock (Rust extension → standard json) ────────────────────
 

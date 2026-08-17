@@ -1,7 +1,35 @@
 {
   "schemaVersion": 1,
   "apps": [
-     {
+    {
+      "id": "erpnext",
+      "title": "ERPNext",
+      "description": "An open-source suite for accounting, inventory, manufacturing, and more.",
+      "version": "16.30.0",
+      "license": "GPL-3.0",
+      "experimental": true,
+      "logo": "https://raw.githubusercontent.com/frappe/erpnext/8378b6e203841c056925420cc44e6d631c915cf1/erpnext/public/images/erpnext-logo.svg",
+      "frappeVersion": ">=16.21.0 <17.0.0",
+      "archive": "apps/erpnext/app.zip",
+      "assetPrefix": "/assets/erpnext",
+      "packageRoot": "erpnext",
+      "archiveExcludes": [
+        "public"
+      ],
+      "pythonDependencies": [
+        "Unidecode~=1.4.0",
+        "barcodenumber~=0.5.0",
+        "holidays~=0.87",
+        "python-youtube~=0.9.9",
+        "pypng~=0.20220715.0",
+        "mt-940>=4.26.0"
+      ],
+      "source": {
+        "repository": "https://github.com/frappe/erpnext.git",
+        "ref": "8378b6e203841c056925420cc44e6d631c915cf1"
+      }
+    },
+    {
       "id": "crm",
       "title": "Frappe CRM",
       "description": "An open-source customer relationship management app.",

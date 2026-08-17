@@ -22,12 +22,15 @@ RUN pip download \
     --only-binary=:all: \
     --dest /workspace/dependencies \
     jinja2 werkzeug click markdown itsdangerous
-RUN pip wheel \
+RUN RAPIDFUZZ_BUILD_EXTENSION=0 pip wheel \
     --no-deps \
+    --no-binary=rapidfuzz \
     --wheel-dir /workspace/dependencies \
     docopt==0.6.2 \
     num2words==0.5.14 \
-    PyQRCode==1.2.1
+    PyQRCode==1.2.1 \
+    googlemaps==4.10.0 \
+    rapidfuzz==3.14.3
 
 # 3. Clone and clean Frappe Core
 RUN git clone --branch ${FRAPPE_VERSION} --depth 1 https://github.com/frappe/frappe.git /workspace/frappe_src \

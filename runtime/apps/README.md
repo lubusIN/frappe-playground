@@ -4,9 +4,9 @@ This directory contains the authored catalog for optional Frappe apps that can
 be prepared for the browser runtime. Catalog entries are build inputs, not
 generated artifacts.
 
-The current compatibility set includes Frappe Wiki, Frappe Vault, and Frappe
-CRM. Apps remain marked experimental until their install, reload, primary
-route, and uninstall lifecycle passes in the browser runtime.
+The current compatibility set includes ERPNext, Frappe Wiki, Frappe Vault, and
+Frappe CRM. Apps remain marked experimental until their install, reload,
+primary route, and uninstall lifecycle passes in the browser runtime.
 
 Each app must use an immutable 40-character Git commit and declare its archive,
 asset prefix, package root, and Python dependencies. Validate
@@ -33,3 +33,9 @@ npm run verify:build
 
 The app manager installs and uninstalls these generated archives independently
 for each playground.
+
+Catalog Python dependencies must have pure-Python wheels that `micropip` can
+install in Pyodide. ERPNext's Google Maps dependency is source-only and
+RapidFuzz normally selects a platform wheel, so both are excluded from the
+per-app `micropip` recipe. The runtime Docker build creates pure-Python wheels
+for them instead and bundles those packages into the shared Frappe runtime.
