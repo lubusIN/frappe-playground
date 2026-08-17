@@ -30,6 +30,7 @@ export const PYTHON_PACKAGES = Object.freeze([
   'premailer',
   'pycountry',
   'pyotp',
+  'pyqrcode',
   'requests-oauthlib',
   'rsa',
   'sentry-sdk',
