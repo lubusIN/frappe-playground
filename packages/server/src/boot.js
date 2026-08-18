@@ -23,8 +23,11 @@ export async function initializePyodide({
   const pyodide = await globalScope.loadPyodide({ indexURL: baseUrl })
   await pyodide.runPythonAsync(`
 import warnings
-warnings.filterwarnings("ignore", category=SyntaxWarning)
-warnings.filterwarnings("ignore", category=DeprecationWarning)
+# Scope the suppression to Whoosh, which emits SyntaxWarning/DeprecationWarning
+# on newer Python versions. A blanket filter used to hide these categories for
+# every package, including Frappe itself, which masks real deprecations.
+warnings.filterwarnings("ignore", category=SyntaxWarning, module=r"whoosh.*")
+warnings.filterwarnings("ignore", category=DeprecationWarning, module=r"whoosh.*")
   `)
 
   log('Loading core packages...')

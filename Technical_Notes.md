@@ -15,9 +15,13 @@ unless they expose a concrete Frappe integration constraint.
 
 ## Reference Scope
 
-- The generated runtime currently contains **Frappe 16.23.0**.
-- `runtime/build/Dockerfile` builds from a pinned tag (`v16.23.0`) via a build argument. These notes therefore describe the checked runtime artifact, not every
-  version of Frappe 16.
+- The generated runtime currently contains **Frappe 16.30.0**.
+- `runtime/build/Dockerfile` builds from a pinned tag (`v16.30.0`) via a build argument,
+  declared once in `runtime/frappe-version.json`. These notes therefore describe the
+  checked runtime artifact, not every version of Frappe 16.
+- `tests/contract/runtime-version.test.mjs` fails if this document, `scripts/build.sh`,
+  the Dockerfile default, and `runtime/frappe-version.json` ever disagree. Update the
+  version file and this line together.
 - Local behavior is covered by the repository's Playwright flows, including
   boot, login, Setup Wizard, Desk, file upload, and scoped reloads.
 
@@ -56,6 +60,14 @@ Short list for an upstream GitHub issue:
 ---
 
 ### Issue 4: Telemetry facade eagerly imports `posthog` provider
+
+> **Resolved upstream.** This was observed against Frappe 16.23.0. As of the
+> 16.30.0 runtime this repository now builds, `posthog` has been removed from
+> Frappe entirely — it appears nowhere in the source and is no longer declared in
+> `pyproject.toml`. `frappe.utils.telemetry` now imports a self-hosted "pulse"
+> provider with no third-party client at module level. Do not file this upstream.
+> The `posthog` entry in the auto-mock list is consequently expected to be dead
+> code, and is included as an ablation candidate.
 
 **Problem:** The telemetry orchestration layer imports the external `posthog` package globally at the top of the file before evaluating the runtime flag to check whether telemetry is enabled by the user.
 
@@ -433,6 +445,79 @@ The dependency and suppression are confirmed. The exact warning, affected file,
 and supported Python-version range have not been captured in this repository, so
 the report should not claim a Frappe compatibility bug until the warning is
 reproduced and recorded.
+
+## Local Remediation Status
+
+This section records which of the follow-up checks below have been acted on in
+this repository, so the notes stay an accurate description of the checked
+artifact rather than a wish list.
+
+### Done
+
+- **Mock strictness (check 5).** The auto-mocked integration tree now raises
+  `DisabledIntegrationError` when a mock is *called*, while imports still
+  succeed. Previously `AbsorbingMock` returned another inert object for every
+  operation, which converted unsupported behavior into apparent success. Mode is
+  selectable through `PLAYGROUND_INTEGRATION_MOCK_MODE` (`strict` default,
+  `warn`, `absorb`), and every call is recorded in `INTEGRATION_MOCK_USAGE` so a
+  test can assert a flow touched no disabled integration. Note that the
+  explicitly wired stubs (`rq.Worker`, `MySQLdb.cursors.SSCursor`, and similar)
+  intentionally remain permissive: they stand in for machinery Frappe really
+  drives, not for disabled features.
+- **Missing-runtime failure (check 6).** The fallback that registered a fake
+  `frappe` module has been replaced with an `ImportError` naming the cause and
+  the fix. A missing runtime archive now fails at the point of failure.
+- **Retired one upstream finding.** Issue 4 (eager `posthog` import) no longer
+  reproduces: upstream removed `posthog` from Frappe between 16.23.0 and
+  16.30.0. This was only visible once the version drift was fixed, which is the
+  argument for the guard.
+- **Whoosh warning suppression.** The blanket `SyntaxWarning` and
+  `DeprecationWarning` filters are now scoped to the `whoosh` module, so
+  deprecations from Frappe and every other package are visible again. The
+  precise Whoosh warning still needs to be captured before this is worth
+  reporting upstream.
+- **Removal testing (check 4).** `scripts/ablate-mocks.mjs` performs the
+  experiment this document asks for: it removes one mock, rebuilds, runs the
+  browser suite, restores the file, and records the outcome. Candidates are
+  marked in `frappe_mocks.py` with `# >>> ablatable:` fences. Note that `plaid`
+  appears in the "not shown to be needed" list below but *is* a declared ERPNext
+  dependency, so its result depends on whether ERPNext is baked into the runtime.
+- **Scope escape detection.** `tests/e2e/scope_escape.spec.js` fails on any
+  backend request that reaches the origin root unscoped, reusing the service
+  worker's own path classification so it cannot drift. This does not fix issue 7;
+  it converts an invisible class of bug into a failing test with an inventory.
+- **CSRF bypass.** Now gated on the site config's `ignore_csrf` rather than
+  applied unconditionally.
+- **Version drift.** The Frappe tag is declared once in
+  `runtime/frappe-version.json`. `tests/contract/runtime-version.test.mjs` fails
+  if the Dockerfile, the build script, or this document disagree with it.
+
+### Not done
+
+- Issues 1-8 are upstream Frappe changes and are unaffected by the local work
+  above. The lazy-import fixes (issues 1, 2, 4, 5) remain the highest-leverage
+  contributions, and would shrink `frappe_mocks.py` substantially.
+- **Setup Wizard state repair (check 7).** Still unproven and still applied. The
+  experiment described below has not been run, so the SQL repair remains in
+  place and must not be cited as a Frappe defect.
+- Checks 1, 2, 3, 8 and 9 (import-level reproductions, Desk without the
+  Socket.IO mock, and the subfolder mount inventory) have not been run.
+
+### ERPNext
+
+ERPNext is supported as a pre-baked runtime variant
+(`npm run build:runtime:erpnext`). Two findings are worth recording:
+
+- ERPNext does not officially support SQLite; it is an open feature request
+  (frappe/erpnext#56443). In practice the gap is narrow. Frappe's SQLite driver
+  already rewrites backticks, `locate()` and table names, and SQLite provides
+  `IFNULL` and `GROUP_CONCAT` natively. What remains is MariaDB's date
+  functions, across roughly 16 files. `runtime/python/sqlite_compat.py`
+  implements those; most of it would be better placed in Frappe's own
+  `modify_query`, which is where an upstream contribution should go.
+- ERPNext's only non-pure-Python dependency is `rapidfuzz`, used in a single
+  file. Every other declared dependency has a `py3-none-any` wheel and installs
+  into the flat runtime archive unchanged.
 
 ## Follow-up Checks
 

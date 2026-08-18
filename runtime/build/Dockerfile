@@ -1,6 +1,11 @@
 FROM python:3.14-slim
 
 ARG FRAPPE_VERSION=v16.30.0
+# ERPNext is pre-baked into the image rather than installed at runtime: it
+# ships 638 DocTypes, and running install-app inside single-threaded Pyodide
+# would mean thousands of sequential SQLite inserts in the browser.
+ARG INSTALL_ERPNEXT=0
+ARG ERPNEXT_VERSION=version-16
 
 # 1. Install system dependencies and node components
 RUN apt-get update && apt-get install -y \
@@ -28,6 +33,16 @@ RUN pip wheel \
     docopt==0.6.2 \
     num2words==0.5.14 \
     PyQRCode==1.2.1
+
+ARG INSTALL_ERPNEXT
+RUN if [ "${INSTALL_ERPNEXT}" = "1" ]; then \
+        pip download --only-binary=:all: --dest /workspace/dependencies \
+            Unidecode barcodenumber holidays googlemaps plaid-python \
+            python-youtube pypng mt-940 pdfplumber pdfminer.six \
+        || pip wheel --no-deps --wheel-dir /workspace/dependencies \
+            Unidecode barcodenumber holidays googlemaps plaid-python \
+            python-youtube pypng mt-940 pdfplumber pdfminer.six ; \
+    fi
 
 # 3. Clone and clean Frappe Core
 RUN git clone --branch ${FRAPPE_VERSION} --depth 1 https://github.com/frappe/frappe.git /workspace/frappe_src \
@@ -60,6 +75,15 @@ RUN bench init --frappe-branch ${FRAPPE_VERSION} --skip-redis-config-generation 
     && cd test-bench \
     && bench new-site playground.local --db-type sqlite --admin-password admin \
     && bench --site playground.local execute frappe.db.set_single_value --args "('System Settings', 'login_with_email_link', 0)"
+
+ARG INSTALL_ERPNEXT
+ARG ERPNEXT_VERSION
+RUN if [ "${INSTALL_ERPNEXT}" = "1" ]; then \
+        cd /workspace/test-bench \
+        && bench get-app --branch ${ERPNEXT_VERSION} --skip-assets erpnext https://github.com/frappe/erpnext.git \
+        && bench build --app erpnext \
+        && bench --site playground.local install-app erpnext ; \
+    fi
 COPY --chown=frappe:frappe runtime/build/build-app-catalog.py /workspace/scripts/build-app-catalog.py
 COPY --chown=frappe:frappe runtime/apps/catalog.json /workspace/runtime/apps/catalog.json
 RUN python /workspace/scripts/build-app-catalog.py \
@@ -69,6 +93,11 @@ RUN python /workspace/scripts/build-app-catalog.py \
 USER root
 # 6. Expose entry point compilation commands
 CMD cp -r /workspace/test-bench/env/lib/python3.14/site-packages/pypika /workspace/archive_root/ && \
+    if [ -d /workspace/test-bench/apps/erpnext/erpnext ]; then \
+        cp -r /workspace/test-bench/apps/erpnext/erpnext /workspace/archive_root/ && \
+        find /workspace/archive_root/erpnext -name '*.pyc' -delete && \
+        find /workspace/archive_root/erpnext -name '__pycache__' -type d -prune -exec rm -rf '{}' + ; \
+    fi && \
     tar -czf /output/frappe_runtime.tar.gz -C /workspace/archive_root . && \
     cp -r /workspace/app_artifacts/apps /output/apps && \
     rm -rf /workspace/assets_export && \

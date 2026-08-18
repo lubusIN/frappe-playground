@@ -1,13 +1,48 @@
+export const COMPAT_MODULE_DIR = '/home/pyodide/frappe_env'
+
 export class PythonBridge {
-  constructor({ pyodide, mocksSource, wsgiSource, cookieJarJson }) {
+  constructor({
+    pyodide,
+    mocksSource,
+    wsgiSource,
+    cookieJarJson,
+    sqliteCompatSource,
+    rapidfuzzCompatSource,
+  }) {
     this.pyodide = pyodide
     this.mocksSource = mocksSource
     this.wsgiSource = wsgiSource
     this.cookieJarJson = cookieJarJson
+    this.sqliteCompatSource = sqliteCompatSource
+    this.rapidfuzzCompatSource = rapidfuzzCompatSource
   }
 
   async configure() {
+    // Compat modules are written to the runtime path and imported as real
+    // modules rather than exec'd as source, so their helpers do not leak into
+    // the shared Python globals that the WSGI handler also uses.
+    if (this.rapidfuzzCompatSource) {
+      this.pyodide.FS.writeFile(
+        `${COMPAT_MODULE_DIR}/rapidfuzz_compat.py`,
+        this.rapidfuzzCompatSource,
+      )
+    }
+    if (this.sqliteCompatSource) {
+      this.pyodide.FS.writeFile(`${COMPAT_MODULE_DIR}/sqlite_compat.py`, this.sqliteCompatSource)
+    }
+
+    // frappe_mocks puts COMPAT_MODULE_DIR on sys.path and must run first.
     await this.pyodide.runPythonAsync(this.mocksSource)
+
+    // rapidfuzz must be registered before any app imports it.
+    if (this.rapidfuzzCompatSource) {
+      await this.pyodide.runPythonAsync('import rapidfuzz_compat; rapidfuzz_compat.install()')
+    }
+    // The SQL translation must be patched in before the first query runs.
+    if (this.sqliteCompatSource) {
+      await this.pyodide.runPythonAsync('import sqlite_compat; sqlite_compat.install()')
+    }
+
     await this.pyodide.runPythonAsync(this.wsgiSource)
     if (this.cookieJarJson) {
       this.pyodide.globals.set('temp_cookie_json', this.cookieJarJson)

@@ -29,8 +29,14 @@ class FrappeWSGIHandler:
         frappe.init(site=self.default_site, sites_path=self.bench_sites_path)
         frappe.connect()
 
-        def bypass_csrf(*args, **kwargs): return True
-        frappe.auth.validate_csrf_token = bypass_csrf
+        # The playground serves a single browser-local origin with no server,
+        # so CSRF validation is bypassed by default. Gate it on the site config
+        # so a derived deployment cannot inherit the bypass silently.
+        if frappe.conf.get("ignore_csrf"):
+            def bypass_csrf(*args, **kwargs): return True
+            frappe.auth.validate_csrf_token = bypass_csrf
+        else:
+            print("[playground] CSRF validation is ACTIVE (ignore_csrf is not set).")
 
     def serve_static_file(self, req, site_name):
         """Serve a static file directly from Pyodide's MEMFS."""

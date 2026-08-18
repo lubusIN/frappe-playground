@@ -45,18 +45,107 @@ class AbsorbingMock(metaclass=AbsorbingMeta):
     @classmethod
     def __class_getitem__(cls, item): return cls
 
+# ── Disabled-integration mocks ───────────────────────────────────────
+#
+# These back the AutoMockFinder below, which fabricates entire module trees
+# for optional integrations that are not installed in the browser runtime.
+#
+# Import must always succeed: Frappe imports several integration modules
+# eagerly, before it checks whether the integration is configured. But a
+# *call* into one of these means real feature code is executing against a
+# stub, which previously succeeded silently and produced wrong results.
+#
+# Mode is read from PLAYGROUND_INTEGRATION_MOCK_MODE:
+#   strict (default) - raise DisabledIntegrationError on call
+#   warn             - print a warning and absorb the call
+#   absorb           - legacy silent behavior
+#
+# Every call is recorded in INTEGRATION_MOCK_USAGE regardless of mode, so a
+# test can assert that a flow touched no disabled integration.
+
+import os
+
+INTEGRATION_MOCK_MODE = os.environ.get("PLAYGROUND_INTEGRATION_MOCK_MODE", "strict")
+INTEGRATION_MOCK_USAGE = []
+
+
+class DisabledIntegrationError(RuntimeError):
+    """Raised when code calls into an integration that is not available."""
+
+
+def _record_integration_use(qualified_name):
+    INTEGRATION_MOCK_USAGE.append(qualified_name)
+    if INTEGRATION_MOCK_MODE == "strict":
+        raise DisabledIntegrationError(
+            f"{qualified_name} was called, but that integration is not available "
+            f"in the browser runtime. It is mocked for import compatibility only. "
+            f"Set PLAYGROUND_INTEGRATION_MOCK_MODE=warn to downgrade this to a warning."
+        )
+    if INTEGRATION_MOCK_MODE == "warn":
+        print(f"[playground] WARNING: called disabled integration {qualified_name}")
+
+
+class DisabledIntegrationMeta(type):
+    def __getattr__(cls, name):
+        if name.startswith("__") and name.endswith("__"):
+            raise AttributeError(name)
+        return cls()
+
+
+class DisabledIntegrationMock(metaclass=DisabledIntegrationMeta):
+    """Import-safe placeholder that reports use instead of silently absorbing it.
+
+    Attribute access stays permissive so that ``from x import y`` and
+    module-level symbol lookups keep working. Only invocation is treated as
+    real feature execution.
+    """
+
+    def __init__(self, *a, **k):
+        object.__setattr__(self, "_playground_name", k.pop("_playground_name", "<disabled integration>"))
+
+    def __getattr__(self, name):
+        if name.startswith("__") and name.endswith("__"):
+            raise AttributeError(name)
+        child = DisabledIntegrationMock()
+        object.__setattr__(child, "_playground_name", f"{object.__getattribute__(self, '_playground_name')}.{name}")
+        return child
+
+    def __call__(self, *a, **k):
+        _record_integration_use(object.__getattribute__(self, "_playground_name"))
+        return self
+
+    def __iter__(self): return iter([])
+    def __len__(self): return 0
+    def __bool__(self): return False
+    def __getitem__(self, key): return self.__getattr__(str(key))
+    def __setitem__(self, key, value): pass
+    def __enter__(self): return self
+    def __exit__(self, *a, **k): pass
+
+    @classmethod
+    def __class_getitem__(cls, item): return cls
+
+
+def _disabled_attr(module_name, name):
+    """Resolve an attribute on a fabricated integration module."""
+    if name in ('__file__', '__path__', '__spec__', '__loader__', '__all__'):
+        raise AttributeError(name)
+    if name.endswith("Error") or name.endswith("Exception"):
+        return create_exception_mock(name)
+    mock = DisabledIntegrationMock()
+    object.__setattr__(mock, "_playground_name", f"{module_name}.{name}")
+    return mock
+
+
 class AutoMockModule(ModuleType):
-    """Dynamically mocks module attributes, yielding exceptions for Errors and AbsorbingMocks for everything else."""
+    """Module whose attributes resolve to import-safe disabled-integration mocks."""
     def __init__(self, name):
         super().__init__(name)
         self.__path__ = []
 
     def __getattr__(self, name):
-        if name in ('__file__', '__path__', '__spec__', '__loader__'):
-            raise AttributeError
-        if name.endswith("Error") or name.endswith("Exception"):
-            return create_exception_mock(name)
-        return AbsorbingMock()
+        return _disabled_attr(self.__name__, name)
+
 
 class AutoMockFinder:
     """A sys.meta_path finder that intercepts and mocks imports for specified prefixes."""
@@ -67,19 +156,17 @@ class AutoMockFinder:
         for prefix in self.prefixes:
             if fullname == prefix or fullname.startswith(prefix + "."):
                 import importlib.machinery
+
                 class AutoMockLoader:
                     def create_module(self, spec):
                         return AutoMockModule(fullname)
+
                     def exec_module(self, module):
-                        def _getattr(name):
-                            if name in ('__file__', '__path__', '__spec__', '__loader__'):
-                                raise AttributeError
-                            if name.endswith("Error") or name.endswith("Exception"):
-                                return create_exception_mock(name)
-                            return AbsorbingMock()
-                        module.__getattr__ = _getattr
+                        module.__getattr__ = lambda name: _disabled_attr(fullname, name)
+
                 return importlib.machinery.ModuleSpec(fullname, AutoMockLoader())
         return None
+
 
 # ── Base DB Exceptions ──────────────────────────────────────────────
 
@@ -193,9 +280,11 @@ sys.modules["psutil"].Process = DummyProcess
 sys.modules["psutil"].AccessDenied = create_exception_mock("AccessDenied")
 sys.modules["psutil"].NoSuchProcess = create_exception_mock("NoSuchProcess")
 
+# >>> ablatable: pwd_grp
 # Frappe relies on pwd/grp for unix user checks which don't exist in Pyodide
 create_mock("pwd", getpwuid=lambda x: AbsorbingMock())
 create_mock("grp", getgrgid=lambda x: AbsorbingMock())
+# <<< ablatable: pwd_grp
 
 # ── orjson Mock (Rust extension → standard json) ────────────────────
 
@@ -223,11 +312,13 @@ sys.modules["orjson"] = MockOrjson
 
 # ── Additional Database Drivers ─────────────────────────────────────
 
+# >>> ablatable: psycopg2
 create_mock("psycopg2", **db_exc)
 create_mock("psycopg2.extensions", ISOLATION_LEVEL_REPEATABLE_READ=0)
 create_mock("psycopg2.sql")
 create_mock("psycopg2.errorcodes")
 create_mock("psycopg2.errors")
+# <<< ablatable: psycopg2
 
 # ── RQ (Redis Queue) Mocks ──────────────────────────────────────────
 
@@ -309,6 +400,7 @@ rq_mod.queue = create_mock("rq.queue", Queue=DummyQueue)
 create_mock("frappe.utils.sentry", capture_exception=lambda *a, **k: None)
 
 # Automatically mock these entire trees so we don't have to stub them one-by-one.
+# >>> ablatable-list: integrations
 sys.meta_path.insert(0, AutoMockFinder([
     "googleapiclient",
     "google",
@@ -323,13 +415,19 @@ sys.meta_path.insert(0, AutoMockFinder([
     "plaid",
     "sentry_sdk",
 ]))
+# <<< ablatable-list: integrations
 
 # ── Install Frappe ──────────────────────────────────────────────────
 
-# Ensure frappe is actually importable by putting it in sys.modules manually if needed
-# (Pyodide can sometimes fail to parse directory structures deeply)
+# A missing Frappe archive is a boot failure, not something to paper over.
+# Registering a fake `frappe` module here used to turn a broken runtime
+# download into confusing downstream AttributeErrors instead of one clear
+# error at the point of failure.
 import importlib.util
-spec = importlib.util.find_spec("frappe")
-if not spec:
-    print("Warning: frappe not found by default importer, manually registering...")
-    sys.modules["frappe"] = create_mock("frappe")
+
+if not importlib.util.find_spec("frappe"):
+    raise ImportError(
+        "The Frappe runtime is not present in /home/pyodide/frappe_env. "
+        "The runtime archive failed to download or unpack. "
+        "Rebuild it with `npm run build:runtime`."
+    )

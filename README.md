@@ -79,6 +79,18 @@ Password: admin
 These presentation defaults live in `packages/client/src/playground/config.js`.
 The credentials are intended only for browser-local playground data.
 
+CSRF validation is bypassed only when the site config sets `ignore_csrf`, so a
+derived deployment cannot inherit the bypass silently.
+
+### Disabled integrations
+
+Optional integrations (Google, LDAP, PostHog, Stripe, and similar) are mocked so
+that Frappe can import them, because Frappe imports several of them before
+checking whether they are configured. Importing always succeeds; *calling* one
+raises `DisabledIntegrationError` by default, so a stub cannot silently stand in
+for a working feature. Override with the `PLAYGROUND_INTEGRATION_MOCK_MODE`
+environment variable, which accepts `strict` (default), `warn`, or `absorb`.
+
 ## Boot Flags (URL Configuration)
 
 The Frappe Playground supports URL query parameters to automatically configure and boot the playground into a specific state.
@@ -121,6 +133,37 @@ Open `http://localhost:5173/`.
 The runtime build is required when `artifacts/runtime/` is missing or when the
 Frappe runtime inputs change. Subsequent client-only development can reuse the
 existing artifacts.
+
+### ERPNext
+
+ERPNext is **pre-baked into the runtime image**, not installed through the
+optional-app catalog:
+
+```bash
+npm run build:runtime:erpnext
+```
+
+The catalog installer suits small apps like CRM and Wiki. ERPNext ships 638
+DocTypes, and running `install-app` inside single-threaded Pyodide would mean
+thousands of sequential SQLite inserts in the browser, so the install cost is
+moved into the Docker build and the browser only unpacks the result.
+
+Two compatibility layers make this work, both under `runtime/python/`:
+
+- `sqlite_compat.py` — ERPNext targets MariaDB, and
+  [SQLite support is still an open request upstream](https://github.com/frappe/erpnext/issues/56443).
+  Frappe's SQLite driver already rewrites backticks, `locate()` and table names,
+  but not MariaDB's date functions. This adds `DATE_ADD`/`DATE_SUB`/`DATE_FORMAT`/
+  `DATEDIFF`/`TIMESTAMPDIFF`/`IF()`/`ON DUPLICATE KEY`, reproducing MySQL's
+  DATE-vs-DATETIME return type rather than approximating it.
+- `rapidfuzz_compat.py` — rapidfuzz is ERPNext's only non-pure-Python dependency
+  and ships compiled wheels only. It is used in exactly one file (bank
+  transaction party matching), so a pure-Python substitute stands in. Scores are
+  computed, not stubbed, but they are not bit-identical to the C++ implementation.
+
+The build reports every artifact against the Cloudflare Pages 25MB per-file cap.
+An ERPNext runtime archive may exceed it, which would require splitting the
+archive across files and reassembling it in `packages/server/src/filesystem.js`.
 
 Optional app sources are declared in `runtime/apps/catalog.json`. Validate the
 catalog without running Docker using `npm run validate:apps`. The runtime build
@@ -223,6 +266,26 @@ Run only the fast protocol contract tests with:
 ```bash
 npm run test:contract
 ```
+
+Run the Python unit tests, which exercise the MariaDB→SQLite translation against
+real ERPNext query shapes on a real SQLite database, and the rapidfuzz
+substitute against the contract ERPNext depends on:
+
+```bash
+npm run test:python
+```
+
+Measure which module mocks are actually required, rather than assuming:
+
+```bash
+npm run test:ablate
+```
+
+This removes one mock at a time, rebuilds, runs the browser suite, restores the
+original file, and writes `artifacts/ablation/report.json`. A mock whose removal
+keeps the suite green is dead code; a mock whose removal breaks it has a captured
+failure that is the reproduction an upstream report needs. It requires
+`artifacts/runtime/` to already exist and takes several minutes per candidate.
 
 Validate runtime hashes, required publish files, absolute and relative worker imports, and source/output boundaries with:
 

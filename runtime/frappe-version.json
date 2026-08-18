@@ -1,0 +1,4 @@
+{
+  "frappeVersion": "v16.30.0",
+  "comment": "Single source of truth for the Frappe tag baked into the runtime. scripts/build.sh reads this, runtime/build/Dockerfile defaults to it, and tests/contract/runtime-version.test.mjs asserts every reference agrees."
+}
