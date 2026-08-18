@@ -441,10 +441,23 @@ Frappe imports Whoosh directly for full-text and website search. The playground
 globally suppresses `SyntaxWarning` and `DeprecationWarning`, with a comment
 attributing the warning to Whoosh on newer Python versions.
 
-The dependency and suppression are confirmed. The exact warning, affected file,
-and supported Python-version range have not been captured in this repository, so
-the report should not claim a Frappe compatibility bug until the warning is
-reproduced and recorded.
+The dependency and suppression are confirmed. The warning has now been captured
+from a live browser boot:
+
+```text
+/lib/python3.14/site-packages/whoosh/analysis/intraword.py:285: SyntaxWarning:
+"\|" is an invalid escape sequence. Such sequences will not work in the future.
+```
+
+It originates in Whoosh's own source (an unescaped backslash in a non-raw string
+literal), not in Frappe, so this is a Whoosh compatibility issue on Python 3.12+
+rather than a Frappe defect. Frappe's only exposure is that it imports Whoosh for
+full-text and website search.
+
+Worth noting for anyone narrowing this filter: a compile-time `SyntaxWarning` is
+attributed to the importing context rather than to the module being compiled, so
+`warnings.filterwarnings(..., module=r"whoosh.*")` does not match it. The filter
+must match on the message instead.
 
 ## Local Remediation Status
 

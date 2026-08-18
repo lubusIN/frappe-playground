@@ -16,7 +16,7 @@
     "test": "npm run test:contract && npm run test:python && npm run test:clean-build && npm run test:e2e",
     "test:contract": "npm run generate:sources && node --test tests/contract/*.test.mjs",
     "test:clean-build": "bash scripts/test-clean-build.sh",
-    "test:serve": "vite preview --host 127.0.0.1 --port 8002",
+    "test:serve": "vite preview --host 127.0.0.1 --port 8102",
     "test:e2e": "playwright test tests/e2e --project=chromium --project=webkit",
     "test:e2e:ui": "playwright test --ui",
     "test:e2e:chromium": "playwright test tests/e2e --project=chromium",

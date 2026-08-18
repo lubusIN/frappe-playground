@@ -20,6 +20,7 @@ scratch/
 
 # Test results (Playwright traces, HTML reports, and screenshots)
 tests/results/
+tests/report/
 
 # pytest
 .pytest_cache

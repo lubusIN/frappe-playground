@@ -249,7 +249,40 @@ provide remote synchronization or server-side backups.
 
 ## Testing
 
-The Playwright suite starts and owns an isolated production preview at `http://127.0.0.1:8002`, so an existing development server cannot affect test results. After assembling `dist/` with `npm run build` or `npm run predeploy`, run:
+The Playwright suite starts and owns an isolated production preview at `http://127.0.0.1:8002`, so an existing development server cannot affect test results.
+
+Browsers are not bundled. In a fresh checkout, and in the Frappe devcontainer,
+install them once before running the browser suite:
+
+```bash
+sudo npx playwright install-deps chromium
+npx playwright install chromium
+```
+
+Run `install-deps` as root and the browser download as the normal user: the
+download must land in that user's `~/.cache/ms-playwright`. Skipping this makes
+every browser test fail identically at `browserType.launch` with
+`Executable doesn't exist`, before any test logic runs.
+
+Run the browser download from the project directory, not a parent. Elsewhere
+`npx` resolves a newer Playwright than the one pinned here and downloads a
+browser build the test run will not look for.
+
+In the Frappe devcontainer, `node_modules` is shared with the host through the
+bind mount, so a native module installed on macOS has no Linux binary and
+`vite preview` dies with `Cannot find native binding`. Add the missing platform
+build alongside the existing one rather than reinstalling, which would drop the
+host's:
+
+```bash
+npm pack @rolldown/binding-linux-arm64-gnu@1.0.2
+tar -xzf rolldown-binding-linux-arm64-gnu-1.0.2.tgz
+mv package node_modules/@rolldown/binding-linux-arm64-gnu
+```
+
+Match the version to the installed `rolldown`. The durable fix is to give the
+container its own `node_modules` via a volume mount in the devcontainer config,
+so host and container never share platform-specific binaries. After assembling `dist/` with `npm run build` or `npm run predeploy`, run:
 
 ```bash
 npm run test

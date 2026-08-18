@@ -23,10 +23,14 @@ export async function initializePyodide({
   const pyodide = await globalScope.loadPyodide({ indexURL: baseUrl })
   await pyodide.runPythonAsync(`
 import warnings
-# Scope the suppression to Whoosh, which emits SyntaxWarning/DeprecationWarning
-# on newer Python versions. A blanket filter used to hide these categories for
-# every package, including Frappe itself, which masks real deprecations.
-warnings.filterwarnings("ignore", category=SyntaxWarning, module=r"whoosh.*")
+# Whoosh emits invalid-escape-sequence SyntaxWarnings on Python 3.12+ (confirmed
+# on 3.14 at whoosh/analysis/intraword.py:285). A blanket category filter used to
+# hide these for every package, including Frappe, which masks real deprecations.
+#
+# Match on the message rather than the module: a compile-time SyntaxWarning is
+# attributed to the importing context, not to the module being compiled, so
+# module=r"whoosh.*" silently fails to match.
+warnings.filterwarnings("ignore", category=SyntaxWarning, message=r".*invalid escape sequence.*")
 warnings.filterwarnings("ignore", category=DeprecationWarning, module=r"whoosh.*")
   `)
 
