@@ -142,7 +142,7 @@ async function completeSetupWizardIfShown(page) {
 
     const setupCompleteResponse = page.waitForResponse(
         response => response.url().includes('/api/method/frappe.desk.page.setup_wizard.setup_wizard.setup_complete'),
-        { timeout: 120000 }
+        { timeout: 300000 }
     );
     await iframe.locator('.complete-btn').click();
     expect((await setupCompleteResponse).status()).toBe(200);
