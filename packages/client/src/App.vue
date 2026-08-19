@@ -282,6 +282,11 @@ async function initPlayground(options = {}) {
     frameSrc.value = frameUrl(address.value)
     startAddressSync()
     
+    // Clear boot flags from URL so they aren't reapplied when switching playgrounds
+    if (window.location.search) {
+      window.history.replaceState(null, '', window.location.pathname)
+    }
+    
     if (session.freshSession && !result.autoLogin && !result.skipOnboarding) {
       showIntroDialog.value = true
     }
