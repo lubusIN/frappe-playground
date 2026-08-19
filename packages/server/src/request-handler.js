@@ -1,13 +1,32 @@
+export const PLAYGROUND_POLYFILLS_DIR = '/home/pyodide/playground_polyfills'
+
 export class PythonBridge {
-  constructor({ pyodide, mocksSource, wsgiSource, cookieJarJson }) {
+  constructor({ pyodide, mocksSource, wsgiSource, cookieJarJson, mariadbPolyfillsSource }) {
     this.pyodide = pyodide
     this.mocksSource = mocksSource
     this.wsgiSource = wsgiSource
     this.cookieJarJson = cookieJarJson
+    this.mariadbPolyfillsSource = mariadbPolyfillsSource
   }
 
   async configure() {
+    if (this.mariadbPolyfillsSource) {
+      this.pyodide.FS.mkdirTree(PLAYGROUND_POLYFILLS_DIR)
+      this.pyodide.FS.writeFile(`${PLAYGROUND_POLYFILLS_DIR}/mariadb_polyfills.py`, this.mariadbPolyfillsSource)
+    }
+
     await this.pyodide.runPythonAsync(this.mocksSource)
+
+    if (this.mariadbPolyfillsSource) {
+      await this.pyodide.runPythonAsync(`
+import sys
+if '${PLAYGROUND_POLYFILLS_DIR}' not in sys.path:
+    sys.path.insert(0, '${PLAYGROUND_POLYFILLS_DIR}')
+import mariadb_polyfills
+mariadb_polyfills.install()
+      `)
+    }
+
     await this.pyodide.runPythonAsync(this.wsgiSource)
     if (this.cookieJarJson) {
       this.pyodide.globals.set('temp_cookie_json', this.cookieJarJson)
