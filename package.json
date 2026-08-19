@@ -1,6 +1,6 @@
 {
   "name": "frappe-playground",
-  "version": "0.6.0",
+  "version": "0.7.0",
   "description": "Run Frappe Framework in the browser via Pyodide",
   "workspaces": [
     "packages/*"
