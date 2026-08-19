@@ -12,7 +12,7 @@ const APPS_TO_TEST = [
     heavy: true,
     async customAssertions(_page, restoredFrame) {
       await restoredFrame.goto('/app')
-      await expect(restoredFrame.getByText('ERPNext', { exact: true }).first()).toBeVisible({
+      await expect(restoredFrame.getByText('Accounting', { exact: true }).first()).toBeVisible({
         timeout: 120000,
       })
     }
