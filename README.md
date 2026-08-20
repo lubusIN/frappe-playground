@@ -258,6 +258,48 @@ npm run deploy
 
 Frappe Playground is heavily inspired by the amazing foundational work done by the [WordPress Playground](https://github.com/WordPress/wordpress-playground) team in bringing full-stack web applications into the browser via WebAssembly.
 
+## More Frappe Tools
+
+Explore more open-source tools we're building for the Frappe ecosystem.
+
+<table>
+  <tr>
+    <td width="50%" valign="top">
+      <a href="https://github.com/lubusIN/frappe-local">
+        <img src="https://raw.githubusercontent.com/lubusIN/frappe-local/main/.github/assets/logo.svg" alt="Frappe Local" height="60">
+      </a>
+      <br>
+      Create and manage local Frappe benches and sites visually.
+    </td>
+    <td width="50%" valign="top">
+      <a href="https://github.com/lubusIN/frappe-brewery">
+        <img src="https://raw.githubusercontent.com/lubusIN/frappe-brewery/main/.github/assets/logo.svg" alt="Frappe Brewery" height="60">
+      </a>
+      <br>
+      Discover community-built apps for Frappe.
+    </td>
+  </tr>
+
+  <tr>
+    <td width="50%" valign="top">
+      <a href="https://github.com/lubusIN/frappe-vault">
+        <img src="https://raw.githubusercontent.com/lubusIN/frappe-vault/main/.github/assets/logo.svg" alt="Frappe Vault" height="60">
+      </a>
+      <br>
+      Manage secrets and passwords with Frappe.
+    </td>
+    <td width="50%" valign="top">
+      <a href="https://github.com/lubusIN/wp-frappe-data-store">
+        <img src="https://raw.githubusercontent.com/lubusIN/wp-frappe-data-store/main/.github/assets/logo.svg" alt="WP Frappe Data Store" height="60">
+      </a>
+      <br>
+      Connect WordPress and Frappe with a React data store.
+    </td>
+  </tr>
+</table>
+
+[Explore all LUBUS projects →](https://github.com/lubusIN)
+
 ## Meet Your Artisans
 
 [LUBUS](https://lubus.in/?utm_source=github&utm_medium=open-source&utm_campaign=frappe-playground) is a web design agency based in Mumbai.
