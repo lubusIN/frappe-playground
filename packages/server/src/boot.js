@@ -23,8 +23,8 @@ export async function initializePyodide({
   const pyodide = await globalScope.loadPyodide({ indexURL: baseUrl })
   await pyodide.runPythonAsync(`
 import warnings
-warnings.filterwarnings("ignore", category=SyntaxWarning)
-warnings.filterwarnings("ignore", category=DeprecationWarning)
+warnings.filterwarnings("ignore", category=SyntaxWarning, module="whoosh.*")
+warnings.filterwarnings("ignore", category=DeprecationWarning, module="whoosh.*")
   `)
 
   log('Loading core packages...')

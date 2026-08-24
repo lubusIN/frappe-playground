@@ -429,14 +429,14 @@ raising an upstream report, reproduce the failure without the repair and record:
 
 ### Whoosh warnings on newer Python versions
 
-Frappe imports Whoosh directly for full-text and website search. The playground
-globally suppresses `SyntaxWarning` and `DeprecationWarning`, with a comment
-attributing the warning to Whoosh on newer Python versions.
+Frappe imports Whoosh directly for full-text and website search. Since Whoosh
+is unmaintained and relies on deprecated Python features, it triggers loud
+`SyntaxWarning` and `DeprecationWarning` messages on newer Python versions
+(like Python 3.12+).
 
-The dependency and suppression are confirmed. The exact warning, affected file,
-and supported Python-version range have not been captured in this repository, so
-the report should not claim a Frappe compatibility bug until the warning is
-reproduced and recorded.
+To keep the console clean without masking real syntax errors in Frappe or custom
+code, the playground explicitly filters and suppresses these warnings only for
+the `whoosh.*` module in `boot.js`.
 
 ## Follow-up Checks
 
