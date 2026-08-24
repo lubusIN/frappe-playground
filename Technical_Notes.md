@@ -15,9 +15,13 @@ unless they expose a concrete Frappe integration constraint.
 
 ## Reference Scope
 
-- The generated runtime currently contains **Frappe 16.23.0**.
-- `runtime/build/Dockerfile` builds from a pinned tag (`v16.23.0`) via a build argument. These notes therefore describe the checked runtime artifact, not every
-  version of Frappe 16.
+- The generated runtime currently contains **Frappe 16.30.0**.
+- `runtime/build/Dockerfile` builds from a pinned tag (`v16.30.0`) via a build argument,
+  declared once in `runtime/frappe-version.json`. These notes therefore describe the
+  checked runtime artifact, not every version of Frappe 16.
+- `tests/contract/runtime-version.test.mjs` fails if this document, `scripts/build.sh`,
+  the Dockerfile default, and `runtime/frappe-version.json` ever disagree. Update the
+  version file and this line together.
 - Local behavior is covered by the repository's Playwright flows, including
   boot, login, Setup Wizard, Desk, file upload, and scoped reloads.
 
