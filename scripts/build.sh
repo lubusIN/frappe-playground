@@ -4,8 +4,9 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 PROJECT_ROOT="$(dirname "$SCRIPT_DIR")"
 RUNTIME_ARTIFACTS_DIR="${PROJECT_ROOT}/artifacts/runtime"
-FRAPPE_VERSION="${FRAPPE_VERSION:-v16.30.0}"
-
+VERSION_FILE="${PROJECT_ROOT}/runtime/frappe-version.json"
+DECLARED_FRAPPE_VERSION="$(sed -n 's/.*"frappeVersion"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' "${VERSION_FILE}")"
+FRAPPE_VERSION="${FRAPPE_VERSION:-${DECLARED_FRAPPE_VERSION}}"
 rm -rf "${RUNTIME_ARTIFACTS_DIR}"
 mkdir -p "${RUNTIME_ARTIFACTS_DIR}"
 
@@ -28,4 +29,5 @@ rm "${RUNTIME_ARTIFACTS_DIR}/assets.tar.gz"
 node "${PROJECT_ROOT}/scripts/write-runtime-manifest.mjs" \
     "${RUNTIME_ARTIFACTS_DIR}" \
     "${FRAPPE_VERSION}"
+bash "${PROJECT_ROOT}/scripts/check-limits.sh" "${RUNTIME_ARTIFACTS_DIR}" || true
 echo "✅ Build complete!"
