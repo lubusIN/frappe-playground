@@ -447,11 +447,10 @@ Before converting these notes into upstream reports or removing local mocks:
 3. Import `frappe.utils.telemetry` with telemetry disabled and PostHog absent.
 4. Remove each unverified module mock independently and run the browser suite.
 5. Make auto-mocked integrations raise when called to expose hidden feature use.
-6. Replace the fake `frappe` fallback with a clear missing-runtime exception.
-7. Complete Setup Wizard without SQL repair and compare state before and after
+6. Complete Setup Wizard without SQL repair and compare state before and after
    persistence.
-8. Boot Desk without the Socket.IO mock and record the client behavior.
-9. Mount Frappe below `/frappe-test/` using WSGI `SCRIPT_NAME` or proxy headers
+7. Boot Desk without the Socket.IO mock and record the client behavior.
+8. Mount Frappe below `/frappe-test/` using WSGI `SCRIPT_NAME` or proxy headers
    and inventory every redirect, asset, API, file, and Socket.IO URL that escapes
    to the origin root.
 

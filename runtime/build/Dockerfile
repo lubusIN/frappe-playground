@@ -62,6 +62,7 @@ USER frappe
 RUN bench init --frappe-branch ${FRAPPE_VERSION} --skip-redis-config-generation  --python python3 test-bench \
     && cd test-bench \
     && bench new-site playground.local --db-type sqlite --admin-password admin \
+    && bench --site playground.local set-config ignore_csrf 1 \
     && bench --site playground.local execute frappe.db.set_single_value --args "('System Settings', 'login_with_email_link', 0)"
 COPY --chown=frappe:frappe runtime/build/build-app-catalog.py /workspace/scripts/build-app-catalog.py
 COPY --chown=frappe:frappe runtime/apps/catalog.json /workspace/runtime/apps/catalog.json

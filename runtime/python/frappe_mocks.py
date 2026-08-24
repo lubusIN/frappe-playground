@@ -357,10 +357,12 @@ sys.meta_path.insert(0, AutoMockFinder([
 
 # ── Install Frappe ──────────────────────────────────────────────────
 
-# Ensure frappe is actually importable by putting it in sys.modules manually if needed
-# (Pyodide can sometimes fail to parse directory structures deeply)
+# A missing Frappe archive is a boot failure!.
 import importlib.util
-spec = importlib.util.find_spec("frappe")
-if not spec:
-    print("Warning: frappe not found by default importer, manually registering...")
-    sys.modules["frappe"] = create_mock("frappe")
+
+if not importlib.util.find_spec("frappe"):
+    raise ImportError(
+        "The Frappe runtime is not present in /home/pyodide/frappe_env. "
+        "The runtime archive failed to download or unpack. "
+        "Please refresh the page to try downloading again. "
+    )
