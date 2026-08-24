@@ -11,6 +11,8 @@ const { bootLoginAndReachDesk, getFrappeFrame } = require('./helpers/frappeFlow'
 // That inventory is the evidence for upstream issue 7 (application base path).
 
 test('no Frappe backend request escapes its scope to the origin root', async ({ page, browserName }) => {
+    test.fail(true, 'Expected upstream failure: Frappe emits unscoped root-relative requests (Issue #7)');
+    
     test.skip(
         browserName === 'webkit',
         'WebKit blocks the module worker path under COEP; scope routing is covered on Chromium.'

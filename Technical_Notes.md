@@ -438,6 +438,19 @@ To keep the console clean without masking real syntax errors in Frappe or custom
 code, the playground explicitly filters and suppresses these warnings only for
 the `whoosh.*` module in `boot.js`.
 
+### Integration Mocks Strictness
+
+The auto-mocked integration tree (e.g. `googleapiclient`, `stripe`, `boto3`)shows a toast warning or raises a `DisabledIntegrationError` when a mock is *called*, while imports still succeed safely.
+
+This behavior is configurable via the `PLAYGROUND_INTEGRATION_MOCK_MODE` environment variable (defaults to `toast`). Because standard OS environment variables are not available in the browser, you can configure it from JavaScript during boot before Frappe is imported:
+
+```javascript
+pyodide.runPython(`
+  import os
+  os.environ["PLAYGROUND_INTEGRATION_MOCK_MODE"] = "strict"
+`)
+```
+
 ## Follow-up Checks
 
 Before converting these notes into upstream reports or removing local mocks:
@@ -446,11 +459,10 @@ Before converting these notes into upstream reports or removing local mocks:
 2. Import `frappe.app` on SQLite with MySQLdb and RQ unavailable.
 3. Import `frappe.utils.telemetry` with telemetry disabled and PostHog absent.
 4. Remove each unverified module mock independently and run the browser suite.
-5. Make auto-mocked integrations raise when called to expose hidden feature use.
-6. Complete Setup Wizard without SQL repair and compare state before and after
+5. Complete Setup Wizard without SQL repair and compare state before and after
    persistence.
-7. Boot Desk without the Socket.IO mock and record the client behavior.
-8. Mount Frappe below `/frappe-test/` using WSGI `SCRIPT_NAME` or proxy headers
+6. Boot Desk without the Socket.IO mock and record the client behavior.
+7. Mount Frappe below `/frappe-test/` using WSGI `SCRIPT_NAME` or proxy headers
    and inventory every redirect, asset, API, file, and Socket.IO URL that escapes
    to the origin root.
 
