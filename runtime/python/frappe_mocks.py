@@ -304,9 +304,11 @@ sys.modules["psutil"].Process = DummyProcess
 sys.modules["psutil"].AccessDenied = create_exception_mock("AccessDenied")
 sys.modules["psutil"].NoSuchProcess = create_exception_mock("NoSuchProcess")
 
+# >>> mock-test-target: pwd_grp
 # Frappe relies on pwd/grp for unix user checks which don't exist in Pyodide
 create_mock("pwd", getpwuid=lambda x: AbsorbingMock())
 create_mock("grp", getgrgid=lambda x: AbsorbingMock())
+# <<< mock-test-target: pwd_grp
 
 # Python's Unix-only resource module is unavailable in Pyodide. Frappe uses it
 # only to record peak memory for prepared reports; process RSS is not exposed by
@@ -346,11 +348,13 @@ sys.modules["orjson"] = MockOrjson
 
 # ── Additional Database Drivers ─────────────────────────────────────
 
+# >>> mock-test-target: psycopg2
 create_mock("psycopg2", **db_exc)
 create_mock("psycopg2.extensions", ISOLATION_LEVEL_REPEATABLE_READ=0)
 create_mock("psycopg2.sql")
 create_mock("psycopg2.errorcodes")
 create_mock("psycopg2.errors")
+# <<< mock-test-target: psycopg2
 
 # ── RQ (Redis Queue) Mocks ──────────────────────────────────────────
 
@@ -432,6 +436,7 @@ rq_mod.queue = create_mock("rq.queue", Queue=DummyQueue)
 create_mock("frappe.utils.sentry", capture_exception=lambda *a, **k: None)
 
 # Automatically mock these entire trees so we don't have to stub them one-by-one.
+# >>> mock-test-target-list: integrations
 sys.meta_path.insert(0, AutoMockFinder([
     "googleapiclient",
     "google",
@@ -446,6 +451,7 @@ sys.meta_path.insert(0, AutoMockFinder([
     "plaid",
     "sentry_sdk",
 ]))
+# <<< mock-test-target-list: integrations
 
 # ── Install Frappe ──────────────────────────────────────────────────
 
