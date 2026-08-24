@@ -236,6 +236,14 @@ Exercise a clean publish build, including stale-output detection, with:
 npm run test:clean-build
 ```
 
+Verify which Python module mocks (used to stub missing Pyodide dependencies) can be safely removed:
+
+```bash
+npm run test:mock-removal
+```
+
+> **Note for Contributors:** If you are modifying the Python runtime or adding new dependencies, please read [`Technical_Notes.md`](Technical_Notes.md) for deep details on how the browser Python environment handles missing OS features, module stubs, and mock strictness.
+
 CI runs the fast tests, clean-build verification, and the complete Chromium Playwright project before publishing.
 
 ## Deployment

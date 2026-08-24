@@ -458,7 +458,7 @@ Before converting these notes into upstream reports or removing local mocks:
 1. Import `frappe` with `psutil` unavailable and capture the exact failure.
 2. Import `frappe.app` on SQLite with MySQLdb and RQ unavailable.
 3. Import `frappe.utils.telemetry` with telemetry disabled and PostHog absent.
-4. Remove each unverified module mock independently and run the browser suite.
+4. Run the automated mock removal tester (`npm run test:mock-removal`) to verify which module mocks can be safely deleted without breaking the browser suite.
 5. Complete Setup Wizard without SQL repair and compare state before and after
    persistence.
 6. Boot Desk without the Socket.IO mock and record the client behavior.
