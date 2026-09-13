@@ -39,13 +39,13 @@ The controller constructor accepts overrides for testing and derived clients, bu
 
 | Server | Port behavior |
 | --- | --- |
-| Playground Vite dev | `5173`, strict |
+| Combined local development | Playground at `5173`; VitePress at `5174`, proxied through `/docs/`; both strict |
 | Playground Vite preview | starts at `8000`, may choose another free port |
 | Documentation screenshot capture | `4175` by default; override with `DOCS_SCREENSHOT_PORT` |
 | Playwright-owned preview | `8102` through `npm run test:serve` |
-| VitePress dev/preview | VitePress defaults unless CLI options are supplied |
+| Standalone VitePress dev/preview | VitePress defaults unless CLI options are supplied |
 
-Both playground Vite modes apply the required cross-origin isolation headers. VitePress development is for docs rendering and does not boot the playground runtime.
+Both playground Vite modes apply the required cross-origin isolation headers. In combined development, the playground server proxies `/docs` to VitePress; standalone `docs:dev` rendering does not boot the playground runtime.
 
 ## Deployment environment
 
