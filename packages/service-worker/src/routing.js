@@ -13,6 +13,10 @@ export function isSocketIoPath(pathname) {
   return pathname.startsWith('/socket.io/')
 }
 
+export function isDocumentationPath(pathname) {
+  return pathname === '/docs' || pathname.startsWith('/docs/')
+}
+
 const socketSessions = new Map()
 let nextSocketSessionId = 1
 
@@ -115,6 +119,7 @@ const STATIC_PATHS = new Set([
 const STATIC_PATH_PREFIXES = [
   '/apps',
   '/assets',
+  '/docs',
   '/frontend',
   '/generated',
   '/protocol',

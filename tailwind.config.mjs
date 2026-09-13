@@ -5,7 +5,9 @@ export default {
   darkMode: 'class',
   content: [
     './packages/client/src/**/*.{html,js,vue}',
+    './docs/**/*.{md,js,ts,vue}',
     './node_modules/frappe-ui/src/**/*.{js,ts,vue}',
+    './node_modules/frappe-ui/vitepress/**/*.{js,ts,vue}',
   ],
   theme: {
     extend: {

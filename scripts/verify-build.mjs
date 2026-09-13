@@ -123,6 +123,7 @@ export async function verifyBuild({
 
   const requiredFiles = [
     'index.html',
+    'docs/index.html',
     'apps/catalog.json',
     'sw.js',
     'worker.js',

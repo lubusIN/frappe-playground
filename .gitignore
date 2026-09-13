@@ -4,6 +4,10 @@ node_modules/
 # Generated build artifacts
 artifacts/
 dist/
+docs/.vitepress/.temp/
+docs/.vitepress/cache/
+docs/auto-imports.d.ts
+docs/components.d.ts
 
 # Legacy root-level intermediate Docker build directory
 /build/

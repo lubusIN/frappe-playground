@@ -16,6 +16,7 @@ import {
   NODE_MODULES_ASSET_PREFIX,
   handleSocketIoRequest,
   isDevelopmentPath,
+  isDocumentationPath,
   isShellNavigation,
   isShellStaticPath,
   isSocketIoPath,
@@ -90,6 +91,9 @@ self.addEventListener('fetch', event => {
   if (url.origin !== self.location.origin) return
 
   const unscopedPath = stripScopeFromPath(url.pathname)
+  // Documentation shares the origin but has its own release lifecycle. Let the
+  // browser and host cache it instead of tying it to the Frappe asset cache ID.
+  if (!scopeFromUrl(url) && isDocumentationPath(unscopedPath)) return
   if (!scopeFromUrl(url) && isShellStaticPath(unscopedPath)) return
 
   if (!scopeFromUrl(url) && isStaticPath(unscopedPath)) {
