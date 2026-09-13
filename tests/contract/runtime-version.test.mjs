@@ -34,15 +34,15 @@ test('Dockerfile default matches the declared runtime version', async () => {
   )
 })
 
-test('Technical_Notes.md documents the version actually built', async () => {
+test('compatibility notes document the version actually built', async () => {
   const declared = JSON.parse(await read('runtime/frappe-version.json')).frappeVersion
-  const notes = await read('Technical_Notes.md')
+  const notes = await read('docs/development/upstream-notes.md')
 
   // Only the Reference Scope section describes the checked artifact. Version
   // numbers elsewhere are statements about when upstream behavior landed and
   // are deliberately not rewritten when the pinned runtime moves.
-  const section = notes.match(/## Reference Scope\n([\s\S]*?)(?=\n## )/)
-  assert.ok(section, 'Technical_Notes.md must keep a "## Reference Scope" section')
+  const section = notes.match(/## Reference scope\n([\s\S]*?)(?=\n## )/)
+  assert.ok(section, 'compatibility notes must keep a "## Reference scope" section')
 
   const versions = new Set(
     [...section[1].matchAll(/\bv?(1[4-9]\.\d+\.\d+)\b/g)].map(match => match[1]),
@@ -53,7 +53,7 @@ test('Technical_Notes.md documents the version actually built', async () => {
     assert.equal(
       `v${version}`,
       declared,
-      `Technical_Notes.md Reference Scope references Frappe ${version} but the runtime `
+      `Compatibility notes reference scope references Frappe ${version} but the runtime `
         + `builds ${declared}. The notes describe a specific checked artifact, so a stale `
         + 'version invalidates them.',
     )

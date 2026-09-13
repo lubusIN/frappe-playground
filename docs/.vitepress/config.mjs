@@ -87,6 +87,7 @@ export default defineConfig({
           { text: 'Testing', link: '/development/testing' },
           { text: 'Repository map', link: '/development/repository-map' },
           { text: 'Configuration reference', link: '/development/configuration' },
+          { text: 'Upstream notes', link: '/development/upstream-notes' },
           { text: 'Documentation maintenance', link: '/development/documentation' },
         ],
       },

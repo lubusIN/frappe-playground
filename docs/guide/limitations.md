@@ -40,4 +40,4 @@ Execution is local after dependencies are loaded, but the current build is not a
 
 Existing browser caches can make later boots work with less network access, but offline cold boot is not a supported guarantee. A self-hosted or air-gapped variant must change `PYODIDE_BASE_URL`, package resolution, and the published artifacts—not only mirror `dist/`.
 
-For detailed Frappe compatibility findings and mock inventory, see the repository’s [`Technical_Notes.md`](https://github.com/lubusIN/frappe-playground/blob/main/Technical_Notes.md).
+For detailed Frappe compatibility findings and the mock inventory, see [Compatibility and upstream notes](/development/upstream-notes).
