@@ -20,7 +20,7 @@ When prose and implementation disagree, update the behavior or docs intentionall
 
 ## Version-sensitive facts
 
-Avoid duplicating values unless readers need them. When documenting Frappe, protocol, Pyodide CDN, app, timeout, or hosting-limit values, name the source file and update the docs in the same change as that source. The existing runtime-version contract already checks the Frappe declaration against build inputs and `Technical_Notes.md`; docs should be reviewed during that change as well.
+Avoid duplicating values unless readers need them. When documenting Frappe, protocol, Pyodide CDN, app, timeout, or hosting-limit values, name the source file and update the docs in the same change as that source. The existing runtime-version contract already checks the Frappe declaration against build inputs and the [compatibility notes](/development/upstream-notes); docs should be reviewed during that change as well.
 
 ## Local authoring
 

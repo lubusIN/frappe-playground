@@ -32,7 +32,7 @@ npm run verify:build
 
 ## Change the Frappe version
 
-The pinned version is declared in `runtime/frappe-version.json` and consumed by the Docker runtime build. Version references in `Technical_Notes.md`, build scripts, and tests are deliberately checked for agreement.
+The pinned version is declared in `runtime/frappe-version.json` and consumed by the Docker runtime build. Version references in the [compatibility notes](/development/upstream-notes), build scripts, and tests are deliberately checked for agreement.
 
 A version bump is compatibility work, not only a manifest edit. Rebuild the runtime, review browser shims and SQLite behavior, and run contract plus end-to-end tests. Optional-app version constraints and pinned commits may also need changes.
 

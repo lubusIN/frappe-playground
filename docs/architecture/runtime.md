@@ -4,7 +4,7 @@ The runtime build converts a normal Frappe source tree into assets that Pyodide 
 
 ## Checked version
 
-The current repository pins Frappe **16.30.0** in `runtime/frappe-version.json`. `runtime/build/Dockerfile`, build scripts, tests, and `Technical_Notes.md` are checked against that declaration.
+The current repository pins Frappe **16.30.0** in `runtime/frappe-version.json`. `runtime/build/Dockerfile`, build scripts, tests, and the [compatibility notes](/development/upstream-notes) are checked against that declaration.
 
 ## Filesystem layout
 
@@ -47,7 +47,7 @@ Frappe assumes infrastructure and native packages unavailable in Pyodide. The cu
 
 These shims support the repository’s checked boot and application flows; they are not full implementations. Inert mocks can hide unsupported feature execution, so new code should prefer explicit minimal substitutes and clear errors.
 
-The repository’s [`Technical_Notes.md`](https://github.com/lubusIN/frappe-playground/blob/main/Technical_Notes.md) is the detailed compatibility inventory: it separates required boot-path substitutes, feature-path guards, unproven historical mocks, upstream Frappe constraints, and mock-removal risks. Keep that evidence-oriented inventory more granular than this architectural overview.
+The [compatibility and upstream notes](/development/upstream-notes) are the detailed compatibility inventory: they separate required boot-path substitutes, feature-path guards, unproven historical mocks, upstream Frappe constraints, and mock-removal risks. Keep that evidence-oriented inventory more granular than this architectural overview.
 
 ## Site configuration
 
