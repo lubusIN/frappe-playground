@@ -12,9 +12,9 @@ npm run dev
 
 `build:runtime` is required when `artifacts/runtime/` is absent or its inputs changed. It is expensive because Docker prepares Frappe, its browser-compatible dependencies, static assets, a seed database, and catalog app packages. Client-only development can reuse existing artifacts.
 
-The playground dev server runs at `http://localhost:5173/` and supplies both authored source modules and generated runtime files through Vite middleware.
+The playground dev server runs at `http://localhost:5173/` and supplies both authored source modules and generated runtime files through Vite middleware. The same command starts VitePress on an internal companion port and proxies `http://localhost:5173/docs/`, matching the production URL layout.
 
-To work on documentation:
+To run only the documentation server:
 
 ```bash
 npm run docs:dev
@@ -25,7 +25,8 @@ npm run docs:dev
 | Command | Purpose |
 | --- | --- |
 | `npm run generate:sources` | Convert authored Python helpers into the worker-imported JS module |
-| `npm run dev` | Regenerate Python sources and start the playground Vite server |
+| `npm run dev` | Regenerate Python sources and start the playground plus proxied docs |
+| `npm run dev:playground` | Start only the playground Vite server |
 | `npm run docs:dev` | Start the VitePress documentation server |
 | `npm run docs:screenshots` | Regenerate documented UI states from the real playground in Chromium |
 | `npm run build:runtime` | Validate apps and rebuild Docker-produced runtime artifacts |

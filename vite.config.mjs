@@ -149,7 +149,7 @@ function contentTypeFor(filePath) {
   }[extension] || 'application/octet-stream'
 }
 
-export default defineConfig({
+export default defineConfig(({ mode }) => ({
   root: clientDir,
   base: '/',
   publicDir: false,
@@ -192,6 +192,13 @@ export default defineConfig({
     port: 5173,
     strictPort: true,
     headers: isolationHeaders,
+    proxy: mode === 'combined' ? {
+      '/docs': {
+        target: 'http://127.0.0.1:5174',
+        changeOrigin: true,
+        ws: true,
+      },
+    } : undefined,
   },
   preview: {
     port: 8000,
@@ -209,4 +216,4 @@ export default defineConfig({
       'interactjs'
     ],
   },
-})
+}))

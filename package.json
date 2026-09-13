@@ -7,7 +7,8 @@
   ],
   "scripts": {
     "start": "vite preview --host 0.0.0.0",
-    "dev": "npm run generate:sources && vite --host 0.0.0.0",
+    "dev": "npm run generate:sources && concurrently --kill-others-on-fail --names playground,docs \"vite --host 0.0.0.0 --mode combined\" \"vitepress dev docs --host 127.0.0.1 --port 5174 --strictPort\"",
+    "dev:playground": "npm run generate:sources && vite --host 0.0.0.0",
     "generate:sources": "node scripts/generate-python-sources.mjs",
     "build": "npm run build:playground && npm run docs:build",
     "build:playground": "npm run generate:sources && vite build && bash scripts/prepare.sh",
@@ -36,6 +37,7 @@
     "@playwright/test": "^1.60.0",
     "@vitejs/plugin-vue": "^6.0.7",
     "autoprefixer": "^10.5.0",
+    "concurrently": "^10.0.5",
     "playwright": "^1.60.0",
     "postcss": "^8.5.15",
     "tailwindcss": "^3.4.17",
