@@ -9,7 +9,12 @@
     "start": "vite preview --host 0.0.0.0",
     "dev": "npm run generate:sources && vite --host 0.0.0.0",
     "generate:sources": "node scripts/generate-python-sources.mjs",
-    "build": "npm run generate:sources && vite build && bash scripts/prepare.sh",
+    "build": "npm run build:playground && npm run docs:build",
+    "build:playground": "npm run generate:sources && vite build && bash scripts/prepare.sh",
+    "docs:dev": "vitepress dev docs",
+    "docs:build": "vitepress build docs",
+    "docs:preview": "vitepress preview docs",
+    "docs:screenshots": "node scripts/capture-docs-screenshots.mjs",
     "build:runtime": "npm run validate:apps && bash scripts/build.sh",
     "validate:apps": "node scripts/validate-app-catalog.mjs",
     "verify:build": "node scripts/verify-build.mjs",
@@ -36,6 +41,7 @@
     "tailwindcss": "^3.4.17",
     "unplugin-icons": "^23.0.1",
     "vite": "^8.0.14",
+    "vitepress": "2.0.0-alpha.20",
     "wrangler": "^4.95.0"
   },
   "dependencies": {

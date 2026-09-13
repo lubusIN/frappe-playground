@@ -24,6 +24,7 @@ import {
 import {
   handleSocketIoRequest,
   isDevelopmentPath,
+  isDocumentationPath,
   isShellNavigation,
   isShellStaticPath,
   isSocketIoPath,
@@ -48,6 +49,10 @@ test('routing scopes backend requests and remaps deploy-safe static assets', () 
   assert.equal(isStaticPath('/protocol/messages.js'), true)
   assert.equal(isStaticPath('/runtime-config/packages.js'), true)
   assert.equal(isStaticPath('/service-worker/routing.js'), true)
+  assert.equal(isStaticPath('/docs/architecture/index.html'), true)
+  assert.equal(isDocumentationPath('/docs'), true)
+  assert.equal(isDocumentationPath('/docs/assets/app.js'), true)
+  assert.equal(isDocumentationPath('/documentation'), false)
   assert.equal(isStaticPath('/frontend/index-abc.js'), true)
   assert.equal(isStaticPath('/favicon.ico'), true)
   assert.equal(isShellStaticPath('/frontend/index-abc.js'), true)
