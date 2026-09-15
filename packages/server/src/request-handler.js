@@ -42,13 +42,15 @@ del temp_cookie_json
     const requestMap = new Map(Object.entries(request))
     if (request.headers) requestMap.set('headers', new Map(Object.entries(request.headers)))
     const pythonRequest = this.pyodide.toPy(requestMap)
-    this.pyodide.globals.set('current_req', pythonRequest)
-    const pythonResponse = this.pyodide.runPython('handle_request(current_req)')
+    let pythonResponse
     try {
+      this.pyodide.globals.set('current_req', pythonRequest)
+      pythonResponse = this.pyodide.runPython('handle_request(current_req)')
       return pythonResponse.toJs({ dict_converter: Object.fromEntries })
     } finally {
+      this.pyodide.globals.delete?.('current_req')
       pythonRequest.destroy()
-      pythonResponse.destroy()
+      pythonResponse?.destroy()
     }
   }
 
@@ -93,27 +95,46 @@ export class SerialRequestExecutor {
     this.processing = false
   }
 
-  attach(port) {
-    port.onmessage = event => {
-      this.queue.push({
-        request: this.decodeRequest(event.data),
-        responsePort: event.ports[0],
-      })
+  // One queue owns every operation that reads or changes the Python runtime.
+  enqueue(operation) {
+    return new Promise((resolve, reject) => {
+      this.queue.push({ operation, resolve, reject })
       this.processNext()
+    })
+  }
+
+  attach(port) {
+    this.port?.close?.()
+    if (this.port) this.port.onmessage = null
+    this.port = port
+    port.onmessage = async event => {
+      const responsePort = event.ports?.[0]
+      if (!responsePort || typeof responsePort.postMessage !== 'function') return
+      try {
+        const request = this.decodeRequest(event.data)
+        const response = await this.enqueue(async () => {
+          const response = await this.handleRequest(request)
+          if (shouldPersistRequest(request, response)) await this.persist()
+          this.logger.log(`[Worker] Handled request: ${request.path} -> ${response.status}`)
+          return response
+        })
+        responsePort.postMessage(this.encodeResponse(response))
+      } catch (error) {
+        responsePort.postMessage(this.encodeError(error))
+      } finally {
+        responsePort.close?.()
+      }
     }
   }
 
   async processNext() {
     if (this.processing || this.queue.length === 0) return
     this.processing = true
-    const { request, responsePort } = this.queue.shift()
+    const { operation, resolve, reject } = this.queue.shift()
     try {
-      const response = await this.handleRequest(request)
-      if (shouldPersistRequest(request, response)) await this.persist()
-      this.logger.log(`[Worker] Handled request: ${request.path} -> ${response.status}`)
-      responsePort.postMessage(this.encodeResponse(response))
+      resolve(await operation())
     } catch (error) {
-      responsePort.postMessage(this.encodeError(error))
+      reject(error)
     } finally {
       this.processing = false
       this.schedule(() => this.processNext())

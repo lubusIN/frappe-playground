@@ -7,14 +7,6 @@ function requestToPromise(request) {
   })
 }
 
-function removeIfExists(fs, path) {
-  try {
-    if (fs.analyzePath(path).exists) fs.unlink(path)
-  } catch (_) {
-    // Ignore transient SQLite sidecar cleanup errors.
-  }
-}
-
 function joinPath(parent, child) {
   return `${parent.replace(/\/$/, '')}/${child}`
 }
@@ -69,15 +61,15 @@ export function restoreSiteFiles(fs, files = [], allowedRoots = []) {
 export async function checkpointDatabase(pyodide, dbPath) {
   await pyodide.runPythonAsync(`
 import sqlite3
+conn = sqlite3.connect('${dbPath}')
 try:
-    conn = sqlite3.connect('${dbPath}')
-    conn.execute('PRAGMA wal_checkpoint(TRUNCATE)')
+    checkpoint = conn.execute('PRAGMA wal_checkpoint(TRUNCATE)').fetchone()
+    if checkpoint[0] != 0:
+        raise RuntimeError('Database checkpoint is busy; state was not saved.')
+finally:
     conn.close()
-except Exception:
-    pass
   `)
-  removeIfExists(pyodide.FS, `${dbPath}-wal`)
-  removeIfExists(pyodide.FS, `${dbPath}-shm`)
+  // SQLite owns its sidecars. Never unlink a WAL that may contain live data.
 }
 
 export async function repairCompletedSiteDefaults(pyodide, dbPath) {
@@ -130,15 +122,20 @@ export async function initializeSiteDatabase({
   log,
   logger = console,
 }) {
-  let restored = false
+  let result = { status: 'missing' }
   if (!freshSession) {
     log('Restoring isolated database...')
     logger.time('loadStateFromIDB')
-    restored = await stateStore.load(dbPath)
+    result = await stateStore.load(dbPath)
     logger.timeEnd('loadStateFromIDB')
   }
 
-  if (freshSession || !restored) {
+  if (result.status === 'failed') throw result.error
+  if (result.status !== 'missing' && result.status !== 'restored') {
+    throw new Error('Invalid database restore outcome.')
+  }
+
+  if (result.status === 'missing') {
     log('Seeding fresh database...')
     pyodide.FS.writeFile(
       dbPath,
@@ -189,66 +186,76 @@ export class BrowserStateStore {
   }
 
   async preload() {
+    let db
     try {
-      const db = await this.open()
-      const store = db.transaction('files', 'readonly').objectStore('files')
+      db = await this.open()
+      const transaction = db.transaction('files', 'readonly')
+      const completed = new Promise((resolve, reject) => {
+        transaction.oncomplete = resolve
+        transaction.onerror = transaction.onabort = () => reject(
+          transaction.error || new Error('Reading playground state was aborted.'),
+        )
+      })
+      const store = transaction.objectStore('files')
       const [siteDb, cookieJar, siteFiles, installedApps] = await Promise.all([
         requestToPromise(store.get('site1.db')),
         requestToPromise(store.get('cookie_jar.json')),
         requestToPromise(store.get('site_files')),
         requestToPromise(store.get('installed_apps')),
+        completed,
       ])
-      db.close()
-      return { siteDb, cookieJar, siteFiles, installedApps }
+      return siteDb === undefined
+        ? { status: 'missing' }
+        : { status: 'restored', siteDb, cookieJar, siteFiles, installedApps }
     } catch (error) {
       this.logger.warn('[Worker] Failed to preload state from IDB:', error)
-      return null
+      return { status: 'failed', error }
+    } finally {
+      db?.close()
     }
   }
 
   async load(dbPath) {
     const state = await this.preloadedState
-    if (!state?.siteDb) return false
+    if (state.status !== 'restored') return state
     try {
       this.getFs().writeFile(dbPath, state.siteDb)
       restoreSiteFiles(this.getFs(), state.siteFiles, this.siteFileRoots)
       if (typeof state.cookieJar === 'string') this.cookieJarJson = state.cookieJar
       if (Array.isArray(state.installedApps)) this.installedApps = state.installedApps
-      return true
+      return { status: 'restored' }
     } catch (error) {
       this.logger.warn('[Worker] Failed to restore preloaded state:', error)
-      return false
+      return { status: 'failed', error }
     }
   }
 
   async save(dbPath, cookieJarJson = '{}', installedApps = this.installedApps || []) {
+    const data = this.getFs().readFile(dbPath).slice()
+    const siteFiles = snapshotSiteFiles(this.getFs(), this.siteFileRoots)
+    const db = await this.open()
     try {
-      const data = this.getFs().readFile(dbPath).slice()
-      const siteFiles = snapshotSiteFiles(this.getFs(), this.siteFileRoots)
-      const db = await this.open()
       await new Promise((resolve, reject) => {
         const transaction = db.transaction('files', 'readwrite')
-        const store = transaction.objectStore('files')
-        store.clear()
-        store.put(data, 'site1.db')
-        store.put(cookieJarJson, 'cookie_jar.json')
-        store.put(siteFiles, 'site_files')
-        store.put(installedApps, 'installed_apps')
-        store.put(
-          JSON.stringify({ savedAt: this.now(), scope: this.scope }),
-          'manifest.json',
+        transaction.oncomplete = resolve
+        transaction.onerror = transaction.onabort = () => reject(
+          transaction.error || new Error('Saving playground state was aborted.'),
         )
-        transaction.oncomplete = () => {
-          db.close()
-          resolve()
-        }
-        transaction.onerror = () => {
-          db.close()
-          reject(transaction.error)
+        try {
+          const store = transaction.objectStore('files')
+          store.put(data, 'site1.db')
+          store.put(cookieJarJson, 'cookie_jar.json')
+          store.put(siteFiles, 'site_files')
+          store.put(installedApps, 'installed_apps')
+          store.put(JSON.stringify({ savedAt: this.now(), scope: this.scope }), 'manifest.json')
+        } catch (error) {
+          // A synchronous put failure does not automatically abort earlier puts.
+          reject(error)
+          transaction.abort()
         }
       })
-    } catch (error) {
-      this.logger.warn('[Worker] Failed to persist state to IDB:', error)
+    } finally {
+      db.close()
     }
   }
 }

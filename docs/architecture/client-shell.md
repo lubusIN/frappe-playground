@@ -4,7 +4,7 @@ The client is a Vue 3 application that owns presentation and orchestration. It n
 
 ## Composition root
 
-`packages/client/src/main.js` mounts `App.vue`. The root component owns four groups of state:
+`packages/client/src/main.js` mounts `App.vue`. The root component composes four modules in `src/composables/`: `use-playground-lifecycle.js`, `use-frame-navigation.js`, `use-app-manager.js`, and `use-instance-manager.js`. They own:
 
 - five-stage boot progress and errors;
 - iframe source and displayed address;
@@ -25,7 +25,7 @@ Presentation remains in `src/components/`. Runtime lifecycle code lives in `src/
 
 The controller records installed app IDs only after `runtime:ready`. A second ready message means a recovered channel and emits `woke_up` instead of repeating initial readiness.
 
-`dispose()` is the ownership boundary. It clears timers, rejects pending app operations, terminates the dedicated worker, closes the BroadcastChannel, removes lifecycle listeners, and clears event subscribers. Switching instances always disposes the old controller first.
+`dispose()` is the ownership boundary. It aborts pending startup and boot-flag requests, retires the owned Service Worker channel, clears timers, rejects pending app operations, terminates the dedicated worker, closes the BroadcastChannel, removes lifecycle listeners, and clears event subscribers. Switching instances always disposes the old controller first.
 
 ## Service Worker upgrade handling
 
@@ -41,7 +41,7 @@ The UI also prevents simultaneous install/uninstall clicks. The server worker pr
 
 ## Iframe and address synchronization
 
-The iframe is same-origin but internally scoped. `iframe-navigation.js` normalizes entered/boot paths, strips legacy query scopes, and adds the selected path scope. `App.vue` polls the iframe location every 500 ms because Frappe can change routes without notifying the shell.
+The iframe is mounted only after the selected runtime is ready. Switching instances removes the old iframe and creates a fresh one, avoiding empty-URL navigation during teardown. The iframe is same-origin but internally scoped. `iframe-navigation.js` normalizes entered/boot paths, strips legacy query scopes, and adds the selected path scope. `use-frame-navigation.js` polls the iframe location every 500 ms because Frappe can change routes without notifying the shell.
 
 On each successful inspection, the shell:
 
@@ -50,14 +50,16 @@ On each successful inspection, the shell:
 - adds a Safari password-field font fix; and
 - mirrors Frappe’s dark-mode marker onto the parent document.
 
-The shell catches `frappe-playground-nested-shell` window messages. It rebuilds a scoped target and adds a timestamp bounce parameter, forcing Vue to update the iframe even when the nominal URL appears unchanged.
+The shell accepts `frappe-playground-nested-shell` messages only from its same-origin iframe and removes the listener on unmount. It rebuilds a scoped target and adds a timestamp bounce parameter, forcing Vue to update the iframe even when the nominal URL appears unchanged.
 
 ## Boot flags and failure cleanup
 
 Boot flags run only after the backend is ready and before the iframe is shown. This allows app installation and authenticated setup API calls to use the worker without racing the initial Frappe page.
 
-If a fresh instance fails during initialization, the root component disposes its worker and attempts to delete both its IndexedDB state and catalog entry. Existing restored instances are retained on failure so a transient dependency or update problem does not destroy saved data.
+A failed initialization disposes its worker and retains the instance catalog and saved state for retry. Each initialization uses its own controller identity, so cancelled or superseded boots cannot update the current UI. The app dialog loads its catalog lazily and can retry failed loads. Boot-flag installation uses the ready worker’s validated catalog without waiting for a second catalog request.
 
 ## Package boundary
 
 The client imports constructors and validators from `packages/protocol`. It must not import Service Worker/server worker implementation. The inline recovery watchdog in `packages/client/index.html` is intentionally independent of the Vue bundle so it can recover when an obsolete Service Worker breaks normal module loading.
+
+The lifecycle exposes `idle`, `starting`, `ready`, `stopping`, and `failed` states. Its runtime error listener remains subscribed after boot, so a late worker failure removes the iframe and stops address synchronization. Instance management owns creation, selection, rename, reset, deletion, and initial URL selection. Blocked IndexedDB deletions remain pending with a visible explanation until the browser confirms completion; failed deletions retain the catalog entry and expose a retryable shell error for the active instance.

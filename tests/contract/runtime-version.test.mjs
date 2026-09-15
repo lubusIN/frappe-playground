@@ -12,13 +12,14 @@ test('runtime version is declared in exactly one place', async () => {
   const declared = JSON.parse(await read('runtime/frappe-version.json')).frappeVersion
   assert.match(declared, /^v\d+\.\d+\.\d+$/, 'frappeVersion must be a pinned vX.Y.Z tag')
 
-  const buildScript = await read('scripts/build.sh')
+  const buildScript = await read('scripts/build-runtime.mjs')
   assert.ok(
     buildScript.includes('runtime/frappe-version.json'),
-    'scripts/build.sh must read the version file rather than hardcoding a tag',
+    'scripts/build-runtime.mjs must read the version file rather than hardcoding a tag',
   )
-  const hardcoded = buildScript.match(/FRAPPE_VERSION="\$\{FRAPPE_VERSION:-v[\d.]+\}"/)
-  assert.equal(hardcoded, null, 'scripts/build.sh must not hardcode a Frappe tag')
+  assert.match(buildScript, /const version = process\.env\.FRAPPE_VERSION \|\| declared\.frappeVersion/,
+    'the build must use the environment override or declared version')
+  assert.doesNotMatch(buildScript, /['"]v\d+\.\d+\.\d+['"]/, 'the build must not contain a duplicate pinned version')
 })
 
 test('Dockerfile default matches the declared runtime version', async () => {

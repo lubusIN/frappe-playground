@@ -10,7 +10,7 @@ The worker reads `scope` and `fresh` from its own entry URL. Important module-le
 - `bootPromise`, shared by every channel initialization;
 - the generated app catalog;
 - `BrowserStateStore` for the scope; and
-- `appMutationPromise`, a promise chain that serializes app changes.
+- `requestExecutor`, a FIFO shared by requests, app changes, and their saves.
 
 If boot rejects, `bootPromise` is cleared so a later channel initialization can retry inside the same worker. Normal shell error handling generally reloads or disposes the worker.
 
@@ -31,7 +31,7 @@ The installed app list is reported in `runtime:ready` both to the Service Worker
 
 Every `channel:init` can attach a new Service Worker port to the already booted interpreter. This is the recovery mechanism: losing the router port does not require reloading Python or Frappe.
 
-`SerialRequestExecutor.attach()` installs a port listener. Each backend request contains a one-shot response port. Requests join an in-memory FIFO; only one handler call runs at a time, and the next item is scheduled with a zero-delay timer so control returns to the worker event loop.
+`SerialRequestExecutor.attach()` closes the previous receiving port and installs a listener on the replacement, retaining the existing queue. Each backend request contains a one-shot response port. Requests join an in-memory FIFO; only one handler call runs at a time, and the next item is scheduled with a zero-delay timer so control returns to the worker event loop.
 
 ## WSGI bridge memory discipline
 
@@ -41,13 +41,13 @@ Python consumes the complete WSGI iterable before returning bytes. Exceptions be
 
 ## Persistence policy
 
-After WSGI returns, `shouldPersistRequest` snapshots all methods except `GET`, `HEAD`, and `OPTIONS`. Those normally read-only methods still snapshot if Frappe returns `Set-Cookie`. Persistence runs before the response message is posted, so a successful mutating response implies that the save attempt has completed; the state store logs and absorbs its own IndexedDB save errors rather than turning the HTTP response into a failure.
+After WSGI returns, `shouldPersistRequest` snapshots all methods except `GET`, `HEAD`, and `OPTIONS`. Those normally read-only methods still snapshot if Frappe returns `Set-Cookie`. Persistence runs before the response message is posted, so a successful mutating response implies that the save completed. Storage errors produce a failed response.
 
 The snapshot first checkpoints SQLite’s WAL, then saves database bytes, cookie JSON, selected site files, installed app IDs, and metadata. This policy relies on applications respecting HTTP method semantics.
 
 ## App mutation transaction boundary
 
-Install/uninstall messages do not use the HTTP queue. They append to `appMutationPromise`. Every backend request awaits that promise before WSGI execution, preventing schema changes and application requests from overlapping.
+Install/uninstall messages enter the same executor as HTTP requests. Each operation includes its checkpoint and save, preventing schema changes, application requests, and snapshots from overlapping. A failed operation rejects its caller without poisoning the queue.
 
 Before mutation, the worker checkpoints and copies database bytes plus the installed-app list. Success checkpoints and saves the combined state. Failure restores those two items, removes sidecars, rewrites `apps.txt`, and returns an operation error. Downloaded/unpacked Python files and newly installed Python dependencies are outside this rollback boundary.
 

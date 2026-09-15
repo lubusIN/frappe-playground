@@ -34,3 +34,34 @@ test('Database state is cached in IndexedDB and seeded only on fresh sessions', 
     // Verify it didn't extract packages (virtual environment was cached)
     expect(logs.some(l => l.includes('[Worker] Restored virtual environment from IDBFS. Skipping extraction.'))).toBeTruthy();
 });
+
+test('an uncloneable save value leaves the previous IndexedDB snapshot intact', async ({ page }) => {
+  await page.goto('/docs/')
+  const result = await page.evaluate(async () => {
+    const { BrowserStateStore } = await import('/server/persistence.js')
+    const scope = `atomic-save-${crypto.randomUUID()}`
+    let bytes = new Uint8Array([1, 2, 3])
+    const options = { indexedDB, scope, getFs: () => ({
+      readFile: () => bytes,
+      writeFile: (_path, restored) => { bytes = restored },
+    }) }
+    try {
+      const store = new BrowserStateStore(options)
+      await store.preloadedState
+      await store.save('/site.db')
+      bytes = new Uint8Array([9, 9, 9])
+      let errorName
+      try { await store.save('/site.db', () => {}) } catch (error) { errorName = error.name }
+      const restored = new BrowserStateStore(options)
+      const outcome = await restored.load('/site.db')
+      return { errorName, status: outcome.status, bytes: [...bytes] }
+    } finally {
+      await new Promise((resolve, reject) => {
+        const request = indexedDB.deleteDatabase(`frappe_playground_db_${scope}`)
+        request.onsuccess = resolve
+        request.onerror = () => reject(request.error)
+      })
+    }
+  })
+  expect(result).toEqual({ errorName: 'DataCloneError', status: 'restored', bytes: [1, 2, 3] })
+})
