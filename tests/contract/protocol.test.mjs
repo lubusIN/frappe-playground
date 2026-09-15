@@ -13,8 +13,10 @@ import {
   createAppUninstallResultMessage,
   createAssociateClientMessage,
   createClaimClientsMessage,
+  createMessage,
   createClearOtherInstancesMessage,
   createInitChannelMessage,
+  createCloseChannelMessage,
   createRecoveryRequestMessage,
   createRuntimeErrorMessage,
   createRuntimeLogMessage,
@@ -33,6 +35,7 @@ test('control and runtime messages use the current protocol version', () => {
     createClaimClientsMessage(),
     createAssociateClientMessage('instance-1'),
     createInitChannelMessage('instance-1', { freshSession: true }),
+    createCloseChannelMessage('instance-1'),
     createClearOtherInstancesMessage('instance-1'),
     createRecoveryRequestMessage(),
     createRuntimeLogMessage('Loading Pyodide...', RuntimeStage.PYTHON),
@@ -54,6 +57,7 @@ test('control and runtime messages use the current protocol version', () => {
       ProtocolMessageType.CLAIM_CLIENTS,
       ProtocolMessageType.ASSOCIATE_CLIENT,
       ProtocolMessageType.INIT_CHANNEL,
+      ProtocolMessageType.CLOSE_CHANNEL,
       ProtocolMessageType.CLEAR_OTHER_INSTANCES,
       ProtocolMessageType.RECOVERY_REQUEST,
       ProtocolMessageType.RUNTIME_LOG,
@@ -142,4 +146,16 @@ test('protocol envelopes survive a MessageChannel structured clone', async () =>
   )
   channel.port1.close()
   channel.port2.close()
+})
+
+test('backend readers reject malformed headers and bodies before execution', () => {
+  assert.throws(() => readBackendRequest(createMessage(ProtocolMessageType.BACKEND_REQUEST, {
+    method: 'GET', path: '/', headers: { accept: 12 },
+  })), /header/)
+  assert.throws(() => readBackendResponse(createMessage(ProtocolMessageType.BACKEND_RESPONSE, {
+    status: 200, headers: [['broken']],
+  })), /header/)
+  assert.throws(() => readBackendResponse(createMessage(ProtocolMessageType.BACKEND_RESPONSE, {
+    status: 200, body: { invalid: true },
+  })), /body/)
 })

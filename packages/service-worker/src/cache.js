@@ -17,44 +17,62 @@ export class RuntimeAssetCache {
   async getCacheName() {
     if (this.currentCacheName) return this.currentCacheName
     if (!this.initCachePromise) this.initCachePromise = this.initializeCacheName()
-    await this.initCachePromise
-    return this.currentCacheName
+    try {
+      await this.initCachePromise
+      return this.currentCacheName
+    } finally {
+      this.initCachePromise = null
+    }
   }
 
   async initializeCacheName() {
     try {
       const cacheBuster = this.now()
-      const [assetsResponse, appCatalogResponse] = await Promise.all([
+      const [assetsResponse, appCatalogResponse, runtimeResponse] = await Promise.all([
         this.fetchFn(`/assets/assets.json?t=${cacheBuster}`),
         this.fetchFn(`/apps/catalog.json?t=${cacheBuster}`),
+        this.fetchFn(`/storage/manifest.json?t=${cacheBuster}`),
       ])
-      if (!assetsResponse.ok || !appCatalogResponse.ok) {
+      if (!assetsResponse.ok || !appCatalogResponse.ok || !runtimeResponse.ok) {
         throw new Error('Runtime cache manifests are unavailable.')
       }
       const identity = [
         await assetsResponse.text(),
         await appCatalogResponse.text(),
+        await runtimeResponse.text(),
       ].join('\n')
       const hash = hashString(identity)
       this.currentCacheName = `frappe-assets-${hash}`
 
-      for (const key of await this.cacheStorage.keys()) {
-        if (key.startsWith('frappe-assets-') && key !== this.currentCacheName) {
-          this.logger.log(`[SW] Deleting old cache: ${key}`)
-          await this.cacheStorage.delete(key)
+      try {
+        for (const key of await this.cacheStorage.keys()) {
+          if (key.startsWith('frappe-assets-') && key !== this.currentCacheName) {
+            this.logger.log(`[SW] Deleting old cache: ${key}`)
+            await this.cacheStorage.delete(key)
+          }
         }
+      } catch (error) {
+        this.logger.warn('[SW] Failed to prune old caches.', error)
       }
     } catch (error) {
       this.logger.warn('[SW] Failed to initialize the asset cache.', error)
-      this.currentCacheName = 'frappe-assets-fallback'
+      this.currentCacheName = null
     }
   }
 
   async respond(request, overrideUrl = null) {
-    const cache = await this.cacheStorage.open(await this.getCacheName())
+    let cache
     const cacheKey = overrideUrl || request.url
-    const cached = await cache.match(cacheKey)
-    if (cached) return cached
+    try {
+      const name = await this.getCacheName()
+      if (name) {
+        cache = await this.cacheStorage.open(name)
+        const cached = await cache.match(cacheKey)
+        if (cached) return cached
+      }
+    } catch (error) {
+      this.logger.warn('[SW] Asset cache read failed.', error)
+    }
 
     const requestOptions = {
       method: request.method,
@@ -65,8 +83,12 @@ export class RuntimeAssetCache {
       ? await this.fetchFn(overrideUrl, requestOptions)
       : await this.fetchFn(request)
 
-    if (response.ok || response.type === 'opaque') {
-      await cache.put(cacheKey, response.clone())
+    if (cache && (response.ok || response.type === 'opaque')) {
+      try {
+        await cache.put(cacheKey, response.clone())
+      } catch (error) {
+        this.logger.warn('[SW] Asset cache write failed.', error)
+      }
     }
     return response
   }

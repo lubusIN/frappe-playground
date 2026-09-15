@@ -1,9 +1,3 @@
-export function hashString(value) {
-  let hash = 5381
-  for (let i = 0; i < value.length; i++) hash = (hash * 33) ^ value.charCodeAt(i)
-  return (hash >>> 0).toString(16)
-}
-
 export async function fetchOk(fetchFn, url) {
   const response = await fetchFn(url)
   if (!response.ok) throw new Error(`Failed to fetch ${url}: ${response.status} ${response.statusText}`)
@@ -45,7 +39,11 @@ export async function installRuntimeFilesystem({
   const assetsResponse = await fetchFn(`${assetsEndpoint}/assets.json?t=${now()}`)
   if (!assetsResponse.ok) throw new Error('Failed to fetch the Frappe assets manifest.')
   const assetsText = await assetsResponse.text()
-  const currentHash = hashString(assetsText)
+  const manifest = await (await fetchOk(fetchFn, `${storageEndpoint}/manifest.json?t=${now()}`)).json()
+  const currentHash = manifest.files?.['frappe_runtime.tar.gz']?.sha256
+  if (typeof currentHash !== 'string' || !/^[a-f0-9]{64}$/i.test(currentHash)) {
+    throw new Error('Runtime manifest is missing the archive SHA-256.')
+  }
 
   log('Mounting virtual filesystem...')
   ensureDirectories(pyodide.FS, [environmentRoot])
@@ -69,7 +67,9 @@ export async function installRuntimeFilesystem({
 
   if (needsExtract) {
     log('Extracting fresh virtual filesystem...')
-    const archive = await fetchBinary(fetchFn, `${storageEndpoint}/frappe_runtime.tar.gz`)
+    const archive = await fetchBinary(fetchFn, `${storageEndpoint}/frappe_runtime.tar.gz?sha256=${currentHash}`)
+    // Remove files omitted by the new archive, including the old success marker.
+    clearDirectory(pyodide.FS, environmentRoot)
     pyodide.unpackArchive(archive, 'gztar', { extractDir: environmentRoot })
     pyodide.FS.writeFile(versionPath, currentHash)
     await syncFilesystem(pyodide.FS, false)
@@ -81,4 +81,17 @@ export async function installRuntimeFilesystem({
 
 export function writeSiteFiles(fs, files) {
   for (const [filePath, contents] of Object.entries(files)) fs.writeFile(filePath, contents)
+}
+
+function clearDirectory(fs, directory) {
+  for (const name of fs.readdir(directory)) {
+    if (name === '.' || name === '..') continue
+    const path = `${directory}/${name}`
+    if (fs.isDir(fs.lstat(path).mode)) {
+      clearDirectory(fs, path)
+      fs.rmdir(path)
+    } else {
+      fs.unlink(path)
+    }
+  }
 }

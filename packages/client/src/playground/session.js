@@ -46,6 +46,12 @@ export function createInstanceSession({
     attempts++
   } while (instances.some(i => i.id === id) && attempts < 10)
 
+  if (instances.some(instance => instance.id === id)) {
+    const base = id
+    let suffix = 1
+    while (instances.some(instance => instance.id === id)) id = `${base}-${suffix++}`
+  }
+
   const createdAt = now()
   const instance = {
     id,
@@ -103,13 +109,14 @@ export function renameInstanceSession(id, name, { storage = globalThis.localStor
   return instances[index]
 }
 
-export function deleteInstanceData(id, { indexedDB = globalThis.indexedDB } = {}) {
+export function deleteInstanceData(id, { indexedDB = globalThis.indexedDB, onBlocked = () => {} } = {}) {
   if (!indexedDB) return Promise.resolve()
   return new Promise((resolve, reject) => {
     const request = indexedDB.deleteDatabase(`frappe_playground_db_${id}`)
     request.onsuccess = () => resolve()
     request.onerror = () => reject(request.error)
-    request.onblocked = () => reject(new Error('Close the playground before deleting its data.'))
+    // A blocked deletion is still pending and cannot be cancelled.
+    request.onblocked = () => onBlocked()
   })
 }
 

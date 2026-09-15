@@ -1,3 +1,4 @@
+import { SCOPE_BOOTSTRAP_SOURCE } from './scope-bootstrap.js'
 import { scopeRedirectLocation, VIRTUAL_SITE_HOST } from './routing.js'
 
 export function rewriteVirtualSiteUrls(body, headers, origin, scope) {
@@ -20,11 +21,13 @@ export function rewriteVirtualSiteUrls(body, headers, origin, scope) {
 }
 
 function scopeBootstrapScript(scope, associationMessage, userId) {
-  const message = JSON.stringify(associationMessage).replace(/</g, '\\u003c')
-  const scopePrefix = JSON.stringify(`/scope:${encodeURIComponent(scope)}`)
-  const virtualSiteHost = JSON.stringify(VIRTUAL_SITE_HOST)
-  const virtualUserId = JSON.stringify(userId && userId !== 'Guest' ? userId : '')
-  return `<script data-playground-scope-bootstrap>(function(){var s=navigator.serviceWorker;var i=${virtualUserId};var d=document,p=d,h;while(p&&!h){p=Object.getPrototypeOf(p);h=p&&Object.getOwnPropertyDescriptor(p,'cookie')}if(i&&h&&h.get&&h.set){try{Object.defineProperty(d,'cookie',{configurable:true,get:function(){var c=h.get.call(d).split('; ').filter(function(v){return v.indexOf('user_id=')!==0}).join('; ');return(c?c+'; ':'')+'user_id='+encodeURIComponent(i)},set:function(v){if(String(v).indexOf('user_id=')===0)return v;return h.set.call(d,v)}})}catch(e){}}function a(){var w=s&&s.controller;if(w)w.postMessage(${message})}function u(v){if(!v)return v;var r=String(v);if(r.charAt(0)==='#'||/^(?:mailto|tel|javascript|data|blob):/i.test(r))return v;try{var x=new URL(r,location.href);if(x.origin!==location.origin){if(x.hostname!==${virtualSiteHost}&&x.hostname!==location.hostname)return v;x.protocol=location.protocol;x.host=location.host}if(x.pathname.indexOf('/scope:')===0)return x.href;x.pathname=${scopePrefix}+(x.pathname.charAt(0)==='/'?x.pathname:'/'+x.pathname);return x.href}catch(e){return v}}a();if(s){s.addEventListener('controllerchange',a);s.ready.then(a)}addEventListener('pageshow',a);var f=window.fetch;if(f)window.fetch=function(i,n){try{i=i instanceof Request?new Request(u(i.url),i):u(i)}catch(e){}return f.call(this,i,n)};var q=XMLHttpRequest.prototype.open;XMLHttpRequest.prototype.open=function(){if(arguments.length>1)arguments[1]=u(arguments[1]);return q.apply(this,arguments)};var o=window.open;window.open=function(){if(arguments.length)arguments[0]=u(arguments[0]);return o.apply(this,arguments)};addEventListener('click',function(e){var l=e.target&&e.target.closest&&e.target.closest('a[href]');if(l&&l.target==='_blank')l.href=u(l.href)},true);var p=location.pathname;var m=p.match(/^\\/scope:[^/]+(\\/.*|$)/);if(m){history.replaceState(history.state,'',(m[1]||'/')+location.search+location.hash)}})();</script>`
+  const options = JSON.stringify({
+    scopePrefix: `/scope:${encodeURIComponent(scope)}`,
+    virtualSiteHost: VIRTUAL_SITE_HOST,
+    associationMessage,
+    userId: userId && userId !== 'Guest' ? userId : '',
+  }).replace(/</g, '\\u003c')
+  return `<script data-playground-scope-bootstrap>${SCOPE_BOOTSTRAP_SOURCE}(${options});</script>`
 }
 
 export function rewriteScopedHtml(body, headers, scope, associationMessage, userId = '') {
@@ -50,6 +53,9 @@ export function createBackendProxy({
   readBackendResponse,
   origin,
   createAssociateClientMessage,
+  timeoutMs = 120000,
+  setTimeoutFn = setTimeout,
+  clearTimeoutFn = clearTimeout,
 }) {
   return async function callBackend({ request, instance, scope, path, query }) {
     if (!instance) {
@@ -76,26 +82,59 @@ export function createBackendProxy({
     const payload = createBackendRequest(backendRequest)
     return new Promise(resolve => {
       const channel = new MessageChannelClass()
-      channel.port1.onmessage = event => {
-        const { status, headers, body } = readBackendResponse(event.data)
-        const responseHeaders = new Headers(headers)
-        responseHeaders.set('Cross-Origin-Resource-Policy', 'same-origin')
-        responseHeaders.set('Cross-Origin-Embedder-Policy', 'require-corp')
-        responseHeaders.set('Cross-Origin-Opener-Policy', 'same-origin')
-        const userId = responseHeaders.get('X-Playground-User-Id') || ''
-        responseHeaders.delete('X-Playground-User-Id')
-        scopeRedirectLocation(responseHeaders, scope, origin)
-        const browserBody = rewriteVirtualSiteUrls(body, responseHeaders, origin, scope)
-        const responseBody = rewriteScopedHtml(
-          browserBody,
-          responseHeaders,
-          scope,
-          createAssociateClientMessage(scope),
-          userId,
-        )
-        resolve(new Response(responseBody, { status, headers: responseHeaders }))
+      let settled = false
+      let timeout
+      const finish = response => {
+        if (settled) return
+        settled = true
+        clearTimeoutFn(timeout)
+        request.signal.removeEventListener('abort', abort)
+        channel.port1.onmessage = null
+        channel.port1.onmessageerror = null
+        channel.port1.close?.()
+        channel.port2.close?.()
+        resolve(response)
       }
-      instance.port.postMessage(payload, [channel.port2])
+      const unavailable = () => finish(new Response('Runtime connection unavailable', {
+        status: 503, headers: { 'Retry-After': '1' },
+      }))
+      const abort = () => finish(new Response('Request aborted', { status: 499 }))
+      timeout = setTimeoutFn(() => finish(new Response('Runtime request timed out', {
+        status: 504,
+      })), timeoutMs)
+      request.signal.addEventListener('abort', abort, { once: true })
+      channel.port1.onmessageerror = unavailable
+      channel.port1.onmessage = event => {
+        try {
+          const { status, headers, body } = readBackendResponse(event.data)
+          const responseHeaders = new Headers(headers)
+          responseHeaders.set('Cross-Origin-Resource-Policy', 'same-origin')
+          responseHeaders.set('Cross-Origin-Embedder-Policy', 'require-corp')
+          responseHeaders.set('Cross-Origin-Opener-Policy', 'same-origin')
+          const userId = responseHeaders.get('X-Playground-User-Id') || ''
+          responseHeaders.delete('X-Playground-User-Id')
+          scopeRedirectLocation(responseHeaders, scope, origin)
+          const browserBody = rewriteVirtualSiteUrls(body, responseHeaders, origin, scope)
+          const responseBody = rewriteScopedHtml(
+            browserBody,
+            responseHeaders,
+            scope,
+            createAssociateClientMessage(scope),
+            userId,
+          )
+          finish(new Response([101, 204, 205, 304].includes(status) ? null : responseBody, {
+            status, headers: responseHeaders,
+          }))
+        } catch (_) {
+          unavailable()
+        }
+      }
+      if (request.signal.aborted) return abort()
+      try {
+        instance.port.postMessage(payload, [channel.port2])
+      } catch (_) {
+        unavailable()
+      }
     })
   }
 }

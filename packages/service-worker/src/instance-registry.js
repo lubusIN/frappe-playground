@@ -9,29 +9,27 @@ export class InstanceRegistry {
   }
 
   register(scope, port, clientId) {
+    this.instances.get(scope)?.port.close?.()
     const instance = { port, ready: false, clientId }
     this.instances.set(scope, instance)
     if (clientId) this.clientScopes.set(clientId, scope)
     return instance
   }
 
+  retire(scope, clientId) {
+    const instance = this.instances.get(scope)
+    if (!instance || (clientId && instance.clientId !== clientId)) return false
+    instance.port.close?.()
+    this.instances.delete(scope)
+    for (const [id, associatedScope] of this.clientScopes) {
+      if (associatedScope === scope) this.clientScopes.delete(id)
+    }
+    return true
+  }
+
   get(scope) {
     if (!scope) return null
     return this.instances.get(scope) || null
-  }
-
-  clearExcept(keepScope) {
-    const cleared = []
-    for (const scope of this.instances.keys()) {
-      if (scope !== keepScope) {
-        this.instances.delete(scope)
-        cleared.push(scope)
-      }
-    }
-    for (const [clientId, scope] of this.clientScopes) {
-      if (scope !== keepScope) this.clientScopes.delete(clientId)
-    }
-    return cleared
   }
 
   associateClient(clientId, scope) {

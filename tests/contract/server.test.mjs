@@ -6,7 +6,7 @@ import {
   FRAPPE_MOCKS_SOURCE,
   WSGI_SERVER_SOURCE,
 } from '../../artifacts/generated/python-sources.js'
-import { ensureDirectories, hashString } from '../../packages/server/src/filesystem.js'
+import { ensureDirectories } from '../../packages/server/src/filesystem.js'
 import {
   PythonBridge,
   SerialRequestExecutor,
@@ -46,7 +46,7 @@ function memoryIndexedDb() {
           put: (value, key) => values.set(key, value),
         }),
       }
-      if (mode === 'readwrite') queueMicrotask(() => transaction.oncomplete?.())
+      queueMicrotask(() => transaction.oncomplete?.())
       return transaction
     },
     close() {},
@@ -81,7 +81,7 @@ test('source-only Python packages are bundled instead of sent to micropip', asyn
   assert.match(dockerfile, /PyQRCode==1\.2\.1/)
 })
 
-test('runtime filesystem utilities are deterministic and tolerate existing directories', () => {
+test('runtime directory creation tolerates existing directories', () => {
   const created = []
   const fs = {
     mkdir(path) {
@@ -91,8 +91,6 @@ test('runtime filesystem utilities are deterministic and tolerate existing direc
   }
   ensureDirectories(fs, ['/exists', '/new'])
   assert.deepEqual(created, ['/new'])
-  assert.equal(hashString('runtime-manifest'), hashString('runtime-manifest'))
-  assert.notEqual(hashString('runtime-manifest'), hashString('other-manifest'))
 })
 
 test('uploaded site files are snapshotted and restored within allowed roots', () => {
@@ -155,7 +153,7 @@ test('installed app metadata is persisted with its playground database', async (
     scope: 'instance-1',
     getFs: () => ({ writeFile: (path, value) => restoredFiles.set(path, value) }),
   })
-  assert.equal(await restored.load('/restored.db'), true)
+  assert.deepEqual(await restored.load('/restored.db'), { status: 'restored' })
   assert.deepEqual(restored.installedApps, ['wiki'])
   assert.deepEqual(restoredFiles.get('/restored.db'), new Uint8Array([1, 2, 3]))
 })
@@ -349,4 +347,104 @@ test('serial executor responds through the request MessagePort and persists muta
   await new Promise(resolve => setTimeout(resolve, 0))
   assert.equal(persisted, 1)
   assert.deepEqual(responses, [{ status: 200, headers: [], body: 'ok' }])
+})
+
+test('runtime queue serializes mutations with saves across channel replacement and survives errors', async () => {
+  let finishSave
+  const saving = new Promise(resolve => { finishSave = resolve })
+  const events = []
+  const executor = new SerialRequestExecutor({
+    decodeRequest: value => value, encodeResponse: value => value,
+    encodeError: error => ({ status: 500, body: error.message }),
+    handleRequest: async () => { events.push('request'); return { status: 200, headers: [] } },
+    persist: async () => { events.push('saving'); await saving; events.push('saved') },
+    schedule: callback => callback(), logger: { log() {} },
+  })
+  const oldPort = { close() { events.push('closed') } }
+  executor.attach(oldPort)
+  const request = oldPort.onmessage({ data: { method: 'POST' }, ports: [{ postMessage() {} }] })
+  await Promise.resolve()
+  executor.attach({})
+  const mutation = executor.enqueue(() => { events.push('mutation'); throw new Error('install failed') })
+  const failed = assert.rejects(mutation, /install failed/)
+  const next = executor.enqueue(() => events.push('next'))
+  assert.deepEqual(events, ['request', 'saving', 'closed'])
+  finishSave()
+  await Promise.all([request, failed, next])
+  assert.deepEqual(events, ['request', 'saving', 'closed', 'saved', 'mutation', 'next'])
+  assert.equal(oldPort.onmessage, null)
+})
+
+test('failed Python execution releases its request proxy and global reference', () => {
+  const cleaned = []
+  const bridge = new PythonBridge({ pyodide: {
+    toPy: () => ({ destroy: () => cleaned.push('proxy') }),
+    globals: { set() {}, delete: name => cleaned.push(name) },
+    runPython() { throw new Error('Python failed') },
+  } })
+  assert.throws(() => bridge.handleRequest({ method: 'GET' }), /Python failed/)
+  assert.deepEqual(cleaned, ['current_req', 'proxy'])
+})
+
+test('state saves reject transaction aborts and quota errors and close the database', async () => {
+  for (const error of [null, new Error('Quota exceeded')]) {
+    const state = new BrowserStateStore({ indexedDB: memoryIndexedDb(), scope: 'test',
+      getFs: () => ({ readFile: () => new Uint8Array([1]) }),
+    })
+    await state.preloadedState
+    let closed = false
+    state.open = async () => ({
+      transaction() {
+        const transaction = { error, objectStore: () => ({ put() {} }) }
+        queueMicrotask(() => transaction.onabort())
+        return transaction
+      },
+      close() { closed = true },
+    })
+    await assert.rejects(state.save('/site.db'), error ? /Quota exceeded/ : /aborted/)
+    assert.equal(closed, true)
+  }
+})
+
+test('a failed checkpoint does not remove SQLite sidecars', async () => {
+  const { checkpointDatabase } = await import('../../packages/server/src/persistence.js')
+  let removed = false
+  await assert.rejects(checkpointDatabase({
+    runPythonAsync: async () => { throw new Error('checkpoint busy') },
+    FS: { unlink() { removed = true } },
+  }, '/site.db'), /checkpoint busy/)
+  assert.equal(removed, false)
+})
+
+test('synchronous save errors abort queued writes instead of committing partial state', async () => {
+  const state = new BrowserStateStore({ indexedDB: memoryIndexedDb(), scope: 'test',
+    getFs: () => ({ readFile: () => new Uint8Array([1]) }),
+  })
+  await state.preloadedState
+  const stored = new Map([['site1.db', 'previous database']])
+  let closed = false
+  state.open = async () => ({
+    transaction() {
+      const queued = new Map()
+      let aborted = false
+      const transaction = {
+        abort() { aborted = true; queueMicrotask(() => transaction.onabort()) },
+        objectStore: () => ({ put(value, key) {
+          if (key === 'cookie_jar.json') throw new DOMException('Not cloneable', 'DataCloneError')
+          queued.set(key, value)
+        } }),
+      }
+      queueMicrotask(() => {
+        if (!aborted) {
+          for (const [key, value] of queued) stored.set(key, value)
+          transaction.oncomplete()
+        }
+      })
+      return transaction
+    },
+    close() { closed = true },
+  })
+  await assert.rejects(state.save('/site.db'), { name: 'DataCloneError' })
+  assert.equal(stored.get('site1.db'), 'previous database')
+  assert.equal(closed, true)
 })

@@ -135,7 +135,7 @@ import Button from 'frappe-ui/components/Button/Button.vue'
 import Dialog from 'frappe-ui/components/Dialog/Dialog.vue'
 import Tabs from 'frappe-ui/components/Tabs/Tabs.vue'
 import FormControl from 'frappe-ui/components/FormControl/FormControl.vue'
-import { User, Key, CheckCircle2, Rocket, Coffee, X, HelpCircle, Bug, Heart, Headphones, ArrowRight, Copy, Check } from '@lucide/vue'
+import { User, Key, CheckCircle2, Rocket, Coffee, X, Bug, Heart, Headphones, ArrowRight, Copy, Check, BookOpen } from '@lucide/vue'
 import GithubIcon from './GithubIcon.vue'
 import BrandIcon from './BrandIcon.vue'
 import { LOGIN_DEMO } from '../playground/config.js'
@@ -180,6 +180,7 @@ async function copyPassword(text) {
 }
 
 const aboutLinks = [
+  { label: 'Documentation', icon: BookOpen, url: '/docs/' },
   { label: 'GitHub', icon: GithubIcon, url: 'https://github.com/lubusIN/frappe-playground' },
   { label: 'Submit Feedback', icon: Bug, url: 'https://github.com/lubusIN/frappe-playground/issues' },
   { label: 'Buy us a coffee', icon: Heart, url: 'https://github.com/sponsors/lubusIN' },

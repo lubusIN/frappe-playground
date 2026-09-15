@@ -52,4 +52,22 @@ test.describe('Boot Flags (URL Configuration)', () => {
         // We should see the User list view instead of the desk
         await expect(frame.locator('.page-title').filter({ hasText: 'User' })).toBeVisible({ timeout: 60000 });
     });
+    test('?apps installs without waiting for the dialog catalog request', async ({ page }) => {
+        await page.addInitScript(() => {
+            if (window !== window.top) return;
+            const originalFetch = window.fetch.bind(window);
+            window.releaseDialogCatalog = () => { window.fetch = originalFetch; };
+            window.fetch = (input, options) => {
+                const url = new URL(input instanceof Request ? input.url : input, location.href);
+                if (url.pathname === '/apps/catalog.json') return new Promise(() => {});
+                return originalFetch(input, options);
+            };
+        });
+        await page.goto(`/?name=BootApp_${Date.now()}&apps=frappe_vault&onboarding=0`);
+        await expect(page.locator('#loading-screen')).toBeHidden({ timeout: 600000 });
+        await expect(page.locator('#frappe-desk')).toBeVisible();
+        await page.evaluate(() => window.releaseDialogCatalog());
+        await page.getByRole('button', { name: 'Manage apps' }).click();
+        await expect(page.getByTestId('uninstall-app-frappe_vault')).toBeVisible({ timeout: 30000 });
+    });
 });
