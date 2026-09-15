@@ -19,6 +19,10 @@ events between the page, Service Worker, and Pyodide server worker.
 - `index.html` provides the static loading shell and inline pre-bundle recovery.
 - `src/main.js` mounts the Vue application.
 - `src/App.vue` composes UI state and the playground controller.
+- `src/composables/use-playground-lifecycle.js` coordinates cancellable boot and progress.
+- `src/composables/use-frame-navigation.js` owns iframe synchronization and DOM fixes.
+- `src/composables/use-instance-manager.js` owns instance actions and pending deletion state.
+- `src/composables/use-app-manager.js` shares catalog loading and app-operation state.
 - `src/components/` contains presentation components.
 - `src/playground/controller.js` owns worker lifecycle and channel wiring.
 - `src/playground/apps.js` loads and validates the published app catalog.

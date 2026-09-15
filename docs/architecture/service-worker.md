@@ -52,12 +52,18 @@ Once a scope is known, backend dispatch waits up to 90 seconds for its runtime-r
 
 ## Runtime asset cache
 
-`RuntimeAssetCache` fetches cache-busted `assets/assets.json` and `apps/catalog.json`, concatenates their text, and hashes it with the repository’s lightweight string hash. That value names `frappe-assets-<hash>`. Older caches with that prefix are removed.
+`RuntimeAssetCache` fetches cache-busted `assets/assets.json`, `apps/catalog.json`, and `storage/manifest.json`, concatenates their text, and hashes it with the repository’s lightweight string hash. That value names `frappe-assets-<hash>`. Older caches with that prefix are removed.
 
-Reads are cache-first. Successful and opaque responses are cloned into the cache. If the identity manifests cannot be fetched, the worker logs a warning and uses `frappe-assets-fallback`. Documentation bypasses this cache so docs-only deployments update independently.
+Reads are cache-first. Successful and opaque responses are cloned into the cache. If the identity manifests cannot be fetched, the worker logs a warning, serves the network response without caching, and retries identity initialization on a later request. Cache open, read, write, and pruning failures also preserve successful network responses. Documentation bypasses this cache so docs-only deployments update independently.
 
 ## Backend response adaptation
 
 The backend proxy uses one response `MessageChannel` per HTTP request. It injects the virtual site header, translates response headers, scopes eligible redirects, rewrites `site1` URLs in textual bodies, and injects the earliest possible HTML bootstrap script. `Content-Length` is removed whenever rewriting changes the body.
 
 The bootstrap re-associates its browser client after controller changes and page restores. It scopes programmatic `fetch`, XHR, `window.open`, and selected new-tab anchors while leaving fragments, `mailto`, `tel`, JavaScript, data, blob, and unrelated external origins alone.
+
+## Channel cleanup and request deadlines
+
+A `channel:close` message retires a scope only when sent by its owning client. Registering a replacement channel closes the old port. Backend responses close their per-request ports on success, malformed replies, send errors, cancellation, or timeout. Unanswered requests return 504 after two minutes; connection errors return 503.
+
+The HTML bootstrap is authored as a self-contained function in `scope-bootstrap.js`. Source generation serializes it into a module for publication, preserving readable source for URL-scoping and cookie-virtualization changes.

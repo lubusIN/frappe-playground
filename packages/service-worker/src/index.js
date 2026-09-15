@@ -3,7 +3,8 @@ import {
   ProtocolMessageType,
   createAssociateClientMessage,
   createRecoveryRequestMessage,
-  isProtocolMessage,
+  isControlMessage,
+  hasMessagePort,
 } from '/protocol/messages.js'
 import {
   createBackendRequest,
@@ -48,31 +49,37 @@ self.addEventListener('install', () => self.skipWaiting())
 self.addEventListener('activate', event => event.waitUntil(self.clients.claim()))
 
 self.addEventListener('message', event => {
-  if (isProtocolMessage(event.data, ProtocolMessageType.ASSOCIATE_CLIENT)) {
+  if (isControlMessage(event.data, ProtocolMessageType.CLOSE_CHANNEL)) {
+    if (event.source?.id) instances.retire(event.data.payload.scope, event.source.id)
+    return
+  }
+
+  if (isControlMessage(event.data, ProtocolMessageType.ASSOCIATE_CLIENT)) {
     instances.associateClient(event.source?.id, event.data.payload.scope)
     return
   }
 
-  if (isProtocolMessage(event.data, ProtocolMessageType.CLEAR_OTHER_INSTANCES)) {
+  if (isControlMessage(event.data, ProtocolMessageType.CLEAR_OTHER_INSTANCES)) {
     // Compatibility with older clients. A service worker is shared by every
     // tab on the origin, so one client must never evict another playground.
     console.warn('[SW] Ignoring deprecated CLEAR_OTHER_INSTANCES message.')
     return
   }
 
-  if (isProtocolMessage(event.data, ProtocolMessageType.CLAIM_CLIENTS)) {
+  if (isControlMessage(event.data, ProtocolMessageType.CLAIM_CLIENTS)) {
     // Compatibility with older clients. Claiming belongs to the activate
     // event; a waiting worker throws InvalidStateError if it calls claim().
     console.warn('[SW] Ignoring deprecated CLAIM_CLIENTS message.')
     return
   }
 
-  if (isProtocolMessage(event.data, ProtocolMessageType.INIT_CHANNEL)) {
+  if (isControlMessage(event.data, ProtocolMessageType.INIT_CHANNEL)) {
+    if (!hasMessagePort(event)) return
     const scope = event.data.payload.scope
     const clientId = event.source?.id || event.data.payload.clientId
     const instance = instances.register(scope, event.ports[0], clientId)
     instance.port.onmessage = messageEvent => {
-      if (isProtocolMessage(messageEvent.data, ProtocolMessageType.RUNTIME_READY)) {
+      if (isControlMessage(messageEvent.data, ProtocolMessageType.RUNTIME_READY)) {
         console.log(`[SW] Received READY from worker: ${scope}`)
         instance.ready = true
       }

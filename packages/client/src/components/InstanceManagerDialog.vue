@@ -4,7 +4,7 @@
     size="lg"
     :title="dialogTitle"
     :message="dialogMessage"
-    @update:open="$emit('update:modelValue', $event)"
+    @update:open="!busy && $emit('update:modelValue', $event)"
   >
     <template #title>
       <div class="flex items-center gap-2">
@@ -21,8 +21,9 @@
       </div>
     </template>
     <template #actions>
+      <p v-if="error || busy" role="status" class="w-full text-sm text-ink-gray-7">{{ error || 'Removing playground data…' }}</p>
       <form
-        v-if="creating"
+        v-if="creating && !busy"
         class="w-full space-y-4 text-left"
         @submit.prevent="createInstance"
       >
@@ -40,7 +41,7 @@
       </form>
 
       <form
-        v-else-if="renaming"
+        v-else-if="renaming && !busy"
         class="w-full space-y-4 text-left"
         @submit.prevent="confirmRename"
       >
@@ -56,14 +57,14 @@
         </div>
       </form>
 
-      <div v-else-if="pendingAction" class="flex w-full justify-end gap-2">
+      <div v-else-if="pendingAction && !busy" class="flex w-full justify-end gap-2">
         <Button variant="subtle" @click="pendingAction = ''">Cancel</Button>
         <Button theme="red" variant="solid" @click="confirmAction">
           {{ pendingAction === 'delete' ? 'Delete' : 'Reset' }}
         </Button>
       </div>
 
-      <div v-else class="-mt-5 w-full space-y-3 text-left">
+      <div v-else-if="!busy" class="-mt-5 w-full space-y-3 text-left">
         <ListView
           class="h-64 !w-full hide-list-header"
           :columns="columns"
@@ -134,6 +135,8 @@ import { ListView } from 'frappe-ui/experimental'
 import TextInput from 'frappe-ui/components/TextInput/TextInput.vue'
 
 const props = defineProps({
+  busy: { type: Boolean, default: false },
+  error: { type: String, default: '' },
   modelValue: { type: Boolean, required: true },
   instances: { type: Array, default: () => [] },
   activeInstanceId: { type: String, default: '' },
@@ -156,8 +159,8 @@ const renaming = ref(false)
 const renameValue = ref('')
 
 defineExpose({
-  startCreating: () => { 
-    creating.value = true 
+  startCreating: () => {
+    creating.value = true
     directCreate.value = true
   }
 })

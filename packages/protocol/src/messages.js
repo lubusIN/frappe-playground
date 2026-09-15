@@ -7,6 +7,7 @@ export const ProtocolMessageType = Object.freeze({
   ASSOCIATE_CLIENT: 'service-worker:associate-client',
   CLEAR_OTHER_INSTANCES: 'service-worker:clear-other-instances',
   INIT_CHANNEL: 'channel:init',
+  CLOSE_CHANNEL: 'channel:close',
   RECOVERY_REQUEST: 'channel:recovery-request',
   RUNTIME_LOG: 'runtime:log',
   RUNTIME_READY: 'runtime:ready',
@@ -95,6 +96,12 @@ export function createInitChannelMessage(scope, options = {}) {
   return createMessage(ProtocolMessageType.INIT_CHANNEL, payload)
 }
 
+export function createCloseChannelMessage(scope) {
+  return createMessage(ProtocolMessageType.CLOSE_CHANNEL, {
+    scope: requireString(scope, 'scope'),
+  })
+}
+
 export function createRecoveryRequestMessage() {
   return createMessage(ProtocolMessageType.RECOVERY_REQUEST)
 }
@@ -158,4 +165,51 @@ export function createAppUninstallResultMessage(requestId, appId, options = {}) 
   }
   if (options.error) payload.error = requireString(options.error, 'error')
   return createMessage(ProtocolMessageType.APP_UNINSTALL_RESULT, payload)
+}
+
+// Validate untrusted control payloads before consumers read fields or mutate state.
+// Keep isProtocolMessage as the envelope predicate for backend request readers.
+export function isControlMessage(value, type) {
+  if (!isProtocolMessage(value, type)) return false
+  const payload = value.payload
+  const string = field => typeof payload?.[field] === 'string' && payload[field].length > 0
+  const object = payload && typeof payload === 'object' && !Array.isArray(payload)
+  switch (value.type) {
+    case ProtocolMessageType.CLAIM_CLIENTS:
+    case ProtocolMessageType.RECOVERY_REQUEST:
+      return payload === undefined || Boolean(object)
+    case ProtocolMessageType.RUNTIME_READY:
+      return payload === undefined || Boolean(object && (payload.installedApps === undefined
+        || (Array.isArray(payload.installedApps)
+          && payload.installedApps.every(app => typeof app === 'string' && app.length > 0))))
+    case ProtocolMessageType.INIT_CHANNEL:
+      return Boolean(object && string('scope')
+        && (payload.freshSession === undefined || typeof payload.freshSession === 'boolean')
+        && (payload.clientId === undefined || string('clientId')))
+    case ProtocolMessageType.ASSOCIATE_CLIENT:
+    case ProtocolMessageType.CLOSE_CHANNEL:
+    case ProtocolMessageType.CLEAR_OTHER_INSTANCES:
+      return Boolean(object && string('scope'))
+    case ProtocolMessageType.RUNTIME_ERROR:
+      return Boolean(object && string('message'))
+    case ProtocolMessageType.RUNTIME_LOG:
+      return Boolean(object && string('message') && runtimeStages.has(payload.stage)
+        && progressStatuses.has(payload.status))
+    case ProtocolMessageType.APP_INSTALL:
+    case ProtocolMessageType.APP_UNINSTALL:
+      return Boolean(object && string('requestId') && string('appId'))
+    case ProtocolMessageType.APP_INSTALL_RESULT:
+    case ProtocolMessageType.APP_UNINSTALL_RESULT: {
+      const field = value.type === ProtocolMessageType.APP_INSTALL_RESULT ? 'installed' : 'uninstalled'
+      return Boolean(object && string('requestId') && string('appId')
+        && typeof payload[field] === 'boolean' && (payload.error === undefined || string('error')))
+    }
+    default:
+      return false
+  }
+}
+
+export function hasMessagePort(event) {
+  const port = event.ports?.[0]
+  return Boolean(port && typeof port.postMessage === 'function' && typeof port.close === 'function')
 }

@@ -28,7 +28,10 @@ frappe-playground/
 
 - `packages/client/index.html`: static shell and legacy-worker recovery.
 - `packages/client/src/main.js`: Vue mount.
-- `packages/client/src/App.vue`: UI composition and boot-flag coordination.
+- `packages/client/src/App.vue`: UI composition and instance actions.
+- `packages/client/src/composables/use-playground-lifecycle.js`: cancellable boot and boot-flag coordination.
+- `packages/client/src/composables/use-frame-navigation.js`: iframe navigation and compatibility fixes.
+- `packages/client/src/composables/use-app-manager.js`: shared catalog loading and app operations.
 - `packages/client/src/playground/controller.js`: worker lifecycle and channel wiring.
 - `session.js`, `apps.js`, `iframe-navigation.js`: instance, catalog, and scope behavior.
 
@@ -64,3 +67,8 @@ See [Server worker internals](/architecture/server-worker) for boot composition,
 - `version.js`: protocol version.
 
 Each package README states its responsibilities, boundaries, and focused verification commands. Start there before changing a package.
+
+- `packages/client/src/composables/use-instance-manager.js`: instance actions and initial session selection.
+- `packages/client/src/playground/boot-options.js`, `site-api.js`, and `boot-locale.js`: URL parsing, scoped API requests, and optional locale lookup with a 2.5-second deadline.
+- `scripts/publication.mjs`: shared public file mapping for development, assembly, and verification.
+- `scripts/build-runtime.mjs`: stages Docker output, checks its manifest and catalog, and promotes the verified directory. `transactional-directory.mjs` retains the previous directory on build failure and rolls back a failed promotion.

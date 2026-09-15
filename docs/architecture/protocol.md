@@ -22,7 +22,7 @@ Use `packages/protocol/src/version.js` as the source of truth for the numeric ve
 
 | Family | Messages | Purpose |
 | --- | --- | --- |
-| Worker lifecycle | `channel:init`, `channel:recovery-request` | Transfer/recreate instance channels |
+| Worker lifecycle | `channel:init`, `channel:close`, `channel:recovery-request` | Transfer, retire, or recreate instance channels |
 | Client association | `service-worker:associate-client` | Bind an iframe client to an instance scope |
 | Runtime lifecycle | `runtime:log`, `runtime:ready`, `runtime:error` | Structured boot progress and outcome |
 | App operations | `app:install`, `app:install-result`, `app:uninstall`, `app:uninstall-result` | Request-correlated catalog mutations |
@@ -45,3 +45,5 @@ The protocol package also owns scoped-URL parsing and optional-app catalog valid
 3. Preserve transferable objects such as ports and request bodies.
 4. Add contract tests for valid, invalid, old, and recovery behavior.
 5. Run `npm run test:contract` before browser tests.
+
+Control receivers validate message-specific payloads with `isControlMessage` before reading fields. Channel initialization also requires a transferred MessagePort. Backend readers validate header shapes and text/binary bodies. The envelope-only `isProtocolMessage` predicate remains available; it does not imply payload validity. Protocol version 2 and deprecated message recognition are preserved.

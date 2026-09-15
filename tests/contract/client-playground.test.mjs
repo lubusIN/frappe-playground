@@ -122,7 +122,7 @@ test('instance catalog creates and selects independent playgrounds', () => {
   assert.equal(first.name, 'Accounting')
   assert.equal(second.name, 'Playground 2')
   assert.equal(storage.getItem(PLAYGROUND_SESSION_KEY), second.id)
-  
+
   const sessions = listInstanceSessions({ storage }).map(instance => instance.id)
   assert.deepEqual(sessions, [first.id, second.id])
 
@@ -132,7 +132,7 @@ test('instance catalog creates and selects independent playgrounds', () => {
   assert.equal(selectedFirst.createdAt, 100)
   assert.equal(selectedFirst.lastOpenedAt, 200)
   assert.equal(selectedFirst.freshSession, false)
-  
+
   assert.equal(storage.getItem(PLAYGROUND_SESSION_KEY), first.id)
   assert.equal(selectInstanceSession('missing', { storage }), null)
 })
@@ -178,7 +178,7 @@ test('instances can be renamed without changing their identity', () => {
   assert.equal(renamed.createdAt, 100)
   assert.equal(renamed.lastOpenedAt, 100)
   assert.equal(storage.getItem(PLAYGROUND_SESSION_KEY), first.id)
-  
+
   assert.throws(() => renameInstanceSession(first.id, ' ', { storage }), {
     name: 'TypeError',
   })
@@ -314,7 +314,7 @@ test('the controller owns lifecycle wiring and emits structured progress', async
     updateViaCache: 'none',
   })
   assert.equal(FakeWorker.instance.options.type, 'module')
-  
+
   const workerUrlObj = new URL(FakeWorker.instance.url, 'http://localhost')
   assert.equal(workerUrlObj.pathname, '/worker.js')
   assert.equal(workerUrlObj.searchParams.get('build'), 'test')
@@ -418,4 +418,124 @@ test('an active registration can boot a hard-reloaded uncontrolled page', () => 
     controller.expectedServiceWorker({ controller: null }, { active }),
     active,
   )
+})
+
+test('repeated name collisions still allocate isolated storage identities', () => {
+  const storage = memoryStorage()
+  const ids = Array.from({ length: 15 }, () => createInstanceSession({ storage, random: () => 0 }).id)
+  assert.equal(new Set(ids).size, ids.length)
+})
+
+test('disposing during registration cancels startup and readiness without creating a worker', async () => {
+  let completeRegistration
+  let workers = 0
+  const listeners = new Set()
+  const controller = new PlaygroundController({
+    session: { id: 'test', freshSession: true },
+    navigator: { serviceWorker: {
+      controller: null,
+      addEventListener: (_type, listener) => listeners.add(listener),
+      removeEventListener: (_type, listener) => listeners.delete(listener),
+      register: () => new Promise(resolve => { completeRegistration = resolve }),
+    } },
+    WorkerClass: class { constructor() { workers++ } },
+  })
+  const start = controller.start()
+  assert.equal(controller.start(), start)
+  const stopped = assert.rejects(start, { name: 'AbortError' })
+  const ready = assert.rejects(controller.waitUntilReady(), { name: 'AbortError' })
+  controller.dispose()
+  completeRegistration({ active: { postMessage() {} } })
+  await Promise.all([stopped, ready])
+  assert.equal(workers, 0)
+  assert.equal(listeners.size, 0)
+})
+
+test('disposing during activation removes the waiting listener', async () => {
+  const listeners = new Set()
+  const serviceWorker = {
+    controller: { scriptURL: 'http://localhost/sw.js' },
+    addEventListener: (_type, listener) => listeners.add(listener),
+    removeEventListener: (_type, listener) => listeners.delete(listener),
+    register: async () => ({}),
+  }
+  const controller = new PlaygroundController({ navigator: { serviceWorker },
+    location: { href: 'http://localhost/' }, session: { id: 'test' },
+  })
+  const stopped = assert.rejects(controller.start(), { name: 'AbortError' })
+  await new Promise(resolve => setTimeout(resolve, 0))
+  assert.equal(listeners.size, 2)
+  controller.dispose()
+  await stopped
+  assert.equal(listeners.size, 0)
+})
+
+test('catalog loads are shared and a failed load can be retried', async () => {
+  const { useAppManager } = await import('../../packages/client/src/composables/use-app-manager.js')
+  let attempts = 0
+  const manager = useAppManager(() => null, { loadCatalog: async () => {
+    if (++attempts === 1) throw new Error('offline')
+    return { apps: [{ id: 'wiki' }] }
+  } })
+  const first = manager.ensureCatalog()
+  assert.equal(manager.ensureCatalog(), first)
+  await assert.rejects(first, /offline/)
+  await manager.ensureCatalog()
+  assert.equal(attempts, 2)
+  assert.deepEqual(manager.availableApps.value, [{ id: 'wiki' }])
+  assert.equal(manager.appCatalogLoading.value, false)
+})
+
+test('an old app operation cannot clear the next instance operation or reload its page', async () => {
+  const { useAppManager } = await import('../../packages/client/src/composables/use-app-manager.js')
+  let finishOld
+  let finishNew
+  let reloads = 0
+  const old = { installApp: () => new Promise(resolve => { finishOld = resolve }), listInstalledApps: () => ['wiki'] }
+  const next = { installApp: () => new Promise(resolve => { finishNew = resolve }), listInstalledApps: () => ['crm'] }
+  let active = old
+  const manager = useAppManager(() => active, { reload: () => reloads++ })
+  const first = manager.installApp('wiki')
+  active = next
+  manager.resetAppState()
+  const second = manager.installApp('crm')
+  finishOld()
+  await first
+  assert.equal(manager.installingAppId.value, 'crm')
+  assert.equal(reloads, 0)
+  finishNew()
+  await second
+  assert.equal(manager.installingAppId.value, '')
+  assert.equal(reloads, 1)
+})
+
+test('a synchronous startup failure does not cache a rejected promise across retries', async () => {
+  const controller = new PlaygroundController({ navigator: {} })
+  const first = controller.start()
+  await assert.rejects(first, /Service workers are unavailable/)
+  const second = controller.start()
+  await assert.rejects(second, /Service workers are unavailable/)
+  assert.notEqual(second, first)
+})
+
+test('boot app installation does not wait for the optional dialog catalog', async () => {
+  const { useAppManager } = await import('../../packages/client/src/composables/use-app-manager.js')
+  let completeCatalog
+  const catalog = new Promise(resolve => { completeCatalog = resolve })
+  let installs = 0
+  let catalogLoads = 0
+  const runtime = { installApp: async () => { installs++ } }
+  const manager = useAppManager(() => runtime, { loadCatalog: () => {
+    catalogLoads++
+    return catalog
+  } })
+  const installing = manager.installBootApp('wiki', runtime)
+  try {
+    await Promise.resolve()
+    assert.equal(installs, 1)
+    assert.equal(catalogLoads, 0)
+  } finally {
+    completeCatalog({ apps: [] })
+    await installing
+  }
 })
