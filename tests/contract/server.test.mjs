@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict'
+import { spawnSync } from 'node:child_process'
 import { readFile } from 'node:fs/promises'
 import test from 'node:test'
 
@@ -192,6 +193,28 @@ test('Pyodide loader installs core and configured Python packages', async () => 
     'tzdata',
   ])
   assert.deepEqual(calls.find(call => call[0] === 'install')[2], ['requests'])
+
+  // Execute the actual boot filter: compile-time warnings use filenames,
+  // whereas warnings raised at runtime may have a dotted module name.
+  const warningCheck = spawnSync('python3', ['-'], { encoding: 'utf8', input:
+    'import warnings\nwarnings.simplefilter("always")\n'
+    + calls.find(call => call[0] === 'python')[1] + String.raw`
+whoosh_path = "/lib/python3.14/site-packages/whoosh/analysis/filters.py"
+for filename, expected in [(whoosh_path, 0), ("/app/example.py", 1)]:
+    with warnings.catch_warnings(record=True) as seen:
+        compile('value = "\\w"', filename, 'exec')
+        assert len(seen) == expected, (filename, seen)
+for message, category, module, expected in [
+    ('"\\w" is an invalid escape sequence', SyntaxWarning, 'whoosh.analysis', 0),
+    ('unrelated warning', SyntaxWarning, 'whoosh.analysis', 1),
+    ('invalid escape sequence', UserWarning, 'whoosh.analysis', 1),
+    ('invalid escape sequence', SyntaxWarning, 'whoosh_other.analysis', 1),
+]:
+    with warnings.catch_warnings(record=True) as seen:
+        warnings.warn_explicit(message, category, whoosh_path, 1, module=module)
+        assert len(seen) == expected, (message, module, seen)
+` })
+  assert.equal(warningCheck.status, 0, warningCheck.stderr)
 })
 
 test('catalog apps are verified, unpacked, and installed into the scoped site', async () => {

@@ -157,8 +157,9 @@ test('instance registry owns client associations, readiness, and cleanup', async
 test('runtime cache identity follows Frappe assets, app catalog, and runtime manifest', async () => {
   const entries = new Map()
   const deleted = []
+  const fetched = []
   const cache = {
-    match: async key => entries.get(key),
+    match: async key => entries.get(key)?.clone(),
     put: async (key, value) => entries.set(key, value),
   }
   const cacheStorage = {
@@ -167,6 +168,7 @@ test('runtime cache identity follows Frappe assets, app catalog, and runtime man
     open: async () => cache,
   }
   const fetchFn = async value => {
+    fetched.push(typeof value === 'string' ? value : value.url)
     if (typeof value === 'string' && value.startsWith('/assets/assets.json')) {
       return new Response('{"app.js":"app.123.js"}')
     }
@@ -187,9 +189,18 @@ test('runtime cache identity follows Frappe assets, app catalog, and runtime man
     `frappe-assets-${hashString('{"app.js":"app.123.js"}\n{"sourceCatalogSha256":"catalog.456"}\nasset')}`,
   )
   assert.deepEqual(deleted, ['frappe-assets-old'])
+  assert.equal(fetched.length, 3, 'initialization fetches only metadata')
+  assert.equal(entries.size, 0, 'initialization does not prefetch assets')
   const request = new Request('https://playground.test/assets/app.js')
   assert.equal(await (await runtimeCache.respond(request)).text(), 'asset')
   assert.equal(entries.size, 1)
+  assert.equal(await (await runtimeCache.respond(request)).text(), 'asset')
+  assert.equal(fetched.filter(url => url === request.url).length, 1, 'repeat requests use the cache')
+  const lazyRequest = new Request('https://playground.test/assets/locale/fr.json')
+  assert.equal(fetched.includes(lazyRequest.url), false)
+  await runtimeCache.respond(lazyRequest)
+  assert.equal(fetched.filter(url => url === lazyRequest.url).length, 1)
+  assert.equal(entries.size, 2)
 })
 
 test('backend proxy translates protocol responses and scopes redirects', async () => {

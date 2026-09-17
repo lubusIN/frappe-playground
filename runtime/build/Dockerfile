@@ -71,12 +71,13 @@ RUN python /workspace/scripts/build-app-catalog.py \
     /workspace/test-bench \
     /workspace/app_artifacts
 USER root
+COPY runtime/build/package-core-runtime.py /workspace/scripts/package-core-runtime.py
 # 6. Expose entry point compilation commands
 CMD cp -r /workspace/test-bench/env/lib/python3.14/site-packages/pypika /workspace/archive_root/ && \
-    tar -czf /output/frappe_runtime.tar.gz -C /workspace/archive_root . && \
     cp -r /workspace/app_artifacts/apps /output/apps && \
     rm -rf /workspace/assets_export && \
     python /workspace/scripts/export-runtime-assets.py /workspace/test-bench/sites /workspace/assets_export && \
+    python /workspace/scripts/package-core-runtime.py /workspace/archive_root /workspace/assets_export/assets /output/frappe_runtime.tar.gz && \
     find /workspace/test-bench/apps -name "node_modules" -type d -prune -exec rm -rf '{}' + && \
     tar -czhf /output/assets.tar.gz -C /workspace/assets_export assets && \
     cp /workspace/test-bench/sites/playground.local/db/*.db /output/site1.db && \

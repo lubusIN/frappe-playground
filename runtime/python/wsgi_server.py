@@ -22,6 +22,9 @@ class FrappeWSGIHandler:
 
     def initialize_environment(self):
         """Bootstraps the Frappe environment when the worker starts."""
+        # The package lives outside a conventional Bench apps/ tree, so Frappe
+        # cannot infer the asset/locale root from frappe.__file__.
+        os.environ["FRAPPE_BENCH_ROOT"] = os.path.dirname(self.bench_sites_path)
         os.chdir(self.bench_sites_path)
         os.environ["SITES_PATH"] = self.bench_sites_path
         os.environ["FRAPPE_SITE"] = self.default_site

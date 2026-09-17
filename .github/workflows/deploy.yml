@@ -33,7 +33,7 @@ jobs:
         uses: actions/cache@v6
         with:
           path: artifacts/runtime
-          key: ${{ runner.os }}-runtime-${{ hashFiles('runtime/apps/catalog.json', 'runtime/build/Dockerfile', 'scripts/build.sh') }}
+          key: ${{ runner.os }}-runtime-${{ hashFiles('runtime/apps/catalog.json', 'runtime/build/**', 'runtime/frappe-version.json', 'scripts/build*', 'scripts/write-runtime-manifest.mjs', 'scripts/runtime-locales.mjs', 'scripts/verify-build.mjs') }}
 
       - name: Prepare Deploy Assets
         id: check_limits
