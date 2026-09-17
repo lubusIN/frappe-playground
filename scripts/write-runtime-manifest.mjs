@@ -1,6 +1,7 @@
 import { createHash } from 'node:crypto'
 import { readFile, stat, writeFile } from 'node:fs/promises'
 import path from 'node:path'
+import { listFrappeLocaleArtifacts } from './runtime-locales.mjs'
 
 const [artifactsDir, frappeVersion] = process.argv.slice(2)
 
@@ -16,6 +17,7 @@ const artifactNames = [
   'assets/assets.json',
   'apps/catalog.json',
   ...appCatalog.apps.map(app => app.archive),
+  ...await listFrappeLocaleArtifacts(artifactsDir),
 ]
 const files = {}
 

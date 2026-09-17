@@ -1,3 +1,4 @@
+import { listFrappeLocaleArtifacts } from './runtime-locales.mjs'
 import { authoredPublicFiles, runtimePublishPath } from './publication.mjs'
 import { createHash } from 'node:crypto'
 import { access, readFile, readdir, stat } from 'node:fs/promises'
@@ -83,9 +84,31 @@ export async function verifyBuild({
     errors.push(`Invalid generated app catalog: ${error.message}`)
   }
 
+  let localeArtifacts = []
+  try {
+    const publishedLocales = await listFrappeLocaleArtifacts(artifactsDir)
+    const declaredLocales = Object.keys(manifest.files || {}).filter(
+      name => /^assets\/locale\/[A-Za-z0-9_]+\/LC_MESSAGES\/frappe\.mo$/.test(name),
+    )
+    localeArtifacts = [...new Set([...publishedLocales, ...declaredLocales])]
+  } catch (error) {
+    errors.push(`Cannot inventory compiled Frappe translations: ${error.message}`)
+  }
+  if (!localeArtifacts.length) errors.push('Runtime manifest must include compiled Frappe translations')
+  for (const name of localeArtifacts) {
+    const file = path.join(artifactsDir, name)
+    if (await exists(file)) {
+      const bytes = await readFile(file)
+      if (bytes.length < 28 || ![0x950412de, 0xde120495].includes(bytes.readUInt32LE(0))) {
+        errors.push(`Invalid compiled translation catalog: ${name}`)
+      }
+    }
+  }
+
   const publishPaths = Object.fromEntries([
     'frappe_runtime.tar.gz', 'site1.db', 'assets/assets.json', 'apps/catalog.json',
     ...(appCatalog?.apps || []).map(app => app.archive),
+    ...localeArtifacts,
   ].map(name => [name, runtimePublishPath(name)]))
   for (const app of appCatalog?.apps || []) {
     const archiveMetadata = manifest.files?.[app.archive]

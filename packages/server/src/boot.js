@@ -21,10 +21,15 @@ export async function initializePyodide({
   }
 
   const pyodide = await globalScope.loadPyodide({ indexURL: baseUrl })
-  await pyodide.runPythonAsync(`
+  await pyodide.runPythonAsync(String.raw`
 import warnings
-warnings.filterwarnings("ignore", category=SyntaxWarning, module="whoosh.*")
-warnings.filterwarnings("ignore", category=DeprecationWarning, module="whoosh.*")
+# Compilation warnings use the source filename, not the imported module name.
+for _category in (SyntaxWarning, DeprecationWarning):
+    warnings.filterwarnings(
+        "ignore", message=r".*invalid escape sequence", category=_category,
+        module=r"^(?:whoosh(?:\.|$)|.*/site-packages/whoosh/)",
+    )
+del _category
   `)
 
   log('Loading core packages...')

@@ -51,7 +51,10 @@ async function getFrappeFrame(page) {
         if (!frame || frame.url() === 'about:blank') return false;
 
         try {
-            return await frame.evaluate(() => document.readyState !== 'loading');
+            // A newly attached iframe can expose a complete initial document
+            // before its navigation and scoped fetch bootstrap have run.
+            return await frame.evaluate(() => document.readyState !== 'loading'
+                && Boolean(document.querySelector('script[data-playground-scope-bootstrap]')));
         } catch (_) {
             return false;
         }
@@ -68,7 +71,6 @@ async function getFrappeFrame(page) {
 
 async function loginAsAdministrator(page) {
     const frame = await getFrappeFrame(page);
-    console.log(`[TEST] iframe URL before login: ${frame.url()}`);
     await frame.waitForSelector('#login_email', { timeout: 60000 });
     await frame.fill('#login_email', ADMIN_EMAIL);
     await frame.fill('#login_password', ADMIN_PASSWORD);

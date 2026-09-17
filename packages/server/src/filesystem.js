@@ -1,3 +1,5 @@
+import { mountFrappeTranslations } from './translations.js'
+
 export async function fetchOk(fetchFn, url) {
   const response = await fetchFn(url)
   if (!response.ok) throw new Error(`Failed to fetch ${url}: ${response.status} ${response.statusText}`)
@@ -76,6 +78,7 @@ export async function installRuntimeFilesystem({
   }
 
   ensureDirectories(pyodide.FS, benchDirectories)
+  mountFrappeTranslations({ fs: pyodide.FS, manifest, assetsEndpoint })
   return assetsText
 }
 

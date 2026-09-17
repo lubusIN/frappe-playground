@@ -61,6 +61,26 @@ export class RuntimeAssetCache {
   }
 
   async respond(request, overrideUrl = null) {
+    const url = overrideUrl || request.url
+    if (['GET', 'HEAD'].includes(request.method)
+      && /^\/assets\/locale\/[A-Za-z0-9_]+\/LC_MESSAGES\/frappe\.mo$/.test(new URL(url).pathname)) {
+      // Emscripten lazy files probe with HEAD before reading. Cache a complete
+      // GET so a HEAD or partial response cannot poison subsequent reads.
+      const headers = new Headers(request.headers)
+      headers.delete('Range')
+      const response = await this.respondAsset(new Request(url, {
+        method: 'GET', headers, credentials: request.credentials,
+      }))
+      const responseHeaders = new Headers(response.headers)
+      responseHeaders.delete('Accept-Ranges')
+      return new Response(request.method === 'HEAD' ? null : response.body, {
+        status: response.status, statusText: response.statusText, headers: responseHeaders,
+      })
+    }
+    return this.respondAsset(request, overrideUrl)
+  }
+
+  async respondAsset(request, overrideUrl = null) {
     let cache
     const cacheKey = overrideUrl || request.url
     try {

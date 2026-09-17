@@ -21,7 +21,6 @@ await replaceDirectory(path.join(projectRoot, 'artifacts/runtime'), async staged
   await rm(path.join(staged, 'assets.tar.gz'))
   run(process.execPath, ['scripts/write-runtime-manifest.mjs', staged, version])
   await verifyBuild({ artifactsDir: staged, runtimeOnly: true })
-  // Size budgets are advisory, as in the previous build command.
-  spawnSync('bash', ['scripts/check-limits.sh', staged], { cwd: projectRoot, stdio: 'inherit' })
+  run('bash', ['scripts/check-limits.sh', staged])
 })
 console.log('Runtime build verified and published.')
