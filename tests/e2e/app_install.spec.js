@@ -81,7 +81,7 @@ const APPS_TO_TEST = [
 ]
 
 for (const app of APPS_TO_TEST) {
-  test(`installs, opens, and uninstalls ${app.name}`, async ({ page, browserName }) => {
+  test(`installs, opens, and uninstalls ${app.name}`, async ({ page }) => {
     if (app.heavy) {
       test.skip(process.env.CI && process.env.GITHUB_EVENT_NAME !== 'schedule', `Skipping heavy ${app.name} test on PRs`);
     }
@@ -91,22 +91,62 @@ for (const app of APPS_TO_TEST) {
       consoleMessages.push(message.text())
       console.log(`[BROWSER]: ${message.text()}`)
     })
-    await bootLoginAndReachDesk(page)
+    const { instanceId } = await bootLoginAndReachDesk(page)
+    const isRuntimeWorker = worker => new URL(worker.url()).pathname.endsWith('/worker.js')
+    const workers = page.workers().filter(isRuntimeWorker)
+    expect(workers).toHaveLength(1)
+    let newWorkers = 0
+    page.on('worker', worker => { if (isRuntimeWorker(worker)) newWorkers++ })
+    const shellMarker = await page.evaluate(() => {
+      window.appOperationShellMarker = crypto.randomUUID()
+      return window.appOperationShellMarker
+    })
+    const initialFrame = await getFrappeFrame(page)
+    const savedNote = await initialFrame.evaluate(async () => {
+      const response = await fetch('/api/resource/ToDo', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ description: 'Survives app changes' }),
+      })
+      const { data } = await response.json()
+      return data.name
+    })
+    const assertSameShell = async () => {
+      expect(newWorkers).toBe(0)
+      expect(page.workers().filter(isRuntimeWorker)).toEqual(workers)
+      await expect(page.locator('#loading-screen')).toBeHidden()
+      expect(await page.evaluate(() => window.appOperationShellMarker)).toBe(shellMarker)
+      expect(await page.evaluate(() => localStorage.getItem('frappe_playground_instance_id'))).toBe(instanceId)
+      const frame = await getFrappeFrame(page)
+      const user = await frame.evaluate(async () => {
+        const response = await fetch('/api/method/frappe.auth.get_logged_user')
+        return response.json()
+      })
+      expect(user.message).toBe('Administrator')
+      const note = await frame.evaluate(async name => {
+        const response = await fetch(`/api/resource/ToDo/${encodeURIComponent(name)}`)
+        return response.json()
+      }, savedNote)
+      expect(note.data.description).toBe('Survives app changes')
+    }
 
     // Install
     await page.getByRole('button', { name: 'Manage apps' }).click()
     await expect(page.getByRole('dialog')).toContainText(app.name)
     await expect(page.getByTestId(`install-app-${app.id}`)).toBeVisible()
-    const shellReloaded = page.waitForEvent('load', { timeout: 300000 })
     await page.getByTestId(`install-app-${app.id}`).click()
     await expect(page.getByRole('dialog')).toContainText('Install app?')
+    const installedView = page.waitForEvent('framenavigated', {
+      predicate: frame => frame.parentFrame() === page.mainFrame(), timeout: 300000,
+    })
     await page.getByRole('button', { name: 'Install', exact: true }).click()
-    await expect(page.getByText('This can take several minutes; keep this tab open. The playground will reload automatically when finished.')).toBeVisible()
+    await expect(page.getByText('This can take several minutes; keep this tab open. The Frappe view will refresh automatically when finished.')).toBeVisible()
 
-    // Shell reload & Verify
-    await shellReloaded
-    await expect(page.locator('#loading-screen')).toBeHidden({ timeout: 600000 })
+    // Only the Frappe document refreshes; Python stays running.
+    await installedView
+    await expect(page.getByRole('dialog')).toBeHidden()
     await expect(page.locator('#frappe-desk')).toBeVisible({ timeout: 120000 })
+    await assertSameShell()
     const restoredFrame = await getFrappeFrame(page)
     await dismissIntroDialogIfShown(page)
     expect(consoleMessages.some(message => message.includes('Error creating icons'))).toBe(false)
@@ -123,16 +163,26 @@ for (const app of APPS_TO_TEST) {
     await page.getByTestId(`uninstall-app-${app.id}`).click()
     await expect(page.getByRole('dialog')).toContainText('Uninstall app?')
 
-    const shellReloadedAfterUninstall = page.waitForEvent('load', { timeout: 300000 })
+    const uninstalledView = page.waitForEvent('framenavigated', {
+      predicate: frame => frame.parentFrame() === page.mainFrame(), timeout: 300000,
+    })
     await page.getByRole('button', { name: 'Uninstall', exact: true }).click()
-    await expect(page.getByText('This can take several minutes; keep this tab open. The playground will reload automatically when finished.')).toBeVisible()
-    await shellReloadedAfterUninstall
-    await expect(page.locator('#loading-screen')).toBeHidden({ timeout: 600000 })
+    await expect(page.getByText('This can take several minutes; keep this tab open. The Frappe view will refresh automatically when finished.')).toBeVisible()
+    await uninstalledView
+    await expect(page.getByRole('dialog')).toBeHidden()
     await expect(page.locator('#frappe-desk')).toBeVisible({ timeout: 120000 })
     await getFrappeFrame(page)
     await dismissIntroDialogIfShown(page)
 
     // Final verification
+    await assertSameShell()
+    const frame = await getFrappeFrame(page)
+    const removedApp = await frame.evaluate(async appId => {
+      const response = await fetch(`/api/method/${appId}.__version__`)
+      return response.json()
+    }, app.id)
+    expect(removedApp.exc_type).toBe('ValidationError')
+    expect(removedApp.exception).toContain(`App ${app.id} is not installed`)
     await page.getByRole('button', { name: 'Manage apps' }).click()
     await expect(page.getByTestId(`install-app-${app.id}`)).toBeVisible()
   })

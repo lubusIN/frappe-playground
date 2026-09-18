@@ -486,15 +486,46 @@ test('catalog loads are shared and a failed load can be retried', async () => {
   assert.equal(manager.appCatalogLoading.value, false)
 })
 
-test('an old app operation cannot clear the next instance operation or reload its page', async () => {
+test('app operations await view refresh only after success', async () => {
+  const { useAppManager } = await import('../../packages/client/src/composables/use-app-manager.js')
+  for (const action of ['installApp', 'uninstallApp']) {
+    let refresh
+    let calls = 0
+    let completed = false
+    const runtime = {
+      [action]: async () => { calls++ },
+      listInstalledApps: () => action === 'installApp' ? ['wiki'] : [],
+    }
+    const manager = useAppManager(() => runtime, {
+      refreshView: () => new Promise(resolve => { refresh = resolve }),
+    })
+    const pending = manager[action]('wiki').then(() => { completed = true })
+    await Promise.resolve()
+    assert.deepEqual(manager.installedApps.value, runtime.listInstalledApps())
+    await manager[action]('wiki')
+    assert.equal(calls, 1)
+    assert.equal(completed, false)
+    refresh()
+    await pending
+    assert.equal(manager.installingAppId.value || manager.uninstallingAppId.value, '')
+
+    runtime[action] = async () => { throw new Error('mutation failed') }
+    refresh = null
+    await manager[action]('wiki')
+    assert.equal(manager.appInstallError.value, 'mutation failed')
+    assert.equal(refresh, null)
+  }
+})
+
+test('an old app operation cannot clear the next instance operation or refresh its view', async () => {
   const { useAppManager } = await import('../../packages/client/src/composables/use-app-manager.js')
   let finishOld
   let finishNew
-  let reloads = 0
+  let refreshes = 0
   const old = { installApp: () => new Promise(resolve => { finishOld = resolve }), listInstalledApps: () => ['wiki'] }
   const next = { installApp: () => new Promise(resolve => { finishNew = resolve }), listInstalledApps: () => ['crm'] }
   let active = old
-  const manager = useAppManager(() => active, { reload: () => reloads++ })
+  const manager = useAppManager(() => active, { refreshView: () => refreshes++ })
   const first = manager.installApp('wiki')
   active = next
   manager.resetAppState()
@@ -502,11 +533,11 @@ test('an old app operation cannot clear the next instance operation or reload it
   finishOld()
   await first
   assert.equal(manager.installingAppId.value, 'crm')
-  assert.equal(reloads, 0)
+  assert.equal(refreshes, 0)
   finishNew()
   await second
   assert.equal(manager.installingAppId.value, '')
-  assert.equal(reloads, 1)
+  assert.equal(refreshes, 1)
 })
 
 test('a synchronous startup failure does not cache a rejected promise across retries', async () => {

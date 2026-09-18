@@ -138,6 +138,7 @@ async function mutateInstalledApps(mutation) {
   const installedAppsBackup = [...stateStore.installedApps]
   try {
     stateStore.installedApps = await mutation(stateStore.installedApps)
+    await bridge.refreshAppState()
     await checkpointDatabase(pyodide, siteDbPath)
     await stateStore.save(siteDbPath, await bridge.exportCookieJar(), stateStore.installedApps)
   } catch (error) {
@@ -151,6 +152,7 @@ async function mutateInstalledApps(mutation) {
       }
     }
     writeInstalledApps(pyodide.FS, appsFile, installedAppsBackup)
+    await bridge.refreshAppState()
     throw error
   }
 }

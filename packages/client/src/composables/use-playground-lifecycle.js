@@ -34,7 +34,13 @@ export function usePlaygroundLifecycle({
   const showIntroDialog = ref(false)
   let playground = null
   const frame = useFrameNavigation({ ready, instanceId })
-  const apps = useAppManager(() => playground)
+  const apps = useAppManager(() => playground, {
+    refreshView: () => {
+      // The current route may belong to the app that was just removed.
+      frame.address.value = '/'
+      frame.reloadFrame()
+    },
+  })
   const { installedApps } = apps
   const { address, frameSrc, frameUrl, startAddressSync } = frame
 

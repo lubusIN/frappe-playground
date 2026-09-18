@@ -297,6 +297,58 @@ test('catalog apps are verified, unpacked, and installed into the scoped site', 
   assert.equal(calls.some(call => call[0] === 'python' && call[1].includes('remove_app')), true)
 })
 
+test('app state refresh preserves the handler session and destroys failed contexts', async () => {
+  let source
+  const bridge = new PythonBridge({ pyodide: {
+    runPythonAsync: async value => { source = value },
+  } })
+  await bridge.refreshAppState()
+  const result = spawnSync('python3', ['-'], { encoding: 'utf8', input: `
+import ast
+import sys
+import types
+
+# Execute the authored handler without booting its Pyodide-only environment.
+tree = ast.parse(${JSON.stringify(WSGI_SERVER_SOURCE)})
+handler_class = next(node for node in tree.body if isinstance(node, ast.ClassDef) and node.name == "FrappeWSGIHandler")
+events = []
+frappe = types.ModuleType("frappe")
+frappe.init = lambda **kwargs: events.append(("init", kwargs["site"]))
+frappe.connect = lambda: events.append("connect")
+frappe.destroy = lambda: events.append("destroy")
+frappe.clear_cache = lambda: events.append("cache")
+frappe.db = types.SimpleNamespace(commit=lambda: events.append("commit"))
+cache_manager = types.ModuleType("frappe.cache_manager")
+cache_manager.clear_controller_cache = lambda **kwargs: events.append(("controllers", kwargs["site"]))
+sys.modules["frappe.cache_manager"] = cache_manager
+namespace = {"frappe": frappe}
+exec(compile(ast.Module(body=[handler_class], type_ignores=[]), "wsgi_server.py", "exec"), namespace)
+handler = namespace["FrappeWSGIHandler"].__new__(namespace["FrappeWSGIHandler"])
+handler.default_site = "site1"
+handler.bench_sites_path = "/bench/sites"
+handler.cookie_jar = {"sid": "existing-session"}
+namespace["_handler"] = handler
+exec(${JSON.stringify(source)}, namespace)
+assert "cache" in events and ("controllers", "site1") in events
+assert events[-2:] == ["commit", "destroy"]
+assert handler.cookie_jar == {"sid": "existing-session"}
+
+events.clear()
+def fail():
+    raise RuntimeError("cache refresh failed")
+frappe.clear_cache = fail
+try:
+    exec(${JSON.stringify(source)}, namespace)
+except RuntimeError:
+    pass
+else:
+    raise AssertionError("refresh failure was swallowed")
+assert events[-1] == "destroy" and "commit" not in events
+assert handler.cookie_jar == {"sid": "existing-session"}
+` })
+  assert.equal(result.status, 0, result.stderr)
+})
+
 test('Python bridge converts requests and releases PyProxy values', () => {
   const destroyed = []
   const pythonResponse = {

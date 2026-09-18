@@ -3,7 +3,7 @@ import { loadAppCatalog } from '../playground/apps.js'
 
 export function useAppManager(getPlayground, {
   loadCatalog = loadAppCatalog,
-  reload = () => window.location.reload(),
+  refreshView = () => {},
 } = {}) {
   const showAppManager = ref(false)
   const availableApps = ref([])
@@ -51,7 +51,8 @@ export function useAppManager(getPlayground, {
       await playground[action](appId)
       if (getPlayground() !== playground || playground.disposed) return
       installedApps.value = playground.listInstalledApps()
-      reload()
+      await refreshView()
+      if (getPlayground() === playground && !playground.disposed) showAppManager.value = false
     } catch (error) {
       if (getPlayground() === playground && !playground.disposed) {
         appInstallError.value = error.message
