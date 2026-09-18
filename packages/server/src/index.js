@@ -8,7 +8,8 @@ import {
   createRuntimeErrorMessage,
   createRuntimeLogMessage,
   createRuntimeReadyMessage,
-  isProtocolMessage,
+  isControlMessage,
+  hasMessagePort,
 } from '/protocol/messages.js'
 import {
   createBackendResponse,
@@ -61,7 +62,7 @@ let freshSession = urlParams.get('fresh') === 'true'
 let pyodide = null
 let bootPromise = null
 let appCatalog = null
-let appMutationPromise = Promise.resolve()
+const requestExecutor = createRequestExecutor()
 
 const stateStore = new BrowserStateStore({
   indexedDB,
@@ -137,6 +138,7 @@ async function mutateInstalledApps(mutation) {
   const installedAppsBackup = [...stateStore.installedApps]
   try {
     stateStore.installedApps = await mutation(stateStore.installedApps)
+    await bridge.refreshAppState()
     await checkpointDatabase(pyodide, siteDbPath)
     await stateStore.save(siteDbPath, await bridge.exportCookieJar(), stateStore.installedApps)
   } catch (error) {
@@ -150,6 +152,7 @@ async function mutateInstalledApps(mutation) {
       }
     }
     writeInstalledApps(pyodide.FS, appsFile, installedAppsBackup)
+    await bridge.refreshAppState()
     throw error
   }
 }
@@ -177,39 +180,21 @@ async function uninstallApp(appId) {
   }))
 }
 
-function handleAppInstall(message) {
+function handleAppOperation(message, operation, createResult, resultKey) {
   const { requestId, appId } = message.payload
-  appMutationPromise = appMutationPromise.then(async () => {
-    try {
-      await installApp(appId)
-      self.postMessage(createAppInstallResultMessage(requestId, appId, { installed: true }))
-    } catch (error) {
-      console.error(`[Worker] Failed to install app ${appId}:`, error)
-      self.postMessage(createAppInstallResultMessage(requestId, appId, {
-        installed: false,
-        error: error?.message || `Failed to install ${appId}.`,
+  requestExecutor.enqueue(() => operation(appId)).then(
+    () => self.postMessage(createResult(requestId, appId, { [resultKey]: true })),
+    error => {
+      console.error(`[Worker] App operation failed for ${appId}:`, error)
+      self.postMessage(createResult(requestId, appId, {
+        [resultKey]: false,
+        error: error?.message || `App operation failed for ${appId}.`,
       }))
-    }
-  })
+    },
+  )
 }
 
-function handleAppUninstall(message) {
-  const { requestId, appId } = message.payload
-  appMutationPromise = appMutationPromise.then(async () => {
-    try {
-      await uninstallApp(appId)
-      self.postMessage(createAppUninstallResultMessage(requestId, appId, { uninstalled: true }))
-    } catch (error) {
-      console.error(`[Worker] Failed to uninstall app ${appId}:`, error)
-      self.postMessage(createAppUninstallResultMessage(requestId, appId, {
-        uninstalled: false,
-        error: error?.message || `Failed to uninstall ${appId}.`,
-      }))
-    }
-  })
-}
-
-function createRequestExecutor(bridge) {
+function createRequestExecutor() {
   return new SerialRequestExecutor({
     decodeRequest: readBackendRequest,
     encodeResponse: createBackendResponse,
@@ -219,10 +204,11 @@ function createRequestExecutor(bridge) {
       body: `Worker error: ${error.message}\n${error.stack || ''}`,
     }),
     handleRequest: async request => {
-      await appMutationPromise
+      const bridge = await bootPromise
       return bridge.handleRequest(request)
     },
     persist: async () => {
+      const bridge = await bootPromise
       await checkpointDatabase(pyodide, siteDbPath)
       await stateStore.save(siteDbPath, await bridge.exportCookieJar())
     },
@@ -230,15 +216,15 @@ function createRequestExecutor(bridge) {
 }
 
 self.onmessage = async event => {
-  if (isProtocolMessage(event.data, ProtocolMessageType.APP_INSTALL)) {
-    handleAppInstall(event.data)
+  if (isControlMessage(event.data, ProtocolMessageType.APP_INSTALL)) {
+    handleAppOperation(event.data, installApp, createAppInstallResultMessage, 'installed')
     return
   }
-  if (isProtocolMessage(event.data, ProtocolMessageType.APP_UNINSTALL)) {
-    handleAppUninstall(event.data)
+  if (isControlMessage(event.data, ProtocolMessageType.APP_UNINSTALL)) {
+    handleAppOperation(event.data, uninstallApp, createAppUninstallResultMessage, 'uninstalled')
     return
   }
-  if (!isProtocolMessage(event.data, ProtocolMessageType.INIT_CHANNEL)) return
+  if (!isControlMessage(event.data, ProtocolMessageType.INIT_CHANNEL) || !hasMessagePort(event)) return
 
   const serviceWorkerPort = event.ports[0]
   if (!bootPromise) {
@@ -247,8 +233,8 @@ self.onmessage = async event => {
   }
 
   try {
-    const bridge = await bootPromise
-    createRequestExecutor(bridge).attach(serviceWorkerPort)
+    await bootPromise
+    requestExecutor.attach(serviceWorkerPort)
     const readyMessage = createRuntimeReadyMessage({
       installedApps: stateStore.installedApps,
     })

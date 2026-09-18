@@ -1,13 +1,16 @@
 const { test, expect } = require('@playwright/test');
-const { waitForPlaygroundBoot, loginAsAdministrator } = require('./helpers/frappeFlow');
+const { waitForPlaygroundBoot } = require('./helpers/frappeFlow');
 
 test.describe('Service Worker Resiliency', () => {
     test('recovers connection if BroadcastChannel requests re-init', async ({ page }) => {
-        page.on('console', msg => console.log(`[PAGE] ${msg.type()}: ${msg.text()}`));
-        page.on('worker', worker => {
-            worker.on('console', msg => console.log(`[WORKER-LOG] ${msg.type()}: ${msg.text()}`));
+        const whooshWarnings = [];
+        page.on('console', msg => {
+            console.log(`[PAGE] ${msg.type()}: ${msg.text()}`);
+            if (/\/whoosh\/.*(?:SyntaxWarning|DeprecationWarning).*invalid escape sequence/.test(msg.text())) {
+                whooshWarnings.push(msg.text());
+            }
         });
-        const { instanceId } = await waitForPlaygroundBoot(page);
+        await waitForPlaygroundBoot(page);
 
         // Force the SW to lose its port by simulating a BroadcastChannel event
         await page.evaluate(async () => {
@@ -27,5 +30,6 @@ test.describe('Service Worker Resiliency', () => {
         console.log("Ping response status:", status);
         console.log("Ping response body:", body);
         expect(status).toBe(200);
+        expect(whooshWarnings).toEqual([]);
     });
 });

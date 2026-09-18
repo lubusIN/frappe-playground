@@ -1,4 +1,5 @@
 import { defineConfig } from 'vite'
+import { resolveDevFile, publishedSource } from './scripts/publication.mjs'
 import vue from '@vitejs/plugin-vue'
 import Icons from 'unplugin-icons/vite'
 import fs from 'node:fs'
@@ -7,7 +8,6 @@ import { createHash } from 'node:crypto'
 import { fileURLToPath } from 'node:url'
 
 const projectRoot = path.dirname(fileURLToPath(import.meta.url))
-const authoredStaticDir = path.join(projectRoot, 'static')
 const clientDir = path.join(projectRoot, 'packages/client')
 const serviceWorkerSourceDir = path.join(projectRoot, 'packages/service-worker/src')
 const serverSourceDir = path.join(projectRoot, 'packages/server/src')
@@ -59,44 +59,6 @@ function runtimeBuildId() {
 
 const playgroundRuntimeBuildId = runtimeBuildId()
 
-const exactDevFiles = new Map([
-  ['/sw.js', path.join(serviceWorkerSourceDir, 'index.js')],
-  ['/worker.js', path.join(serverSourceDir, 'index.js')],
-  ['/config.js', path.join(serverSourceDir, 'config.js')],
-  ['/_headers', path.join(authoredStaticDir, '_headers')],
-  ['/_redirects', path.join(authoredStaticDir, '_redirects')],
-  ['/favicon.ico', path.join(authoredStaticDir, 'favicon.ico')],
-])
-
-const prefixedDevFiles = [
-  ['/generated/', generatedSourceDir],
-  ['/apps/', path.join(runtimeArtifactsDir, 'apps')],
-  ['/server/', serverSourceDir],
-  // Preserve the monorepo-relative import used by service-worker/routing.js.
-  // This must precede /protocol/ so /protocol/src/x maps to protocol/src/x.
-  ['/protocol/src/', protocolSourceDir],
-  ['/protocol/', protocolSourceDir],
-  ['/runtime-config/', runtimeConfigDir],
-  ['/service-worker/', serviceWorkerSourceDir],
-  ['/storage/', runtimeArtifactsDir],
-  ['/assets/', path.join(runtimeArtifactsDir, 'assets')],
-]
-
-function resolveDevFile(pathname) {
-  const exactFile = exactDevFiles.get(pathname)
-  if (exactFile) return exactFile
-
-  for (const [prefix, directory] of prefixedDevFiles) {
-    if (!pathname.startsWith(prefix)) continue
-
-    const relativePath = decodeURIComponent(pathname.slice(prefix.length))
-    const filePath = path.normalize(path.join(directory, relativePath))
-    if (filePath.startsWith(directory + path.sep)) return filePath
-  }
-
-  return null
-}
-
 function runtimeFileMiddleware(req, res, next) {
   const pathname = new URL(req.url || '/', 'http://localhost').pathname
 
@@ -124,7 +86,8 @@ function runtimeFileMiddleware(req, res, next) {
       res.setHeader('Cache-Control', 'no-store')
     }
     res.setHeader('Content-Type', contentTypeFor(filePath))
-    fs.createReadStream(filePath).pipe(res)
+    if (filePath.endsWith('.js')) res.end(publishedSource(fs.readFileSync(filePath, 'utf8')))
+    else fs.createReadStream(filePath).pipe(res)
   })
 }
 
@@ -149,7 +112,7 @@ function contentTypeFor(filePath) {
   }[extension] || 'application/octet-stream'
 }
 
-export default defineConfig({
+export default defineConfig(({ mode }) => ({
   root: clientDir,
   base: '/',
   publicDir: false,
@@ -192,6 +155,13 @@ export default defineConfig({
     port: 5173,
     strictPort: true,
     headers: isolationHeaders,
+    proxy: mode === 'combined' ? {
+      '/docs': {
+        target: 'http://127.0.0.1:5174',
+        changeOrigin: true,
+        ws: true,
+      },
+    } : undefined,
   },
   preview: {
     port: 8000,
@@ -202,11 +172,11 @@ export default defineConfig({
     // Frappe UI source imports feather-icons as a CJS default. Pre-bundle it
     // so Vite serves an ESM interop wrapper instead of the raw UMD file.
     include: [
-      'feather-icons', 
-      'debug', 
-      'highlight.js', 
-      'highlight.js/lib/core', 
+      'feather-icons',
+      'debug',
+      'highlight.js',
+      'highlight.js/lib/core',
       'interactjs'
     ],
   },
-})
+}))

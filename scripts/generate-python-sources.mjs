@@ -1,3 +1,4 @@
+import { SCOPE_BOOTSTRAP_SOURCE } from '../packages/service-worker/src/scope-bootstrap.js'
 import { mkdir, readFile, writeFile } from 'node:fs/promises'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -22,4 +23,8 @@ await writeFile(
     `export const MARIADB_POLYFILLS_SOURCE = ${JSON.stringify(mariadbPolyfillsSource)}`,
     '',
   ].join('\n'),
+)
+
+await writeFile(path.join(outputDir, 'scope-bootstrap.js'),
+  `// Generated from service-worker/src/scope-bootstrap.js.\nexport const SCOPE_BOOTSTRAP_SOURCE = ${JSON.stringify(SCOPE_BOOTSTRAP_SOURCE)}\n`,
 )

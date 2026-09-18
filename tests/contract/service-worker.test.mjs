@@ -24,6 +24,7 @@ import {
 import {
   handleSocketIoRequest,
   isDevelopmentPath,
+  isDocumentationPath,
   isShellNavigation,
   isShellStaticPath,
   isSocketIoPath,
@@ -48,6 +49,10 @@ test('routing scopes backend requests and remaps deploy-safe static assets', () 
   assert.equal(isStaticPath('/protocol/messages.js'), true)
   assert.equal(isStaticPath('/runtime-config/packages.js'), true)
   assert.equal(isStaticPath('/service-worker/routing.js'), true)
+  assert.equal(isStaticPath('/docs/architecture/index.html'), true)
+  assert.equal(isDocumentationPath('/docs'), true)
+  assert.equal(isDocumentationPath('/docs/assets/app.js'), true)
+  assert.equal(isDocumentationPath('/documentation'), false)
   assert.equal(isStaticPath('/frontend/index-abc.js'), true)
   assert.equal(isStaticPath('/favicon.ico'), true)
   assert.equal(isShellStaticPath('/frontend/index-abc.js'), true)
@@ -105,7 +110,8 @@ test('instance registry owns client associations, readiness, and cleanup', async
   const first = registry.register('tab-1', { name: 'port-1' }, 'client-1')
   registry.register('tab-2', { name: 'port-2' }, 'client-2')
   assert.equal(registry.scopeForClient('client-1'), 'tab-1')
-  assert.deepEqual(registry.clearExcept('tab-1'), ['tab-2'])
+  assert.equal(registry.onlyActiveScope(), null)
+  assert.equal(registry.retire('tab-2', 'client-2'), true)
   assert.equal(registry.scopeForClient('client-2'), null)
   assert.equal(registry.onlyActiveScope(), 'tab-1')
 
@@ -148,11 +154,12 @@ test('instance registry owns client associations, readiness, and cleanup', async
   assert.equal(await ready, true)
 })
 
-test('runtime cache identity follows Frappe assets and the app catalog', async () => {
+test('runtime cache identity follows Frappe assets, app catalog, and runtime manifest', async () => {
   const entries = new Map()
   const deleted = []
+  const fetched = []
   const cache = {
-    match: async key => entries.get(key),
+    match: async key => entries.get(key)?.clone(),
     put: async (key, value) => entries.set(key, value),
   }
   const cacheStorage = {
@@ -161,6 +168,7 @@ test('runtime cache identity follows Frappe assets and the app catalog', async (
     open: async () => cache,
   }
   const fetchFn = async value => {
+    fetched.push(typeof value === 'string' ? value : value.url)
     if (typeof value === 'string' && value.startsWith('/assets/assets.json')) {
       return new Response('{"app.js":"app.123.js"}')
     }
@@ -178,12 +186,21 @@ test('runtime cache identity follows Frappe assets and the app catalog', async (
 
   assert.equal(
     await runtimeCache.getCacheName(),
-    `frappe-assets-${hashString('{"app.js":"app.123.js"}\n{"sourceCatalogSha256":"catalog.456"}')}`,
+    `frappe-assets-${hashString('{"app.js":"app.123.js"}\n{"sourceCatalogSha256":"catalog.456"}\nasset')}`,
   )
   assert.deepEqual(deleted, ['frappe-assets-old'])
+  assert.equal(fetched.length, 3, 'initialization fetches only metadata')
+  assert.equal(entries.size, 0, 'initialization does not prefetch assets')
   const request = new Request('https://playground.test/assets/app.js')
   assert.equal(await (await runtimeCache.respond(request)).text(), 'asset')
   assert.equal(entries.size, 1)
+  assert.equal(await (await runtimeCache.respond(request)).text(), 'asset')
+  assert.equal(fetched.filter(url => url === request.url).length, 1, 'repeat requests use the cache')
+  const lazyRequest = new Request('https://playground.test/assets/locale/fr.json')
+  assert.equal(fetched.includes(lazyRequest.url), false)
+  await runtimeCache.respond(lazyRequest)
+  assert.equal(fetched.filter(url => url === lazyRequest.url).length, 1)
+  assert.equal(entries.size, 2)
 })
 
 test('backend proxy translates protocol responses and scopes redirects', async () => {
@@ -273,7 +290,7 @@ test('scoped HTML hides the virtual path before application scripts execute', ()
   assert.match(html, /window\.open/)
   assert.match(html, /window\.fetch/)
   assert.match(html, /XMLHttpRequest\.prototype\.open/)
-  assert.match(html, /target==='_blank'/)
+  assert.match(html, /target\s*===\s*'_blank'/)
   assert.match(html, /\/scope:tab-1/)
   assert.match(html, /site1/)
   assert.match(html, /user_id=/)
@@ -321,4 +338,76 @@ test('Socket.IO compatibility retires an abandoned poll without a reconnect loop
   assert.equal(await (await firstPoll).text(), '2')
   secondController.abort()
   assert.equal(await (await secondPoll).text(), '2')
+})
+
+test('backend requests settle and close their ports on timeout, abort, and malformed replies', async () => {
+  for (const mode of ['timeout', 'abort', 'malformed', 'send-error']) {
+    let channel
+    let timeout
+    let closed = 0
+    const controller = new AbortController()
+    const call = createBackendProxy({
+      MessageChannelClass: class { constructor() {
+        channel = this
+        this.port1 = { close() { closed++ } }
+        this.port2 = { close() { closed++ } }
+      } },
+      createBackendRequest, readBackendResponse, createAssociateClientMessage,
+      origin: 'https://playground.test',
+      setTimeoutFn: callback => { timeout = callback; return 1 }, clearTimeoutFn() {},
+    })
+    const result = call({ request: new Request('https://playground.test/ping', { signal: controller.signal }),
+      instance: { port: { postMessage() { if (mode === 'send-error') throw new Error('closed') } } },
+      scope: 'test', path: '/ping', query: '',
+    })
+    if (mode === 'timeout') timeout()
+    if (mode === 'abort') controller.abort()
+    if (mode === 'malformed') channel.port1.onmessage({ data: {} })
+    assert.equal((await result).status, mode === 'timeout' ? 504 : mode === 'abort' ? 499 : 503)
+    assert.equal(closed, 2)
+  }
+})
+
+test('registry retirement only removes the owning client and closes replaced ports', () => {
+  const registry = new InstanceRegistry()
+  let closed = 0
+  const port = () => ({ close() { closed++ } })
+  registry.register('test', port(), 'old')
+  registry.register('test', port(), 'new')
+  assert.equal(closed, 1)
+  assert.equal(registry.retire('test', 'old'), false)
+  assert.equal(registry.retire('test', 'new'), true)
+  assert.equal(closed, 2)
+  assert.equal(registry.size, 0)
+  assert.equal(registry.scopeForClient('old'), null)
+})
+
+test('generated bootstrap executes scoped fetch, popup, and cookie behavior', async () => {
+  const { runInNewContext } = await import('node:vm')
+  const { SCOPE_BOOTSTRAP_SOURCE: generated } = await import('../../artifacts/generated/scope-bootstrap.js')
+  const { SCOPE_BOOTSTRAP_SOURCE: authored } = await import('../../packages/service-worker/src/scope-bootstrap.js')
+  assert.equal(generated, authored)
+  const calls = []
+  const listeners = new Map()
+  const document = Object.create({ get cookie() { return 'user_id=Other; theme=dark' }, set cookie(value) { calls.push(value) } })
+  const context = {
+    document, URL, Request,
+    navigator: { serviceWorker: { controller: { postMessage() {} }, addEventListener() {}, ready: Promise.resolve() } },
+    location: new URL('https://playground.test/scope:example/desk'),
+    history: { replaceState: (...args) => calls.push(args[2]) },
+    addEventListener: (type, callback) => listeners.set(type, callback),
+    XMLHttpRequest: class { open() {} },
+    window: { fetch: input => calls.push(typeof input === 'string' ? input : input.url), open: url => calls.push(url) },
+  }
+  const html = rewriteScopedHtml('<head></head>', new Headers({ 'Content-Type': 'text/html' }),
+    'example', createAssociateClientMessage('example'), 'Admin</script>')
+  assert.equal((html.match(/<\/script>/g) || []).length, 1)
+  const script = html.slice(html.indexOf('>') + 1).replace(/^<script[^>]*>/, '').split('</script>')[0]
+  runInNewContext(script, context)
+  context.window.fetch('/api/method/ping')
+  context.window.open('http://site1/wiki')
+  context.window.fetch('https://external.test/api')
+  assert.deepEqual(calls, ['/desk', 'https://playground.test/scope:example/api/method/ping',
+    'https://playground.test/scope:example/wiki', 'https://external.test/api'])
+  assert.equal(document.cookie, 'theme=dark; user_id=Admin%3C%2Fscript%3E')
 })

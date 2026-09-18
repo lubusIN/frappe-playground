@@ -20,8 +20,28 @@ class FrappeWSGIHandler:
     def get_site_db_path(self, site_name):
         return os.path.join(self.bench_sites_path, site_name, "db", f"{site_name}.db")
 
+    def refresh_app_state(self):
+        """Invalidate app state without replacing Python or the session cookie jar."""
+        import importlib
+        from frappe.cache_manager import clear_controller_cache
+
+        importlib.invalidate_caches()
+        frappe.init(site=self.default_site, sites_path=self.bench_sites_path)
+        frappe.connect()
+        try:
+            frappe.clear_cache()
+            # Frappe normally invalidates controllers through Redis pub/sub.
+            # Its background listener cannot run in this single-threaded worker.
+            clear_controller_cache(site=self.default_site)
+            frappe.db.commit()
+        finally:
+            frappe.destroy()
+
     def initialize_environment(self):
         """Bootstraps the Frappe environment when the worker starts."""
+        # The package lives outside a conventional Bench apps/ tree, so Frappe
+        # cannot infer the asset/locale root from frappe.__file__.
+        os.environ["FRAPPE_BENCH_ROOT"] = os.path.dirname(self.bench_sites_path)
         os.chdir(self.bench_sites_path)
         os.environ["SITES_PATH"] = self.bench_sites_path
         os.environ["FRAPPE_SITE"] = self.default_site

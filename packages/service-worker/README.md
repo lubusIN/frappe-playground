@@ -20,6 +20,7 @@ playground tab and instance on the origin.
 - `src/routing.js` classifies and rewrites request URLs.
 - `src/instance-registry.js` tracks instance ports, clients, and readiness.
 - `src/backend-proxy.js` translates Fetch requests to protocol messages.
+- `src/scope-bootstrap.js` is readable source for the generated inline browser compatibility script.
 - `src/cache.js` manages versioned runtime asset caching.
 
 ## Boundaries

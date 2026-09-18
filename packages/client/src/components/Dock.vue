@@ -130,7 +130,7 @@
   <button
     v-else
     @click="isMinimized = false"
-    class="fixed bottom-4 right-4 z-50 flex h-12 w-12 items-center justify-center rounded-full shadow-[0_0_35px_#3b82f680] hover:scale-105 hover:shadow-[0_0_40px_#3b82f6aa] !outline-none !ring-0 focus:!outline-none focus:!ring-0 transition-all sm:bottom-6 sm:right-6 overflow-hidden bg-[#171717]"
+    class="fixed bottom-4 right-4 z-50 flex h-12 w-12 items-center justify-center rounded-6 shadow-[0_0_35px_#3b82f680] hover:scale-105 hover:shadow-[0_0_40px_#3b82f6aa] !outline-none !ring-0 focus:!outline-none focus:!ring-0 transition-all sm:bottom-6 sm:right-6 overflow-hidden bg-[#171717]"
     style="-webkit-tap-highlight-color: transparent;"
     title="Expand Playground Dock"
   >

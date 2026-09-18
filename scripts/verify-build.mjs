@@ -1,3 +1,5 @@
+import { listFrappeLocaleArtifacts } from './runtime-locales.mjs'
+import { authoredPublicFiles, runtimePublishPath } from './publication.mjs'
 import { createHash } from 'node:crypto'
 import { access, readFile, readdir, stat } from 'node:fs/promises'
 import path from 'node:path'
@@ -61,6 +63,7 @@ export async function verifyBuild({
   artifactsDir = defaultArtifactsDir,
   distDir = defaultDistDir,
   authoredCatalogPath = defaultAuthoredCatalogPath,
+  runtimeOnly = false,
 } = {}) {
   const errors = []
   const manifestPath = path.join(artifactsDir, 'manifest.json')
@@ -81,13 +84,32 @@ export async function verifyBuild({
     errors.push(`Invalid generated app catalog: ${error.message}`)
   }
 
-  const publishPaths = {
-    'frappe_runtime.tar.gz': 'storage/frappe_runtime.tar.gz',
-    'site1.db': 'storage/site1.db',
-    'assets/assets.json': 'assets/assets.json',
-    'apps/catalog.json': 'apps/catalog.json',
+  let localeArtifacts = []
+  try {
+    const publishedLocales = await listFrappeLocaleArtifacts(artifactsDir)
+    const declaredLocales = Object.keys(manifest.files || {}).filter(
+      name => /^assets\/locale\/[A-Za-z0-9_]+\/LC_MESSAGES\/frappe\.mo$/.test(name),
+    )
+    localeArtifacts = [...new Set([...publishedLocales, ...declaredLocales])]
+  } catch (error) {
+    errors.push(`Cannot inventory compiled Frappe translations: ${error.message}`)
   }
-  for (const app of appCatalog?.apps || []) publishPaths[app.archive] = app.archive
+  if (!localeArtifacts.length) errors.push('Runtime manifest must include compiled Frappe translations')
+  for (const name of localeArtifacts) {
+    const file = path.join(artifactsDir, name)
+    if (await exists(file)) {
+      const bytes = await readFile(file)
+      if (bytes.length < 28 || ![0x950412de, 0xde120495].includes(bytes.readUInt32LE(0))) {
+        errors.push(`Invalid compiled translation catalog: ${name}`)
+      }
+    }
+  }
+
+  const publishPaths = Object.fromEntries([
+    'frappe_runtime.tar.gz', 'site1.db', 'assets/assets.json', 'apps/catalog.json',
+    ...(appCatalog?.apps || []).map(app => app.archive),
+    ...localeArtifacts,
+  ].map(name => [name, runtimePublishPath(name)]))
   for (const app of appCatalog?.apps || []) {
     const archiveMetadata = manifest.files?.[app.archive]
     if (archiveMetadata?.bytes !== app.archiveBytes) {
@@ -105,7 +127,7 @@ export async function verifyBuild({
       errors.push(`Runtime manifest is missing ${artifactName}`)
       continue
     }
-    if (!await exists(artifactPath) || !await exists(publishPath)) {
+    if (!await exists(artifactPath) || (!runtimeOnly && !await exists(publishPath))) {
       errors.push(`Missing runtime artifact or publish copy: ${artifactName}`)
       continue
     }
@@ -115,36 +137,18 @@ export async function verifyBuild({
     }
     const [artifactHash, publishHash] = await Promise.all([
       sha256(artifactPath),
-      sha256(publishPath),
+      runtimeOnly ? null : sha256(publishPath),
     ])
     if (artifactHash !== metadata.sha256) errors.push(`Runtime artifact hash mismatch: ${artifactName}`)
-    if (publishHash !== metadata.sha256) errors.push(`Published artifact hash mismatch: ${publishName}`)
+    if (!runtimeOnly && publishHash !== metadata.sha256) errors.push(`Published artifact hash mismatch: ${publishName}`)
   }
 
-  const requiredFiles = [
-    'index.html',
-    'apps/catalog.json',
-    'sw.js',
-    'worker.js',
-    'config.js',
-    'protocol/app-catalog.js',
-    'protocol/messages.js',
-    'protocol/request.js',
-    'protocol/scope-url.js',
-    'protocol/version.js',
-    'runtime-config/packages.js',
-    'runtime-config/site.js',
-    'generated/python-sources.js',
-    'service-worker/backend-proxy.js',
-    'service-worker/cache.js',
-    'service-worker/instance-registry.js',
-    'service-worker/routing.js',
-    'server/filesystem.js',
-    'server/app-installer.js',
-    'server/persistence.js',
-    'server/request-handler.js',
-    'server/boot.js',
-  ]
+  if (runtimeOnly) {
+    if (errors.length) throw new Error(`Runtime verification failed:\n- ${errors.join('\n- ')}`)
+    return { frappeVersion: manifest.frappeVersion }
+  }
+
+  const requiredFiles = ['index.html', 'docs/index.html', 'apps/catalog.json', ...authoredPublicFiles().keys()]
   for (const file of requiredFiles) {
     if (!await exists(path.join(distDir, file))) errors.push(`Missing publish file: ${file}`)
   }

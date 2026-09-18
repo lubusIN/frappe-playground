@@ -45,7 +45,7 @@ import { LOGIN_DEMO } from '../playground/config.js'
 
 const dialogTitle = 'Experimental Playground'
 const dialogDescription =
-  'This playground runs entirely in your browser. Changes made here are temporary and will be lost when this tab is closed or reloaded.'
+  'This playground runs entirely in your browser. Changes are saved in this browser, but can be lost if site data is cleared or evicted.'
 
 defineProps({
   modelValue: {

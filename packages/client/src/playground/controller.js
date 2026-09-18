@@ -4,7 +4,8 @@ import {
   createAppInstallMessage,
   createAppUninstallMessage,
   createInitChannelMessage,
-  isProtocolMessage,
+  createCloseChannelMessage,
+  isControlMessage,
 } from '../../../protocol/src/messages.js'
 import { validateAppId } from '../../../protocol/src/app-catalog.js'
 import { getOrCreateInstanceSession, selectInstanceSession } from './session.js'
@@ -54,7 +55,6 @@ export class PlaygroundController {
     this.readyTimer = 0
     this.runtimeReady = false
     this.installedApps = []
-    this.started = false
     this.disposed = false
     this.handleControllerChange = null
     this.handleVisibilityChange = null
@@ -76,9 +76,19 @@ export class PlaygroundController {
     this.emit(PlaygroundEventType.PROGRESS, { stage, status, message })
   }
 
-  async start() {
-    if (this.started) return this.session
-    this.started = true
+  start() {
+    if (this.startPromise) return this.startPromise
+    this.abortController = new AbortController()
+    const starting = this.startRuntime(this.abortController.signal)
+    this.startPromise = starting
+    // Synchronous failures can dispose before the promise assignment above.
+    starting.catch(() => {
+      if (this.startPromise === starting) this.startPromise = null
+    })
+    return starting
+  }
+
+  async startRuntime(signal) {
     this.disposed = false
     this.reloadingForServiceWorkerUpdate = false
 
@@ -121,6 +131,7 @@ export class PlaygroundController {
           updateViaCache: 'none',
         }),
       )
+      signal.throwIfAborted()
       this.registration = registration
       this.serviceWorkerTarget = this.expectedServiceWorker(serviceWorker, registration)
 
@@ -128,6 +139,7 @@ export class PlaygroundController {
         const controllerReady = this.waitForExpectedServiceWorker(serviceWorker)
         this.progress(RuntimeStage.SERVICE_WORKER, 'active', 'Updating service worker...')
         const upgraded = await controllerReady
+        signal.throwIfAborted()
         if (upgraded === false) {
           throw new Error('The service worker update did not activate. Reload the page to retry.')
         }
@@ -140,8 +152,10 @@ export class PlaygroundController {
       this.setupRecovery()
       return this.session
     } catch (error) {
-      this.started = false
-      this.emitError(error)
+      if (!signal.aborted) {
+        this.emitError(error)
+        this.dispose()
+      }
       throw error
     }
   }
@@ -157,13 +171,13 @@ export class PlaygroundController {
     )
 
     this.worker.onmessage = event => {
-      if (isProtocolMessage(event.data, ProtocolMessageType.RUNTIME_LOG)) {
+      if (isControlMessage(event.data, ProtocolMessageType.RUNTIME_LOG)) {
         const { stage, status, message } = event.data.payload
         this.progress(stage, status, message)
         return
       }
 
-      if (isProtocolMessage(event.data, ProtocolMessageType.RUNTIME_READY)) {
+      if (isControlMessage(event.data, ProtocolMessageType.RUNTIME_READY)) {
         if (this.runtimeReady) {
           this.emit(PlaygroundEventType.WOKE_UP)
           return
@@ -181,12 +195,12 @@ export class PlaygroundController {
         return
       }
 
-      if (isProtocolMessage(event.data, ProtocolMessageType.RUNTIME_ERROR)) {
+      if (isControlMessage(event.data, ProtocolMessageType.RUNTIME_ERROR)) {
         this.emitError(new Error(event.data.payload.message))
         return
       }
 
-      if (isProtocolMessage(event.data, ProtocolMessageType.APP_INSTALL_RESULT)) {
+      if (isControlMessage(event.data, ProtocolMessageType.APP_INSTALL_RESULT)) {
         const pending = this.pendingAppOperations.get(event.data.payload.requestId)
         if (!pending) return
         this.environment.clearTimeoutFn(pending.timeout)
@@ -201,7 +215,7 @@ export class PlaygroundController {
         return
       }
 
-      if (isProtocolMessage(event.data, ProtocolMessageType.APP_UNINSTALL_RESULT)) {
+      if (isControlMessage(event.data, ProtocolMessageType.APP_UNINSTALL_RESULT)) {
         const pending = this.pendingAppOperations.get(event.data.payload.requestId)
         if (!pending) return
         this.environment.clearTimeoutFn(pending.timeout)
@@ -258,7 +272,7 @@ export class PlaygroundController {
       this.options.recoveryChannelName,
     )
     this.recoveryChannel.onmessage = event => {
-      if (isProtocolMessage(event.data, ProtocolMessageType.RECOVERY_REQUEST)) {
+      if (isControlMessage(event.data, ProtocolMessageType.RECOVERY_REQUEST)) {
         console.log('[Playground] Service Worker requested channel recovery.')
         this.emit(PlaygroundEventType.WAKING_UP)
         this.setupChannel()
@@ -284,21 +298,42 @@ export class PlaygroundController {
   }
 
   withRegistrationTimeout(registrationPromise) {
+    const signal = this.abortController?.signal
     return new Promise((resolve, reject) => {
-      const timeout = this.environment.registrationSetTimeoutFn(() => {
-        reject(new Error('Service worker registration timed out.'))
+      let timeout
+      const finish = (callback, value) => {
+        this.environment.registrationClearTimeoutFn(timeout)
+        signal?.removeEventListener('abort', abort)
+        callback(value)
+      }
+      const abort = () => finish(reject, signal.reason)
+      signal?.addEventListener('abort', abort, { once: true })
+      timeout = this.environment.registrationSetTimeoutFn(() => {
+        finish(reject, new Error('Service worker registration timed out.'))
       }, this.options.serviceWorkerRegistrationTimeoutMs)
-
       Promise.resolve(registrationPromise).then(
-        registration => {
-          this.environment.registrationClearTimeoutFn(timeout)
-          resolve(registration)
-        },
-        error => {
-          this.environment.registrationClearTimeoutFn(timeout)
-          reject(error)
-        },
+        value => finish(resolve, value),
+        error => finish(reject, error),
       )
+      if (signal?.aborted) abort()
+    })
+  }
+
+  waitUntilReady() {
+    if (this.runtimeReady) return Promise.resolve()
+    const signal = this.abortController?.signal
+    return new Promise((resolve, reject) => {
+      const finish = (callback, value) => {
+        offReady()
+        offError()
+        signal?.removeEventListener('abort', abort)
+        callback(value)
+      }
+      const offReady = this.on(PlaygroundEventType.READY, () => finish(resolve))
+      const offError = this.on(PlaygroundEventType.ERROR, ({ error }) => finish(reject, error))
+      const abort = () => finish(reject, signal.reason)
+      signal?.addEventListener('abort', abort, { once: true })
+      if (signal?.aborted) abort()
     })
   }
 
@@ -320,9 +355,11 @@ export class PlaygroundController {
   }
 
   waitForExpectedServiceWorker(serviceWorker) {
+    const signal = this.abortController?.signal
     return new Promise(resolve => {
       let timeout
       const finish = result => {
+        signal?.removeEventListener('abort', abort)
         serviceWorker.removeEventListener('controllerchange', handleControllerChange)
         this.environment.clearTimeoutFn(timeout)
         resolve(result)
@@ -331,11 +368,15 @@ export class PlaygroundController {
         if (this.isExpectedServiceWorker(serviceWorker.controller)) finish(true)
       }
 
+      const abort = () => finish(false)
+      signal?.addEventListener('abort', abort, { once: true })
       serviceWorker.addEventListener('controllerchange', handleControllerChange)
       timeout = this.environment.setTimeoutFn(
         () => finish(false),
         this.options.serviceWorkerUpgradeTimeoutMs,
       )
+      handleControllerChange()
+      if (signal?.aborted) abort()
     })
   }
 
@@ -372,7 +413,13 @@ export class PlaygroundController {
         reject(new Error(`Timed out while ${action} ${appId}.`))
       }, this.options.appOperationTimeoutMs)
       this.pendingAppOperations.set(requestId, { resolve, reject, timeout })
-      this.worker.postMessage(createMessage(requestId, appId))
+      try {
+        this.worker.postMessage(createMessage(requestId, appId))
+      } catch (error) {
+        this.environment.clearTimeoutFn(timeout)
+        this.pendingAppOperations.delete(requestId)
+        reject(error)
+      }
     })
   }
 
@@ -382,7 +429,8 @@ export class PlaygroundController {
 
   dispose() {
     this.disposed = true
-    this.started = false
+    this.abortController?.abort()
+    this.startPromise = null
     this.environment.clearTimeoutFn(this.readyTimer)
     this.runtimeReady = false
     this.installedApps = []
@@ -391,6 +439,13 @@ export class PlaygroundController {
       pending.reject(new Error('Playground stopped before the app operation completed.'))
     }
     this.pendingAppOperations.clear()
+    if (this.session) {
+      try {
+        this.serviceWorkerTarget?.postMessage(createCloseChannelMessage(this.session.id))
+      } catch (_) {
+        // The service worker may already have been replaced.
+      }
+    }
     this.worker?.terminate()
     this.worker = null
     this.registration = null
