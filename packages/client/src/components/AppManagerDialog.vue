@@ -23,7 +23,7 @@
     <template #actions>
       <div v-if="pendingRemoval || pendingInstall" class="w-full space-y-3 text-left">
         <p v-if="uninstallingAppId || installingAppId" class="m-0 text-sm text-ink-gray-6">
-          This can take several minutes; keep this tab open. The playground will reload automatically when finished.
+          This can take several minutes; keep this tab open. The Frappe view will refresh automatically when finished.
         </p>
         <p
           v-else-if="installError"
@@ -173,10 +173,10 @@ const dialogTitle = computed(() => {
 
 const dialogMessage = computed(() => {
   if (pendingRemoval.value) {
-    return `Uninstall “${pendingRemoval.value.title}”? This will remove the app and reload the playground.`
+    return `Uninstall “${pendingRemoval.value.title}”? This will remove the app and refresh the Frappe view.`
   }
   if (pendingInstall.value) {
-    return `Install “${pendingInstall.value.title}”? This will add the app and reload the playground.`
+    return `Install “${pendingInstall.value.title}”? This will add the app and refresh the Frappe view.`
   }
   return 'Add optional apps to this playground. Installed apps and their data stay isolated in this browser.'
 })

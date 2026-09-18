@@ -54,6 +54,10 @@ del temp_cookie_json
     }
   }
 
+  refreshAppState() {
+    return this.pyodide.runPythonAsync('_handler.refresh_app_state()')
+  }
+
   async exportCookieJar() {
     try {
       return await this.pyodide.runPythonAsync(`

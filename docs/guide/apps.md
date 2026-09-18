@@ -17,11 +17,11 @@ The authored catalog currently contains ERPNext 16.30.0, Frappe CRM 1.81.1, Frap
 3. The server worker installs declared Python dependencies with `micropip` using `keep_going` where applicable.
 4. It downloads the prepared archive, verifies both its byte length and SHA-256 digest, then unpacks it into the Pyodide filesystem.
 5. Frappe’s install lifecycle updates the current site.
-6. The database and installed-app list are persisted together. The shell reloads so hooks, DocTypes, and assets initialize with the new app present.
+6. The worker clears Frappe’s app, metadata, routing, and controller caches, then persists the database and installed-app list together. Only the Frappe view refreshes; the Python worker and outer playground page stay running.
 
-An uninstall calls Frappe’s `remove_app(..., yes=True, no_backup=True)`, then persists the new app list. Mutations are serialized. If a mutation fails, the worker restores its in-memory database backup and previous installed-app list. It does not roll back packages or archive files already added to the shared virtual environment; the authoritative installed-app list controls which apps are prepared on the next boot.
+An uninstall calls Frappe’s `remove_app(..., yes=True, no_backup=True)`, then persists the new app list. Mutations are serialized. If a mutation fails, the worker restores its in-memory database backup and previous installed-app list, then clears caches against the restored state. It does not roll back packages or archive files already added to the shared virtual environment; the authoritative installed-app list controls which apps are prepared on the next boot.
 
-The shell reloads after an app-manager install or uninstall. Keep the tab open while the operation runs. App installs initiated by URL boot flags occur before the initial iframe navigation and do not add an extra reload at that point.
+After an app-manager install or uninstall, the Frappe view returns to the site root so it cannot stay on a removed app’s route. The instance, saved data, and login session are preserved, without reloading Python or downloading installed apps again. App installs initiated by URL boot flags occur before the initial iframe navigation and do not add a view refresh. Imported Python modules remain resident; Frappe’s installed-app list controls active hooks and API access. Arbitrary app monkey patches cannot be undone by clearing caches and require explicit compatibility handling.
 
 ## Compatibility constraints
 
