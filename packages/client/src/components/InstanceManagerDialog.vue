@@ -65,57 +65,55 @@
       </div>
 
       <div v-else-if="!busy" class="-mt-5 w-full space-y-3 text-left">
-        <ListView
-          class="h-64 !w-full hide-list-header"
-          :columns="columns"
-          :rows="instances"
-          :options="listOptions"
-          row-key="id"
-        >
-          <template #cell="{ row, column }">
-          <div v-if="column.key === 'info'" class="flex flex-col gap-0.5 overflow-hidden text-left">
-            <div class="flex items-center gap-2">
-              <p class="truncate text-sm font-medium text-ink-gray-9">
-                {{ row.name }}
-              </p>
-            </div>
-            <span class="text-xs text-ink-gray-5 text-left">
-              {{ row.lastOpenedAt ? `Last Accessed ${formatDate(row.lastOpenedAt)}` : 'Never opened' }}
-            </span>
-          </div>
-          <div
-            v-else-if="column.key === 'actions'"
-            class="flex items-center justify-end gap-2"
-            @click.stop
-          >
-            <Button
-              v-if="row.id !== activeInstanceId"
-              size="sm"
-              variant="subtle"
-              @click="$emit('select', row.id)"
-            >
-              Open
-            </Button>
-            <Badge
-              v-if="row.id === activeInstanceId"
-              theme="blue"
-              variant="subtle"
-              size="md"
-            >
-              Active
-            </Badge>
-            <Dropdown
-              align="end"
-              :button="{
-                icon: 'lucide-ellipsis',
-                variant: 'ghost',
-                'aria-label': `Actions for ${row.name}`,
-              }"
-              :options="actionsFor(row)"
-            />
-          </div>
-          </template>
-        </ListView>
+        <List class="h-64 overflow-y-auto" :columns="['minmax(0, 1fr)', '120px']" :row-height="56">
+          <ListRow v-for="row in instances" :key="row.id" :value="row.id">
+            <ListCell>
+              <div class="flex flex-col gap-0.5 overflow-hidden text-left">
+                <div class="flex items-center gap-2">
+                  <p class="truncate text-sm font-medium text-ink-gray-9">
+                    {{ row.name }}
+                  </p>
+                </div>
+                <span class="text-xs text-ink-gray-5 text-left">
+                  {{ row.lastOpenedAt ? `Last Accessed ${formatDate(row.lastOpenedAt)}` : 'Never opened' }}
+                </span>
+              </div>
+            </ListCell>
+            <ListCell class="justify-end">
+              <div
+                class="flex items-center justify-end gap-2"
+                @click.stop
+              >
+                <Button
+                  v-if="row.id !== activeInstanceId"
+                  size="sm"
+                  variant="subtle"
+                  @click="$emit('select', row.id)"
+                >
+                  Open
+                </Button>
+                <Badge
+                  v-if="row.id === activeInstanceId"
+                  theme="blue"
+                  variant="subtle"
+                  size="md"
+                >
+                  Active
+                </Badge>
+                <Dropdown
+                  align="end"
+                  :button="{
+                    icon: 'lucide-ellipsis',
+                    variant: 'ghost',
+                    'aria-label': `Actions for ${row.name}`,
+                  }"
+                  :options="actionsFor(row)"
+                />
+              </div>
+            </ListCell>
+          </ListRow>
+        </List>
+        <p v-if="!instances.length" class="text-sm text-ink-gray-5">No playgrounds. Create a playground to get started.</p>
 
         <div class="flex justify-end">
           <Button variant="solid" @click="creating = true">New Playground</Button>
@@ -126,13 +124,9 @@
 </template>
 
 <script setup>
+import { Badge, Button, Dialog, Dropdown, TextInput } from 'frappe-ui'
 import { computed, ref, watch } from 'vue'
-import Badge from 'frappe-ui/components/Badge/Badge.vue'
-import Button from 'frappe-ui/components/Button/Button.vue'
-import Dialog from 'frappe-ui/components/Dialog/Dialog.vue'
-import Dropdown from 'frappe-ui/components/Dropdown/Dropdown.vue'
-import { ListView } from 'frappe-ui/experimental'
-import TextInput from 'frappe-ui/components/TextInput/TextInput.vue'
+import { List, ListRow, ListCell } from 'frappe-ui/list'
 
 const props = defineProps({
   busy: { type: Boolean, default: false },
@@ -164,22 +158,6 @@ defineExpose({
     directCreate.value = true
   }
 })
-
-const columns = [
-  { label: 'Saved Playground', key: 'info', width: 'minmax(0, 1fr)' },
-  { label: '', key: 'actions', width: '120px', align: 'right' },
-]
-
-const listOptions = computed(() => ({
-  selectable: false,
-  enableActive: false,
-  showTooltip: true,
-  rowHeight: 56,
-  emptyState: {
-    title: 'No playgrounds',
-    description: 'Create a playground to get started.',
-  },
-}))
 
 const selectedInstance = computed(() => (
   props.instances.find(instance => instance.id === selectedId.value) || null
@@ -292,9 +270,3 @@ function confirmAction() {
   pendingAction.value = ''
 }
 </script>
-
-<style scoped>
-:deep(.hide-list-header > .mb-2.grid) {
-  display: none !important;
-}
-</style>

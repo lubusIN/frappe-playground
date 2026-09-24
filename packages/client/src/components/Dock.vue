@@ -140,8 +140,8 @@
 </template>
 
 <script setup>
+import { Button } from 'frappe-ui'
 import { computed, ref, onMounted, onUnmounted } from 'vue'
-import Button from 'frappe-ui/components/Button/Button.vue'
 import { RotateCw, PanelsTopLeft, Blocks, HelpCircle, ChevronDown, ChevronUp, Maximize, Minimize, Plus, Terminal, Minus } from '@lucide/vue'
 import BrandIcon from './BrandIcon.vue'
 
