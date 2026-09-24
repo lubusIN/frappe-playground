@@ -245,6 +245,10 @@ def rewrite_sql_for_sqlite(sql):
     sql = _rewrite_calls(sql, "IF", _translate_if)
     sql = _rewrite_calls(sql, "TIMESTAMPDIFF", _translate_timestampdiff)
 
+    # Quote unquoted sequence names in nextval and setval
+    sql = re.sub(r"\bnextval\s*\(\s*([a-zA-Z0-9_]+)\s*\)", r"nextval('\1')", sql, flags=re.IGNORECASE)
+    sql = re.sub(r"\bsetval\s*\(\s*([a-zA-Z0-9_]+)\s*,", r"setval('\1',", sql, flags=re.IGNORECASE)
+
     # Convert MariaDB's ON DUPLICATE KEY UPDATE to SQLite's ON CONFLICT DO UPDATE SET
     sql = re.sub(
         r"ON\s+DUPLICATE\s+KEY\s+UPDATE",
