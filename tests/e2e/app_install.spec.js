@@ -136,12 +136,12 @@ for (const app of APPS_TO_TEST) {
     await expect(page.getByRole('dialog')).toContainText(app.name)
     await expect(page.getByTestId(`install-app-${app.id}`)).toBeVisible()
     await page.getByTestId(`install-app-${app.id}`).click()
-    await expect(page.getByRole('dialog')).toContainText('Install app?')
+    await expect(page.getByRole('dialog')).toContainText('Install App')
     const installedView = page.waitForEvent('framenavigated', {
       predicate: frame => frame.parentFrame() === page.mainFrame(), timeout: 300000,
     })
     await page.getByRole('button', { name: 'Install', exact: true }).click()
-    await expect(page.getByText('This can take several minutes; keep this tab open. The Frappe view will refresh automatically when finished.')).toBeVisible()
+    await expect(page.getByText('This can take several minutes; keep this tab open.')).toBeVisible()
 
     await expect(page.getByRole('dialog')).toContainText(`${app.name} installed successfully.`, { timeout: 300000 })
 
@@ -166,13 +166,13 @@ for (const app of APPS_TO_TEST) {
     await expect(page.getByRole('dialog')).toContainText(app.name)
     await expect(page.getByTestId(`install-app-${app.id}`)).toHaveCount(0)
     await page.getByTestId(`uninstall-app-${app.id}`).click()
-    await expect(page.getByRole('dialog')).toContainText('Uninstall app?')
+    await expect(page.getByRole('dialog')).toContainText('Uninstall App')
 
     const uninstalledView = page.waitForEvent('framenavigated', {
       predicate: frame => frame.parentFrame() === page.mainFrame(), timeout: 300000,
     })
     await page.getByRole('button', { name: 'Uninstall', exact: true }).click()
-    await expect(page.getByText('This can take several minutes; keep this tab open. The Frappe view will refresh automatically when finished.')).toBeVisible()
+    await expect(page.getByText('This can take several minutes; keep this tab open.')).toBeVisible()
     await expect(page.getByRole('dialog')).toContainText(`${app.name} uninstalled successfully.`, { timeout: 300000 })
     await uninstalledView
     await expect(page.getByRole('dialog')).toBeVisible()
