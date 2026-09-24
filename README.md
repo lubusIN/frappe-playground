@@ -11,14 +11,14 @@ Run Frappe Framework entirely in the browser with Pyodide and WebAssembly. Frapp
 
 ## Documentation
 
-Read the [Frappe Playground documentation](https://frappe-playground.pages.dev/docs/) for:
+Read the [Frappe Playground documentation](https://frappe-playground.lubus.in/docs/) for:
 
-- [using the playground](https://frappe-playground.pages.dev/docs/guide/getting-started)
-- [boot flags](https://frappe-playground.pages.dev/docs/guide/boot-flags)
-- [self-hosting and deployment](https://frappe-playground.pages.dev/docs/hosting/)
-- [customization](https://frappe-playground.pages.dev/docs/hosting/customize)
-- [architecture and inner workings](https://frappe-playground.pages.dev/docs/architecture/)
-- [contributor setup and testing](https://frappe-playground.pages.dev/docs/development/)
+- [using the playground](https://frappe-playground.lubus.in/docs/guide/getting-started)
+- [boot flags](https://frappe-playground.lubus.in/docs/guide/boot-flags)
+- [self-hosting and deployment](https://frappe-playground.lubus.in/docs/hosting/)
+- [customization](https://frappe-playground.lubus.in/docs/hosting/customize)
+- [architecture and inner workings](https://frappe-playground.lubus.in/docs/architecture/)
+- [contributor setup and testing](https://frappe-playground.lubus.in/docs/development/)
 
 ## Local development
 
@@ -46,7 +46,7 @@ Open `http://localhost:5173/`. Existing runtime artifacts can be reused for clie
 | `npm test` | Run contract, clean-build, and browser tests |
 | `npm run predeploy` | Prepare and verify the Cloudflare Pages output |
 
-See the [contributor guide](https://frappe-playground.pages.dev/docs/development/) for prerequisites, repository structure, build behavior, and focused test commands.
+See the [contributor guide](https://frappe-playground.lubus.in/docs/development/) for prerequisites, repository structure, build behavior, and focused test commands.
 
 ## Inspiration
 
