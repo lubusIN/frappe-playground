@@ -13,7 +13,7 @@ const {
   ready, booting, bootError, bootSteps, instanceId, instances, showIntroDialog,
   address, frameSrc, iframeRef, syncAddressFromFrame, navigateFrame, reloadFrame,
   showAppManager, availableApps, installedApps, appCatalogLoading, appCatalogError,
-  appInstallError, installingAppId, uninstallingAppId, openAppManager, retryAppCatalog,
+  appOperationNotice, appInstallError, installingAppId, uninstallingAppId, openAppManager, retryAppCatalog,
   installApp, uninstallApp, initPlayground, stopPlayground, failPlayground,
 } = usePlaygroundLifecycle()
 const showInfoDialog = ref(false)
@@ -69,6 +69,7 @@ function reloadPage() { window.location.reload() }
       :loading="appCatalogLoading"
       :error="appCatalogError"
       :install-error="appInstallError"
+      :operation-notice="appOperationNotice"
       :installing-app-id="installingAppId"
       :uninstalling-app-id="uninstallingAppId"
       @install="installApp"
