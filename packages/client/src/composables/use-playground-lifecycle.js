@@ -36,8 +36,10 @@ export function usePlaygroundLifecycle({
   const frame = useFrameNavigation({ ready, instanceId })
   const apps = useAppManager(() => playground, {
     refreshView: () => {
-      // The current route may belong to the app that was just removed.
-      frame.address.value = '/'
+      // Use an explicit Desk route: the root can render Desk at / and leave
+      // its client router on the wrong page after app hooks change.
+      // This also avoids returning to a route owned by an uninstalled app.
+      frame.address.value = '/desk'
       frame.reloadFrame()
     },
   })

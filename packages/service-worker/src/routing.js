@@ -117,7 +117,6 @@ const STATIC_PATHS = new Set([
   '/worker.js',
 ])
 const STATIC_PATH_PREFIXES = [
-  '/apps',
   '/assets',
   '/docs',
   '/frontend',
@@ -148,6 +147,8 @@ export function queryWithoutScope(url) {
 }
 
 export function isStaticPath(pathname) {
+  // /apps is also Frappe's app launcher route, not a static directory.
+  if (pathname === '/apps/catalog.json' || /^\/apps\/[a-z][a-z0-9_]*\/app\.zip$/.test(pathname)) return true
   if (STATIC_PATHS.has(pathname)) return true
   return STATIC_PATH_PREFIXES.some(prefix => pathname.startsWith(prefix))
 }
