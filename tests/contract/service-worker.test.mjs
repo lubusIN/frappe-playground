@@ -35,6 +35,17 @@ import {
   staticRequestUrl,
 } from '../../packages/service-worker/src/routing.js'
 
+test('app launcher routes stay in Frappe while catalog archives remain static', () => {
+  for (const path of ['/apps', '/apps/', '/apps/example', '/appstore']) {
+    assert.equal(isStaticPath(path), false)
+  }
+  assert.equal(isStaticPath('/apps/catalog.json'), true)
+  assert.equal(isStaticPath('/apps/erpnext/app.zip'), true)
+  const headers = new Headers({ Location: '/apps' })
+  scopeRedirectLocation(headers, 'tab-1', 'https://playground.test')
+  assert.equal(headers.get('Location'), '/scope:tab-1/apps')
+})
+
 test('routing scopes backend requests and remaps deploy-safe static assets', () => {
   const backendUrl = new URL('https://playground.test/scope:tab-1/api/method/ping?x=1')
   assert.equal(scopeFromUrl(backendUrl), 'tab-1')

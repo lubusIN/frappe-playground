@@ -11,7 +11,8 @@ const APPS_TO_TEST = [
     name: 'ERPNext',
     heavy: true,
     async customAssertions(_page, restoredFrame) {
-      await restoredFrame.goto('/app')
+      // Verify the automatic refresh itself instead of rescuing it with navigation.
+      expect(new URL(restoredFrame.url()).pathname).toContain('/desk')
       await expect(restoredFrame.getByText('Accounting', { exact: true }).first()).toBeVisible({
         timeout: 120000,
       })
