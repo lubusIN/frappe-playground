@@ -143,14 +143,6 @@ export default defineConfig(({ mode }) => ({
       },
     },
   },
-  resolve: {
-    alias: {
-      'frappe-ui/components': path.join(
-        projectRoot,
-        'node_modules/frappe-ui/src/components',
-      ),
-    },
-  },
   server: {
     port: 5173,
     strictPort: true,
@@ -167,16 +159,5 @@ export default defineConfig(({ mode }) => ({
     port: 8000,
     strictPort: false,
     headers: isolationHeaders,
-  },
-  optimizeDeps: {
-    // Frappe UI source imports feather-icons as a CJS default. Pre-bundle it
-    // so Vite serves an ESM interop wrapper instead of the raw UMD file.
-    include: [
-      'feather-icons',
-      'debug',
-      'highlight.js',
-      'highlight.js/lib/core',
-      'interactjs'
-    ],
   },
 }))

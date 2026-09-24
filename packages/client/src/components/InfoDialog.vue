@@ -12,6 +12,7 @@
     <div class="bg-surface-elevation-1 rounded-6 shadow-xl overflow-hidden flex flex-col relative text-left">
       <Button
         variant="ghost"
+        aria-label="Close"
         class="absolute top-2 right-2 z-10 w-8"
         @click="$emit('update:modelValue', false)"
       >
@@ -64,7 +65,7 @@
                     <User class="w-4 h-4 text-ink-gray-5" />
                   </template>
                   <template #suffix>
-                    <Button variant="ghost" @click="copyUsername(LOGIN_DEMO.username)">
+                    <Button variant="ghost" aria-label="Copy username" @click="copyUsername(LOGIN_DEMO.username)">
                       <template #icon>
                         <Check v-if="copiedUsername" class="w-4 h-4 text-green-600" />
                         <Copy v-else class="w-4 h-4 text-ink-gray-5" />
@@ -82,7 +83,7 @@
                     <Key class="w-4 h-4 text-ink-gray-5" />
                   </template>
                   <template #suffix>
-                    <Button variant="ghost" @click="copyPassword(LOGIN_DEMO.password)">
+                    <Button variant="ghost" aria-label="Copy password" @click="copyPassword(LOGIN_DEMO.password)">
                       <template #icon>
                         <Check v-if="copiedPassword" class="w-4 h-4 text-green-600" />
                         <Copy v-else class="w-4 h-4 text-ink-gray-5" />
@@ -128,13 +129,9 @@
 </template>
 
 <script setup>
+import { Badge, Button, Dialog, Tabs, FormControl } from 'frappe-ui'
 import { ref, computed } from 'vue'
 import { DialogTitle, DialogDescription, VisuallyHidden } from 'reka-ui'
-import Badge from 'frappe-ui/components/Badge/Badge.vue'
-import Button from 'frappe-ui/components/Button/Button.vue'
-import Dialog from 'frappe-ui/components/Dialog/Dialog.vue'
-import Tabs from 'frappe-ui/components/Tabs/Tabs.vue'
-import FormControl from 'frappe-ui/components/FormControl/FormControl.vue'
 import { User, Key, CheckCircle2, Rocket, Coffee, X, Bug, Heart, Headphones, ArrowRight, Copy, Check, BookOpen } from '@lucide/vue'
 import GithubIcon from './GithubIcon.vue'
 import BrandIcon from './BrandIcon.vue'

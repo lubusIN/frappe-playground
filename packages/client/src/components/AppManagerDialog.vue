@@ -4,7 +4,8 @@
     size="lg"
     :title="dialogTitle"
     :message="dialogMessage"
-    :icon="operationNotice?.type === 'success' ? { name: 'lucide-check', theme: 'green' } : undefined"
+    :icon="operationNotice?.type === 'success' ? 'lucide-check' : undefined"
+    :theme="operationNotice?.type === 'success' ? 'green' : undefined"
     @update:open="$emit('update:modelValue', $event)"
   >
     <template #title>
@@ -24,7 +25,7 @@
     <template #actions>
       <div v-if="pendingRemoval || pendingInstall" class="w-full space-y-3 text-left">
         <p v-if="!operationNotice && (uninstallingAppId || installingAppId)" class="m-0 text-sm text-ink-gray-6">
-          This can take several minutes; keep this tab open. The Frappe view will refresh automatically when finished.
+          This can take several minutes; keep this tab open.
         </p>
         <p
           v-else-if="installError"
@@ -83,59 +84,58 @@
         </div>
 
         <div v-else class="h-64 w-full overflow-y-auto">
-          <ListView
-            class="!w-full hide-list-header"
-            :columns="columns"
-            :rows="apps"
-            :options="listOptions"
-            row-key="id"
-          >
-          <template #cell="{ item, row, column }">
-            <div v-if="column.key === 'app'" class="flex items-start gap-3 min-w-0 py-1">
-              <Avatar
-                :image="row.logo || null"
-                :label="row.title"
-                shape="square"
-                size="2xl"
-                class="mt-0.5"
-              />
-              <div class="flex flex-col min-w-0 text-left">
-                <div class="flex min-w-0 flex-wrap items-center gap-1.5">
-                  <p class="m-0 truncate text-sm font-medium text-ink-gray-9">{{ row.title }}</p>
-                  <Badge size="sm" theme="gray" variant="subtle">
-                    v{{ row.version }}
-                  </Badge>
+          <p v-if="!apps.length" class="text-sm text-ink-gray-5">No apps available in this build.</p>
+          <List v-else :columns="['minmax(0, 1fr)', '92px']" :row-height="80">
+            <ListRow v-for="row in apps" :key="row.id" :value="row.id">
+              <ListCell>
+                <div class="flex items-start gap-3 min-w-0 py-1">
+                  <Avatar
+                    :image="row.logo || null"
+                    :label="row.title"
+                    shape="square"
+                    size="2xl"
+                    class="mt-0.5"
+                  />
+                  <div class="flex flex-col min-w-0 text-left">
+                    <div class="flex min-w-0 flex-wrap items-center gap-1.5">
+                      <p class="m-0 truncate text-sm font-medium text-ink-gray-9">{{ row.title }}</p>
+                      <Badge size="sm" theme="gray" variant="subtle">
+                        v{{ row.version }}
+                      </Badge>
+                    </div>
+                    <p class="m-0 mt-1 line-clamp-2 text-xs leading-4 text-ink-gray-5 text-left">
+                      {{ row.description }}
+                    </p>
+                  </div>
                 </div>
-                <p class="m-0 mt-1 line-clamp-2 text-xs leading-4 text-ink-gray-5 text-left">
-                  {{ row.description }}
-                </p>
-              </div>
-            </div>
-            <div v-else-if="column.key === 'actions'" class="flex justify-end" @click.stop>
-              <Button
-                v-if="!isInstalled(row.id)"
-                :data-testid="`install-app-${row.id}`"
-                size="sm"
-                variant="solid"
-                :disabled="Boolean(installingAppId || uninstallingAppId)"
-                @click="pendingInstall = row"
-              >
-                Install
-              </Button>
-              <Button
-                v-else
-                :data-testid="`uninstall-app-${row.id}`"
-                size="sm"
-                theme="red"
-                variant="ghost"
-                :disabled="Boolean(installingAppId || uninstallingAppId)"
-                @click="pendingRemoval = row"
-              >
-                Uninstall
-              </Button>
-            </div>
-          </template>
-        </ListView>
+              </ListCell>
+              <ListCell class="justify-end">
+                <div class="flex justify-end" @click.stop>
+                  <Button
+                    v-if="!isInstalled(row.id)"
+                    :data-testid="`install-app-${row.id}`"
+                    size="sm"
+                    variant="solid"
+                    :disabled="Boolean(installingAppId || uninstallingAppId)"
+                    @click="pendingInstall = row"
+                  >
+                    Install
+                  </Button>
+                  <Button
+                    v-else
+                    :data-testid="`uninstall-app-${row.id}`"
+                    size="sm"
+                    theme="red"
+                    variant="ghost"
+                    :disabled="Boolean(installingAppId || uninstallingAppId)"
+                    @click="pendingRemoval = row"
+                  >
+                    Uninstall
+                  </Button>
+                </div>
+              </ListCell>
+            </ListRow>
+          </List>
         </div>
 
 
@@ -145,12 +145,8 @@
 </template>
 
 <script setup>
-import Avatar from 'frappe-ui/components/Avatar/Avatar.vue'
-import Badge from 'frappe-ui/components/Badge/Badge.vue'
-import Button from 'frappe-ui/components/Button/Button.vue'
-import Dialog from 'frappe-ui/components/Dialog/Dialog.vue'
-import { ListView } from 'frappe-ui/experimental'
-import Spinner from 'frappe-ui/components/Spinner/Spinner.vue'
+import { Avatar, Badge, Button, Dialog, Spinner } from 'frappe-ui'
+import { List, ListRow, ListCell } from 'frappe-ui/list'
 import { computed, ref, watch } from 'vue'
 
 const props = defineProps({
@@ -171,10 +167,10 @@ const pendingRemoval = ref(null)
 const pendingInstall = ref(null)
 
 const dialogTitle = computed(() => {
-  if (props.operationNotice?.type === 'success') return pendingRemoval.value ? 'App uninstalled' : 'App installed'
-  if (props.installError) return pendingRemoval.value ? 'Uninstall failed' : 'Install failed'
-  if (pendingRemoval.value) return 'Uninstall app?'
-  if (pendingInstall.value) return 'Install app?'
+  if (props.operationNotice?.type === 'success') return pendingRemoval.value ? 'App Uninstalled' : 'App Installed'
+  if (props.installError) return pendingRemoval.value ? 'Uninstall Failed' : 'Install Failed'
+  if (pendingRemoval.value) return 'Uninstall App'
+  if (pendingInstall.value) return 'Install App'
   return 'Apps'
 })
 
@@ -182,10 +178,10 @@ const dialogMessage = computed(() => {
   if (props.operationNotice?.type === 'success') return props.operationNotice.message
   if (props.installError) return ''
   if (pendingRemoval.value) {
-    return `Uninstall “${pendingRemoval.value.title}”? This will remove the app and refresh the Frappe view.`
+    return `Remove the “${pendingRemoval.value.title}” app and refresh the site?`
   }
   if (pendingInstall.value) {
-    return `Install “${pendingInstall.value.title}”? This will add the app and refresh the Frappe view.`
+    return `Add the “${pendingInstall.value.title}” app and refresh the site?`
   }
   return 'Add optional apps to this playground. Installed apps and their data stay isolated in this browser.'
 })
@@ -201,29 +197,7 @@ watch(() => props.modelValue, open => {
 
 
 
-const columns = [
-  { label: 'App', key: 'app', width: 'minmax(0, 1fr)' },
-  { label: '', key: 'actions', width: '92px', align: 'right' },
-]
-
-const listOptions = {
-  selectable: false,
-  enableActive: false,
-  showTooltip: true,
-  rowHeight: 80,
-  emptyState: {
-    title: 'No apps available',
-    description: 'This build does not include any optional apps.',
-  },
-}
-
 function isInstalled(appId) {
   return props.installedApps.includes(appId)
 }
 </script>
-
-<style scoped>
-:deep(.hide-list-header > .mb-2.grid) {
-  display: none !important;
-}
-</style>
