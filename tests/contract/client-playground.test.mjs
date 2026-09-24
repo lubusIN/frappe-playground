@@ -497,7 +497,12 @@ test('app operations await view refresh only after success', async () => {
       listInstalledApps: () => action === 'installApp' ? ['wiki'] : [],
     }
     const manager = useAppManager(() => runtime, {
-      refreshView: () => new Promise(resolve => { refresh = resolve }),
+      refreshView: () => new Promise(resolve => {
+        assert.equal(manager.showAppManager.value, true)
+        assert.equal(manager.appOperationNotice.value.type, 'success')
+        assert.match(manager.appOperationNotice.value.message, /wiki .*ed successfully/)
+        refresh = resolve
+      }),
     })
     const pending = manager[action]('wiki').then(() => { completed = true })
     await Promise.resolve()
@@ -505,14 +510,21 @@ test('app operations await view refresh only after success', async () => {
     await manager[action]('wiki')
     assert.equal(calls, 1)
     assert.equal(completed, false)
+    await new Promise(resolve => setImmediate(resolve))
     refresh()
     await pending
+    assert.equal(manager.showAppManager.value, true)
     assert.equal(manager.installingAppId.value || manager.uninstallingAppId.value, '')
 
     runtime[action] = async () => { throw new Error('mutation failed') }
+    manager.showAppManager.value = true
+    const installedBeforeFailure = [...manager.installedApps.value]
     refresh = null
     await manager[action]('wiki')
-    assert.equal(manager.appInstallError.value, 'mutation failed')
+    assert.match(manager.appInstallError.value, /Failed to .* wiki. mutation failed/)
+    assert.equal(manager.appOperationNotice.value.type, 'error')
+    assert.equal(manager.showAppManager.value, true)
+    assert.deepEqual(manager.installedApps.value, installedBeforeFailure)
     assert.equal(refresh, null)
   }
 })

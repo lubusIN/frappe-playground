@@ -4,6 +4,7 @@
     size="lg"
     :title="dialogTitle"
     :message="dialogMessage"
+    :icon="operationNotice?.type === 'success' ? { name: 'lucide-check', theme: 'green' } : undefined"
     @update:open="$emit('update:modelValue', $event)"
   >
     <template #title>
@@ -22,7 +23,7 @@
     </template>
     <template #actions>
       <div v-if="pendingRemoval || pendingInstall" class="w-full space-y-3 text-left">
-        <p v-if="uninstallingAppId || installingAppId" class="m-0 text-sm text-ink-gray-6">
+        <p v-if="!operationNotice && (uninstallingAppId || installingAppId)" class="m-0 text-sm text-ink-gray-6">
           This can take several minutes; keep this tab open. The Frappe view will refresh automatically when finished.
         </p>
         <p
@@ -32,7 +33,10 @@
         >
           {{ installError }}
         </p>
-        <div v-if="pendingRemoval" class="flex justify-end gap-2">
+        <div v-if="operationNotice?.type === 'success'" class="flex justify-end">
+          <Button variant="solid" @click="$emit('update:modelValue', false)">Close</Button>
+        </div>
+        <div v-if="pendingRemoval && operationNotice?.type !== 'success'" class="flex justify-end gap-2">
           <Button variant="subtle" :disabled="Boolean(uninstallingAppId)" @click="pendingRemoval = null">
             Cancel
           </Button>
@@ -46,7 +50,7 @@
             Uninstall
           </Button>
         </div>
-        <div v-if="pendingInstall" class="flex justify-end gap-2">
+        <div v-if="pendingInstall && operationNotice?.type !== 'success'" class="flex justify-end gap-2">
           <Button variant="subtle" :disabled="Boolean(installingAppId)" @click="pendingInstall = null">
             Cancel
           </Button>
@@ -156,6 +160,7 @@ const props = defineProps({
   loading: { type: Boolean, default: false },
   error: { type: String, default: '' },
   installError: { type: String, default: '' },
+  operationNotice: { type: Object, default: null },
   installingAppId: { type: String, default: '' },
   uninstallingAppId: { type: String, default: '' },
 })
@@ -166,12 +171,16 @@ const pendingRemoval = ref(null)
 const pendingInstall = ref(null)
 
 const dialogTitle = computed(() => {
+  if (props.operationNotice?.type === 'success') return pendingRemoval.value ? 'App uninstalled' : 'App installed'
+  if (props.installError) return pendingRemoval.value ? 'Uninstall failed' : 'Install failed'
   if (pendingRemoval.value) return 'Uninstall app?'
   if (pendingInstall.value) return 'Install app?'
   return 'Apps'
 })
 
 const dialogMessage = computed(() => {
+  if (props.operationNotice?.type === 'success') return props.operationNotice.message
+  if (props.installError) return ''
   if (pendingRemoval.value) {
     return `Uninstall “${pendingRemoval.value.title}”? This will remove the app and refresh the Frappe view.`
   }
@@ -181,8 +190,10 @@ const dialogMessage = computed(() => {
   return 'Add optional apps to this playground. Installed apps and their data stay isolated in this browser.'
 })
 
+// Keep the current view throughout the closing animation. Reset only when
+// reopening the catalog, not when an in-flight operation reopens its result.
 watch(() => props.modelValue, open => {
-  if (!open && !props.uninstallingAppId && !props.installingAppId) {
+  if (open && !props.operationNotice && !props.uninstallingAppId && !props.installingAppId) {
     pendingRemoval.value = null
     pendingInstall.value = null
   }

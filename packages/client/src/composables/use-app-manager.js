@@ -1,4 +1,4 @@
-import { ref } from 'vue'
+import { nextTick, ref } from 'vue'
 import { loadAppCatalog } from '../playground/apps.js'
 
 export function useAppManager(getPlayground, {
@@ -11,6 +11,7 @@ export function useAppManager(getPlayground, {
   const appCatalogLoading = ref(false)
   const appCatalogError = ref('')
   const appInstallError = ref('')
+  const appOperationNotice = ref(null)
   const installingAppId = ref('')
   const uninstallingAppId = ref('')
   let catalogPromise
@@ -33,6 +34,7 @@ export function useAppManager(getPlayground, {
   async function openAppManager() {
     showAppManager.value = true
     appInstallError.value = ''
+    if (!installingAppId.value && !uninstallingAppId.value) appOperationNotice.value = null
     installedApps.value = getPlayground()?.listInstalledApps() || []
     try {
       await ensureCatalog()
@@ -47,15 +49,27 @@ export function useAppManager(getPlayground, {
     const activeId = action === 'installApp' ? installingAppId : uninstallingAppId
     activeId.value = appId
     appInstallError.value = ''
+    appOperationNotice.value = null
+    const title = availableApps.value.find(app => app.id === appId)?.title || appId
+    const verb = action === 'installApp' ? 'install' : 'uninstall'
+    let succeeded = false
     try {
       await playground[action](appId)
       if (getPlayground() !== playground || playground.disposed) return
+      succeeded = true
       installedApps.value = playground.listInstalledApps()
+      appOperationNotice.value = { type: 'success', message: `${title} ${verb}ed successfully.` }
+      showAppManager.value = true
+      await nextTick()
+      if (getPlayground() !== playground || playground.disposed) return
       await refreshView()
-      if (getPlayground() === playground && !playground.disposed) showAppManager.value = false
     } catch (error) {
       if (getPlayground() === playground && !playground.disposed) {
-        appInstallError.value = error.message
+        const message = succeeded
+          ? `${title} ${verb}ed successfully, but the site could not refresh. Please refresh the site manually.`
+          : `Failed to ${verb} ${title}.${error?.message ? ` ${error.message}` : ''}`
+        appInstallError.value = message
+        appOperationNotice.value = { type: 'error', message }
       }
     } finally {
       if (getPlayground() === playground) activeId.value = ''
@@ -80,6 +94,7 @@ export function useAppManager(getPlayground, {
   function resetAppState() {
     showAppManager.value = false
     installedApps.value = []
+    appOperationNotice.value = null
     installingAppId.value = ''
     uninstallingAppId.value = ''
     appInstallError.value = ''
@@ -87,7 +102,7 @@ export function useAppManager(getPlayground, {
 
   return {
     resetAppState, showAppManager, availableApps, installedApps, appCatalogLoading, appCatalogError,
-    appInstallError, installingAppId, uninstallingAppId, ensureCatalog, openAppManager,
+    appOperationNotice, appInstallError, installingAppId, uninstallingAppId, ensureCatalog, openAppManager,
     retryAppCatalog: openAppManager, installBootApp,
     installApp: appId => mutateApp(appId, 'installApp'),
     uninstallApp: appId => mutateApp(appId, 'uninstallApp'),

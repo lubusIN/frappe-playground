@@ -142,8 +142,12 @@ for (const app of APPS_TO_TEST) {
     await page.getByRole('button', { name: 'Install', exact: true }).click()
     await expect(page.getByText('This can take several minutes; keep this tab open. The Frappe view will refresh automatically when finished.')).toBeVisible()
 
+    await expect(page.getByRole('dialog')).toContainText(`${app.name} installed successfully.`, { timeout: 300000 })
+
     // Only the Frappe document refreshes; Python stays running.
     await installedView
+    await expect(page.getByRole('dialog')).toBeVisible()
+    await page.getByRole('dialog').getByRole('button', { name: 'Close', exact: true }).last().click()
     await expect(page.getByRole('dialog')).toBeHidden()
     await expect(page.locator('#frappe-desk')).toBeVisible({ timeout: 120000 })
     await assertSameShell()
@@ -168,7 +172,10 @@ for (const app of APPS_TO_TEST) {
     })
     await page.getByRole('button', { name: 'Uninstall', exact: true }).click()
     await expect(page.getByText('This can take several minutes; keep this tab open. The Frappe view will refresh automatically when finished.')).toBeVisible()
+    await expect(page.getByRole('dialog')).toContainText(`${app.name} uninstalled successfully.`, { timeout: 300000 })
     await uninstalledView
+    await expect(page.getByRole('dialog')).toBeVisible()
+    await page.getByRole('dialog').getByRole('button', { name: 'Close', exact: true }).last().click()
     await expect(page.getByRole('dialog')).toBeHidden()
     await expect(page.locator('#frappe-desk')).toBeVisible({ timeout: 120000 })
     await getFrappeFrame(page)
