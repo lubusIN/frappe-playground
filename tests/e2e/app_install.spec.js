@@ -26,11 +26,11 @@ const APPS_TO_TEST = [
       const wikiTabPromise = page.waitForEvent('popup', { timeout: 120000 })
       const standaloneRequests = []
       page.context().on('request', request => standaloneRequests.push(request.url()))
-      await restoredFrame.evaluate(() => window.open('/wiki', '_blank'))
+      await restoredFrame.evaluate(() => window.open('/wiki-app', '_blank'))
       const wikiTab = await wikiTabPromise
-      await wikiTab.waitForURL(url => url.pathname === '/wiki/spaces', { timeout: 120000 })
+      await wikiTab.waitForURL(url => url.pathname === '/wiki-app' || url.pathname === '/wiki-app/', { timeout: 120000 })
       await wikiTab.waitForTimeout(10000)
-      expect(new URL(wikiTab.url()).pathname).toBe('/wiki/spaces')
+      expect(new URL(wikiTab.url()).pathname).toMatch(/^\/wiki-app\/?$/)
       expect(standaloneRequests.some(url => new URL(url).pathname.endsWith('/login'))).toBe(false)
       expect(standaloneRequests.some(url => new URL(url).port === '9000')).toBe(false)
       const socketRequests = standaloneRequests.filter(

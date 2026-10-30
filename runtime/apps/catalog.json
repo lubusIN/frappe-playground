@@ -56,10 +56,10 @@
       "id": "wiki",
       "title": "Frappe Wiki",
       "description": "A documentation and knowledge-base app.",
-      "version": "3.0.0-rc.4",
+      "version": "3.2.1",
       "license": "MIT",
       "experimental": true,
-      "logo": "https://raw.githubusercontent.com/frappe/wiki/refs/heads/develop/wiki/public/images/wiki-logo.png",
+      "logo": "https://raw.githubusercontent.com/frappe/wiki/0c0adb06b9deb84d11d1f95e85df891c2a29f8da/wiki/public/images/wiki-logo.png",
       "frappeVersion": ">=16.0.0 <17.0.0",
       "archive": "apps/wiki/app.zip",
       "assetPrefix": "/assets/wiki",
@@ -68,11 +68,12 @@
         "benchmarks"
       ],
       "pythonDependencies": [
-        "mistune>=3.0"
+        "markdown-it-py>=3.0",
+        "mdit-py-plugins>=0.4"
       ],
       "source": {
         "repository": "https://github.com/frappe/wiki.git",
-        "ref": "6420bd3d41c0b9ac60b552ab9c8bf9155ac9b7cd"
+        "ref": "0c0adb06b9deb84d11d1f95e85df891c2a29f8da"
       }
     },
     {
