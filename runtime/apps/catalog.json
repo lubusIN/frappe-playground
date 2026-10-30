@@ -33,10 +33,10 @@
       "id": "crm",
       "title": "Frappe CRM",
       "description": "An open-source customer relationship management app.",
-      "version": "1.81.1",
+      "version": "1.85.1",
       "license": "AGPL-3.0",
       "experimental": true,
-      "logo": "https://raw.githubusercontent.com/frappe/crm/main/.github/logo.svg",
+      "logo": "https://raw.githubusercontent.com/frappe/crm/a6dfe8bf39e74c22b6212a43c8dadfb569c12154/.github/logo.svg",
       "frappeVersion": ">=15.0.0 <17.0.0",
       "archive": "apps/crm/app.zip",
       "assetPrefix": "/assets/crm",
@@ -49,7 +49,7 @@
       ],
       "source": {
         "repository": "https://github.com/frappe/crm.git",
-        "ref": "85684310ca688a467374f759a2996440e91f12b3"
+        "ref": "a6dfe8bf39e74c22b6212a43c8dadfb569c12154"
       }
     },
     {

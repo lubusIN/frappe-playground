@@ -4,7 +4,7 @@ The app manager installs only applications prepared in the build-time catalog. I
 
 ## Current catalog
 
-The authored catalog currently contains ERPNext 16.30.0, Frappe CRM 1.81.1, Frappe Wiki 3.2.1, and Frappe Vault 1.2.0. Every entry is marked experimental and pinned to a specific Git commit; `runtime/apps/catalog.json` is the source of truth.
+The authored catalog currently contains ERPNext 16.30.0, Frappe CRM 1.85.1, Frappe Wiki 3.2.1, and Frappe Vault 1.2.0. Every entry is marked experimental and pinned to a specific Git commit; `runtime/apps/catalog.json` is the source of truth.
 
 ![The optional-app manager listing installable catalog apps](/images/app-manager.png)
 
