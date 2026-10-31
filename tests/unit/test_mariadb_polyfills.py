@@ -128,6 +128,115 @@ class MariaDBPolyfillsTest(unittest.TestCase):
         )
         self.assertIn("ON CONFLICT DO UPDATE SET", translated)
 
+    # ── sequence polyfill tests (nextval / setval) ──────────────────────
+
+    def test_nextval_unquoted(self):
+        # CRM Task autoname autoincrement executes SELECT nextval(crm_task_id_seq)
+        first = self.run_sql("SELECT nextval(crm_task_id_seq)")[0]
+        second = self.run_sql("SELECT nextval(crm_task_id_seq)")[0]
+        self.assertEqual(first, 1)
+        self.assertEqual(second, 2)
+
+    def test_nextval_quoted_and_backticked(self):
+        first = self.run_sql("SELECT nextval('custom_seq')")[0]
+        second = self.run_sql("SELECT nextval(`custom_seq`)")[0]
+        self.assertEqual(first, 1)
+        self.assertEqual(second, 2)
+
+    def test_setval_false(self):
+        # setval with is_used=false means the nextval returns the set value
+        set_res = self.run_sql("SELECT setval(order_seq, 50, false)")[0]
+        self.assertEqual(set_res, 50)
+        next_res = self.run_sql("SELECT nextval(order_seq)")[0]
+        self.assertEqual(next_res, 50)
+
+    def test_setval_true(self):
+        # setval with is_used=true means nextval returns set value + 1
+        set_res = self.run_sql("SELECT setval(`invoice_seq`, 100, true)")[0]
+        self.assertEqual(set_res, 100)
+        next_res = self.run_sql("SELECT nextval(`invoice_seq`)")[0]
+        self.assertEqual(next_res, 101)
+
+    def test_nextval_initializes_from_existing_table(self):
+        self.conn.execute("CREATE TABLE \"tabLead\" (name INTEGER PRIMARY KEY, title TEXT)")
+        self.conn.execute("INSERT INTO \"tabLead\" VALUES (10, 'Lead A'), (25, 'Lead B')")
+        # sequence lead_id_seq should detect tabLead and start after 25
+        first = self.run_sql("SELECT nextval(lead_id_seq)")[0]
+        self.assertEqual(first, 26)
+        second = self.run_sql("SELECT nextval(lead_id_seq)")[0]
+        self.assertEqual(second, 27)
+
+    # ── case-insensitive primary key collation tests ────────────────────
+
+    def test_create_table_primary_key_uses_nocase(self):
+        sql = "CREATE TABLE `tabCRM Lost Reason` (name TEXT PRIMARY KEY, description TEXT)"
+        rewritten = rewrite_sql_for_sqlite(sql)
+        self.assertIn("name TEXT COLLATE NOCASE PRIMARY KEY", rewritten)
+
+    def test_nocase_primary_key_matches_case_insensitively(self):
+        create_sql = rewrite_sql_for_sqlite(
+            "CREATE TABLE `tabCRM Lost Reason` (name TEXT PRIMARY KEY, description TEXT)"
+        )
+        self.conn.execute(create_sql)
+        self.conn.execute(
+            "INSERT INTO `tabCRM Lost Reason` VALUES ('Budget Constraints', 'No budget available')"
+        )
+        row = self.run_sql(
+            "SELECT name FROM `tabCRM Lost Reason` WHERE name = 'Budget constraints'"
+        )
+        self.assertIsNotNone(row)
+        self.assertEqual(row[0], "Budget Constraints")
+
+    # ── string functions (CONCAT, CONCAT_WS, FIELD, LOCATE) ────────────
+
+    def test_concat(self):
+        row = self.run_sql("select CONCAT('Hello', ' ', 'World')")
+        self.assertEqual(row[0], "Hello World")
+
+    def test_concat_null_returns_null(self):
+        row = self.run_sql("select CONCAT('Hello', NULL, 'World')")
+        self.assertIsNone(row[0])
+
+    def test_concat_nested_inside_if(self):
+        # frappe_vault dashboard query pattern:
+        # COALESCE(IF(condition, CONCAT(a, ' / ', b), b), 'Unfiled')
+        row = self.run_sql(
+            "select COALESCE(IF('parent' != '', CONCAT('parent', ' / ', 'sub'), 'sub'), 'Unfiled')"
+        )
+        self.assertEqual(row[0], "parent / sub")
+
+    def test_concat_ws(self):
+        row = self.run_sql("select CONCAT_WS(' : ', 'Actual Qty', 10, 'kg')")
+        self.assertEqual(row[0], "Actual Qty : 10 : kg")
+
+    def test_concat_ws_skips_null(self):
+        row = self.run_sql("select CONCAT_WS(' ', 'First', NULL, 'Last')")
+        self.assertEqual(row[0], "First Last")
+
+    def test_concat_ws_null_separator(self):
+        row = self.run_sql("select CONCAT_WS(NULL, 'First', 'Last')")
+        self.assertIsNone(row[0])
+
+    def test_field(self):
+        row = self.run_sql("select FIELD('Medium', 'High', 'Medium', 'Low')")
+        self.assertEqual(row[0], 2)
+        row_ci = self.run_sql("select FIELD('medium', 'High', 'Medium', 'Low')")
+        self.assertEqual(row_ci[0], 2)
+        row_none = self.run_sql("select FIELD('Unknown', 'High', 'Medium', 'Low')")
+        self.assertEqual(row_none[0], 0)
+        row_null = self.run_sql("select FIELD(NULL, 'High', 'Medium', 'Low')")
+        self.assertEqual(row_null[0], 0)
+
+    def test_locate(self):
+        row = self.run_sql("select LOCATE('bar', 'foobarbaz')")
+        self.assertEqual(row[0], 4)
+        row_pos = self.run_sql("select LOCATE('bar', 'foobarbarbaz', 5)")
+        self.assertEqual(row_pos[0], 7)
+        row_missing = self.run_sql("select LOCATE('xyz', 'foobarbaz')")
+        self.assertEqual(row_missing[0], 0)
+        row_null = self.run_sql("select LOCATE(NULL, 'foobarbaz')")
+        self.assertIsNone(row_null[0])
+
     # ── things that must NOT be rewritten ───────────────────────────────
 
     def test_ifnull_is_left_alone(self):

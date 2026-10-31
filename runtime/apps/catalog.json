@@ -5,16 +5,17 @@
       "id": "erpnext",
       "title": "ERPNext",
       "description": "An open-source suite for accounting, inventory, manufacturing, and more.",
-      "version": "16.30.0",
+      "version": "16.53.0",
       "license": "GPL-3.0",
       "experimental": true,
-      "logo": "https://raw.githubusercontent.com/frappe/erpnext/8378b6e203841c056925420cc44e6d631c915cf1/erpnext/public/images/erpnext-logo.svg",
-      "frappeVersion": ">=16.21.0 <17.0.0",
+      "logo": "https://raw.githubusercontent.com/frappe/erpnext/9cd11b19575bfc34f092a24f6c8b368c4dd69481/erpnext/public/images/erpnext-logo.svg",
+      "frappeVersion": ">=16.50.0 <17.0.0",
       "archive": "apps/erpnext/app.zip",
       "assetPrefix": "/assets/erpnext",
       "packageRoot": "erpnext",
       "archiveExcludes": [
-        "public"
+        "public",
+        "locale"
       ],
       "pythonDependencies": [
         "Unidecode~=1.4.0",
@@ -26,60 +27,63 @@
       ],
       "source": {
         "repository": "https://github.com/frappe/erpnext.git",
-        "ref": "8378b6e203841c056925420cc44e6d631c915cf1"
+        "ref": "9cd11b19575bfc34f092a24f6c8b368c4dd69481"
       }
     },
     {
       "id": "crm",
       "title": "Frappe CRM",
       "description": "An open-source customer relationship management app.",
-      "version": "1.81.1",
+      "version": "1.85.1",
       "license": "AGPL-3.0",
       "experimental": true,
-      "logo": "https://raw.githubusercontent.com/frappe/crm/main/.github/logo.svg",
+      "logo": "https://raw.githubusercontent.com/frappe/crm/a6dfe8bf39e74c22b6212a43c8dadfb569c12154/.github/logo.svg",
       "frappeVersion": ">=15.0.0 <17.0.0",
       "archive": "apps/crm/app.zip",
       "assetPrefix": "/assets/crm",
       "packageRoot": "crm",
       "archiveExcludes": [
-        "public"
+        "public",
+        "locale"
       ],
       "pythonDependencies": [
         "twilio==8.5.0"
       ],
       "source": {
         "repository": "https://github.com/frappe/crm.git",
-        "ref": "85684310ca688a467374f759a2996440e91f12b3"
+        "ref": "a6dfe8bf39e74c22b6212a43c8dadfb569c12154"
       }
     },
     {
       "id": "wiki",
       "title": "Frappe Wiki",
       "description": "A documentation and knowledge-base app.",
-      "version": "3.0.0-rc.4",
+      "version": "3.2.1",
       "license": "MIT",
       "experimental": true,
-      "logo": "https://raw.githubusercontent.com/frappe/wiki/refs/heads/develop/wiki/public/images/wiki-logo.png",
+      "logo": "https://raw.githubusercontent.com/frappe/wiki/0c0adb06b9deb84d11d1f95e85df891c2a29f8da/wiki/public/images/wiki-logo.png",
       "frappeVersion": ">=16.0.0 <17.0.0",
       "archive": "apps/wiki/app.zip",
       "assetPrefix": "/assets/wiki",
       "packageRoot": "wiki",
       "archiveExcludes": [
-        "benchmarks"
+        "benchmarks",
+        "public"
       ],
       "pythonDependencies": [
-        "mistune>=3.0"
+        "markdown-it-py>=3.0",
+        "mdit-py-plugins>=0.4"
       ],
       "source": {
         "repository": "https://github.com/frappe/wiki.git",
-        "ref": "6420bd3d41c0b9ac60b552ab9c8bf9155ac9b7cd"
+        "ref": "0c0adb06b9deb84d11d1f95e85df891c2a29f8da"
       }
     },
     {
       "id": "frappe_vault",
       "title": "Frappe Vault",
       "description": "A password and secrets manager.",
-      "version": "1.1.0",
+      "version": "1.2.0",
       "license": "MIT",
       "experimental": true,
       "logo": "https://raw.githubusercontent.com/lubusIN/frappe-vault/refs/heads/main/frappe_vault/public/images/vault-logo.svg",
@@ -93,7 +97,7 @@
       "pythonDependencies": [],
       "source": {
         "repository": "https://github.com/lubusIN/frappe-vault.git",
-        "ref": "c7b1aa4d7cd990a8b9c2d9b93735b6f09544f22b"
+        "ref": "d399e253143b921bc40c40cf87aeaec522061050"
       }
     }
   ]

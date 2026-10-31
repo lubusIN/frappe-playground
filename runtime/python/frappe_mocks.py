@@ -23,6 +23,22 @@ def create_exception_mock(name):
     """Returns a dynamically generated Exception subclass to safely mock module errors."""
     return type(name, (Exception,), {})
 
+class DummyExceptionModule(DummyModule):
+    """A mock module that dynamically creates Exception classes for unknown attributes."""
+    def __getattr__(self, name):
+        if name.startswith("__") and name.endswith("__"):
+            raise AttributeError(name)
+        exc = create_exception_mock(name)
+        setattr(self, name, exc)
+        return exc
+
+def create_exception_module_mock(name, **kwargs):
+    m = DummyExceptionModule(name)
+    for k, v in kwargs.items():
+        setattr(m, k, v)
+    sys.modules[name] = m
+    return m
+
 class AbsorbingMeta(type):
     def __getattr__(cls, name):
         if name.startswith("__") and name.endswith("__"):
@@ -413,13 +429,17 @@ rq_mod = create_mock("rq",
     get_current_job=lambda *a, **k: None
 )
 rq_mod.defaults = create_mock("rq.defaults", DEFAULT_WORKER_TTL=420)
-rq_mod.exceptions = create_mock("rq.exceptions",
+rq_mod.exceptions = create_exception_module_mock("rq.exceptions",
+    DeserializationError=create_exception_mock("DeserializationError"),
     InvalidJobOperation=create_exception_mock("InvalidJobOperation"),
     NoSuchJobError=create_exception_mock("NoSuchJobError")
 )
 rq_mod.job = create_mock("rq.job", Job=DummyJob, JobStatus=DummyJobStatus)
 rq_mod.logutils = create_mock("rq.logutils", setup_loghandlers=lambda *a, **k: None)
-rq_mod.timeouts = create_mock("rq.timeouts", JobTimeoutException=create_exception_mock("JobTimeoutException"))
+rq_mod.timeouts = create_exception_module_mock("rq.timeouts",
+    JobTimeoutException=create_exception_mock("JobTimeoutException"),
+    TimerDeathPenalty=create_exception_mock("TimerDeathPenalty")
+)
 rq_mod.worker = create_mock("rq.worker",
     DequeueStrategy=DummyDequeueStrategy, StopRequested=create_exception_mock("StopRequested"),
     WorkerStatus=AbsorbingMock
@@ -452,6 +472,52 @@ sys.meta_path.insert(0, AutoMockFinder([
     "sentry_sdk",
 ]))
 # <<< mock-test-target-list: integrations
+
+# ── Frappe Wiki Compatibility ───────────────────────────────────────
+
+# Wiki's public/ directory is omitted from the app archive to reduce payload size.
+# wiki.utils.get_tailwindcss_hash() reads public/css/tailwind.css from disk to
+# append a cache-busting query parameter. Wrap it to safely return an empty
+# string on OSError, matching wiki.utils.get_asset_hash's fallback behavior.
+import functools
+
+class _WikiPatcher:
+    def find_spec(self, fullname, path, target=None):
+        if fullname in ("wiki.utils", "frappe.utils.jinja"):
+            for finder in sys.meta_path:
+                if finder is self:
+                    continue
+                if hasattr(finder, "find_spec"):
+                    spec = finder.find_spec(fullname, path, target)
+                    if spec and getattr(spec, "loader", None):
+                        loader = spec.loader
+                        marker = "_" + fullname.replace(".", "_") + "_patched"
+                        if not getattr(loader, marker, False):
+                            orig_exec = loader.exec_module
+                            def exec_wrapper(module):
+                                orig_exec(module)
+                                if module.__name__ == "wiki.utils" and hasattr(module, "get_tailwindcss_hash"):
+                                    orig_fn = module.get_tailwindcss_hash
+                                    @functools.wraps(orig_fn)
+                                    def get_tailwindcss_hash(*a, **k):
+                                        try:
+                                            return orig_fn(*a, **k)
+                                        except Exception:
+                                            return ""
+                                    module.get_tailwindcss_hash = get_tailwindcss_hash
+                                elif module.__name__ == "frappe.utils.jinja" and hasattr(module, "_get_jenv"):
+                                    orig_get_jenv = module._get_jenv
+                                    def safe_get_jenv(*a, **k):
+                                        jenv = orig_get_jenv(*a, **k)
+                                        jenv.globals.setdefault("get_tailwindcss_hash", lambda: "")
+                                        return jenv
+                                    module._get_jenv = safe_get_jenv
+                            loader.exec_module = exec_wrapper
+                            setattr(loader, marker, True)
+                        return spec
+        return None
+
+sys.meta_path.insert(0, _WikiPatcher())
 
 # ── Install Frappe ──────────────────────────────────────────────────
 
