@@ -473,6 +473,52 @@ sys.meta_path.insert(0, AutoMockFinder([
 ]))
 # <<< mock-test-target-list: integrations
 
+# ── Frappe Wiki Compatibility ───────────────────────────────────────
+
+# Wiki's public/ directory is omitted from the app archive to reduce payload size.
+# wiki.utils.get_tailwindcss_hash() reads public/css/tailwind.css from disk to
+# append a cache-busting query parameter. Wrap it to safely return an empty
+# string on OSError, matching wiki.utils.get_asset_hash's fallback behavior.
+import functools
+
+class _WikiPatcher:
+    def find_spec(self, fullname, path, target=None):
+        if fullname in ("wiki.utils", "frappe.utils.jinja"):
+            for finder in sys.meta_path:
+                if finder is self:
+                    continue
+                if hasattr(finder, "find_spec"):
+                    spec = finder.find_spec(fullname, path, target)
+                    if spec and getattr(spec, "loader", None):
+                        loader = spec.loader
+                        marker = "_" + fullname.replace(".", "_") + "_patched"
+                        if not getattr(loader, marker, False):
+                            orig_exec = loader.exec_module
+                            def exec_wrapper(module):
+                                orig_exec(module)
+                                if module.__name__ == "wiki.utils" and hasattr(module, "get_tailwindcss_hash"):
+                                    orig_fn = module.get_tailwindcss_hash
+                                    @functools.wraps(orig_fn)
+                                    def get_tailwindcss_hash(*a, **k):
+                                        try:
+                                            return orig_fn(*a, **k)
+                                        except Exception:
+                                            return ""
+                                    module.get_tailwindcss_hash = get_tailwindcss_hash
+                                elif module.__name__ == "frappe.utils.jinja" and hasattr(module, "_get_jenv"):
+                                    orig_get_jenv = module._get_jenv
+                                    def safe_get_jenv(*a, **k):
+                                        jenv = orig_get_jenv(*a, **k)
+                                        jenv.globals.setdefault("get_tailwindcss_hash", lambda: "")
+                                        return jenv
+                                    module._get_jenv = safe_get_jenv
+                            loader.exec_module = exec_wrapper
+                            setattr(loader, marker, True)
+                        return spec
+        return None
+
+sys.meta_path.insert(0, _WikiPatcher())
+
 # ── Install Frappe ──────────────────────────────────────────────────
 
 # A missing Frappe archive is a boot failure!.
