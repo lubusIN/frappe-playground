@@ -67,7 +67,8 @@
       "assetPrefix": "/assets/wiki",
       "packageRoot": "wiki",
       "archiveExcludes": [
-        "benchmarks"
+        "benchmarks",
+        "public"
       ],
       "pythonDependencies": [
         "markdown-it-py>=3.0",
