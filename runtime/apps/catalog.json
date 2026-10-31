@@ -5,16 +5,17 @@
       "id": "erpnext",
       "title": "ERPNext",
       "description": "An open-source suite for accounting, inventory, manufacturing, and more.",
-      "version": "16.37.0",
+      "version": "16.53.0",
       "license": "GPL-3.0",
       "experimental": true,
-      "logo": "https://raw.githubusercontent.com/frappe/erpnext/af63cde4941570ec7b9e12422c68302762cfcf91/erpnext/public/images/erpnext-logo.svg",
-      "frappeVersion": ">=16.21.0 <17.0.0",
+      "logo": "https://raw.githubusercontent.com/frappe/erpnext/9cd11b19575bfc34f092a24f6c8b368c4dd69481/erpnext/public/images/erpnext-logo.svg",
+      "frappeVersion": ">=16.50.0 <17.0.0",
       "archive": "apps/erpnext/app.zip",
       "assetPrefix": "/assets/erpnext",
       "packageRoot": "erpnext",
       "archiveExcludes": [
-        "public"
+        "public",
+        "locale"
       ],
       "pythonDependencies": [
         "Unidecode~=1.4.0",
@@ -26,7 +27,7 @@
       ],
       "source": {
         "repository": "https://github.com/frappe/erpnext.git",
-        "ref": "af63cde4941570ec7b9e12422c68302762cfcf91"
+        "ref": "9cd11b19575bfc34f092a24f6c8b368c4dd69481"
       }
     },
     {
