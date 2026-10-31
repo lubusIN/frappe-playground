@@ -20,8 +20,8 @@ unless they expose a concrete Frappe integration constraint.
 
 ## Reference scope
 
-- The generated runtime currently contains **Frappe 16.30.0**.
-- `runtime/build/Dockerfile` builds from a pinned tag (`v16.30.0`) via a build argument,
+- The generated runtime currently contains **Frappe 16.54.0**.
+- `runtime/build/Dockerfile` builds from a pinned tag (`v16.54.0`) via a build argument,
   declared once in `runtime/frappe-version.json`. These notes therefore describe the
   checked runtime artifact, not every version of Frappe 16.
 - `tests/contract/runtime-version.test.mjs` fails if this document, `scripts/build.sh`,
@@ -77,7 +77,7 @@ appear in the later sections.
 
 **Historical observation:** Earlier runtime work found the telemetry facade importing `posthog` before checking whether telemetry was enabled.
 
-**Current status:** The pinned Frappe 16.30.0 runtime has changed its telemetry implementation, and the mock-removal audit now treats `posthog` as a removal candidate. Do not report the historical behavior upstream without reproducing it against the current source.
+**Current status:** The pinned Frappe 16.54.0 runtime has changed its telemetry implementation, and the mock-removal audit now treats `posthog` as a removal candidate. Do not report the historical behavior upstream without reproducing it against the current source.
 
 **Possible improvement if reproduced:** Load the configured telemetry provider only after telemetry is enabled.
 

@@ -1,12 +1,12 @@
 FROM python:3.14-slim
 
-ARG FRAPPE_VERSION=v16.30.0
+ARG FRAPPE_VERSION=v16.54.0
 
 # 1. Install system dependencies and node components
-RUN apt-get update && apt-get install -y \
+RUN apt-get update && apt-get install -y --no-install-recommends \
     git curl unzip tar build-essential libffi-dev pkg-config cron default-libmysqlclient-dev \
     && curl -fsSL https://deb.nodesource.com/setup_24.x | bash - \
-    && apt-get install -y nodejs \
+    && apt-get install -y --no-install-recommends nodejs \
     && npm install -g yarn \
     && yarn config set ignore-engines true \
     && rm -rf /var/lib/apt/lists/*
@@ -14,6 +14,7 @@ RUN apt-get update && apt-get install -y \
 WORKDIR /workspace
 
 COPY runtime/build/export-runtime-assets.py /workspace/scripts/export-runtime-assets.py
+COPY runtime/build/patch-sqlite-database.py /workspace/scripts/patch-sqlite-database.py
 
 # 2. Pre-download pure-Python dependencies
 RUN mkdir -p /workspace/dependencies
@@ -48,7 +49,8 @@ RUN mkdir -p /workspace/archive_root \
     && cp /workspace/dependencies/*.whl /workspace/archive_root/ 2>/dev/null || true \
     && cd /workspace/archive_root \
     && for wheel in *.whl; do unzip -q "$wheel" && rm "$wheel"; done \
-    && rm -rf *.dist-info
+    && rm -rf *.dist-info \
+    && python /workspace/scripts/patch-sqlite-database.py /workspace/archive_root/frappe/database/sqlite/database.py
 
 # 5. Boot a temporary bench and pre-bake the SQLite DB file
 # Create uv wrapper
@@ -60,6 +62,7 @@ RUN pip install frappe-bench \
 RUN useradd -ms /bin/bash frappe && chown -R frappe:frappe /workspace
 USER frappe
 RUN bench init --frappe-branch ${FRAPPE_VERSION} --skip-redis-config-generation  --python python3 test-bench \
+    && python /workspace/scripts/patch-sqlite-database.py /workspace/test-bench/apps/frappe/frappe/database/sqlite/database.py \
     && cd test-bench \
     && bench new-site playground.local --db-type sqlite --admin-password admin \
     && bench --site playground.local set-config ignore_csrf 1 \

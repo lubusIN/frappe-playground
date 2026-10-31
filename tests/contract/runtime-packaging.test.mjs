@@ -100,7 +100,8 @@ test('runtime verification detects omitted, missing, and corrupt compiled catalo
     await write(german, catalog)
     await write(french, catalog)
     await write('assets/locale/app_only/LC_MESSAGES/erpnext.mo', catalog)
-    const result = spawnSync(process.execPath, ['scripts/write-runtime-manifest.mjs', root, 'v16.30.0'], {
+    const frappeVersion = JSON.parse(await readFile('runtime/frappe-version.json', 'utf8')).frappeVersion
+    const result = spawnSync(process.execPath, ['scripts/write-runtime-manifest.mjs', root, frappeVersion], {
       encoding: 'utf8',
     })
     assert.equal(result.status, 0, result.stderr)

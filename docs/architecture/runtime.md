@@ -4,7 +4,7 @@ The runtime build converts a normal Frappe source tree into assets that Pyodide 
 
 ## Checked version
 
-The current repository pins Frappe **16.30.0** in `runtime/frappe-version.json`. `runtime/build/Dockerfile`, build scripts, tests, and the [compatibility notes](/development/upstream-notes) are checked against that declaration.
+The current repository pins Frappe **16.54.0** in `runtime/frappe-version.json`. `runtime/build/Dockerfile`, build scripts, tests, and the [compatibility notes](/development/upstream-notes) are checked against that declaration.
 
 ## Filesystem layout
 
