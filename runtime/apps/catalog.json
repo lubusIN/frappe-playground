@@ -43,7 +43,8 @@
       "assetPrefix": "/assets/crm",
       "packageRoot": "crm",
       "archiveExcludes": [
-        "public"
+        "public",
+        "locale"
       ],
       "pythonDependencies": [
         "twilio==8.5.0"
