@@ -363,6 +363,59 @@ def _days_in_month(year, month):
     return calendar.monthrange(year, month)[1]
 
 
+def _to_str(val):
+    if isinstance(val, bytes):
+        return val.decode("utf-8", errors="replace")
+    return str(val)
+
+
+def _sql_concat(*args):
+    """MariaDB CONCAT(str1, str2, ...). Returns NULL if any argument is NULL."""
+    if any(arg is None for arg in args):
+        return None
+    return "".join(_to_str(arg) for arg in args)
+
+
+def _sql_concat_ws(separator, *args):
+    """MariaDB CONCAT_WS(separator, str1, str2, ...). Skips NULLs after separator."""
+    if separator is None:
+        return None
+    sep = _to_str(separator)
+    return sep.join(_to_str(arg) for arg in args if arg is not None)
+
+
+def _sql_field(target, *values):
+    """MariaDB FIELD(val, val1, val2, ...). Returns 1-based index or 0."""
+    if target is None:
+        return 0
+    t = str(target).lower() if isinstance(target, str) else target
+    for i, val in enumerate(values, 1):
+        if val is None:
+            continue
+        v = str(val).lower() if isinstance(val, str) else val
+        if t == v:
+            return i
+    return 0
+
+
+def _sql_locate(*args):
+    """MariaDB LOCATE(substr, str[, pos]). Returns 1-based index or 0."""
+    if len(args) < 2 or any(a is None for a in args):
+        return None
+    substr = _to_str(args[0])
+    string = _to_str(args[1])
+    pos = 1
+    if len(args) > 2 and args[2] is not None:
+        try:
+            pos = int(args[2])
+        except (ValueError, TypeError):
+            return 0
+    if pos < 1:
+        return 0
+    idx = string.lower().find(substr.lower(), pos - 1)
+    return idx + 1 if idx != -1 else 0
+
+
 def _is_truthy(val):
     if isinstance(val, str):
         return val.strip().lower() in ("true", "1", "t")
@@ -504,6 +557,14 @@ def attach_mariadb_functions(connection):
         lambda value: (_to_datetime(value) - datetime(1970, 1, 1)).total_seconds()
         if _to_datetime(value) else None,
     )
+    connection.create_function("concat", -1, _sql_concat)
+    connection.create_function("concat_ws", -1, _sql_concat_ws)
+    connection.create_function("field", -1, _sql_field)
+    connection.create_function("locate", -1, _sql_locate)
+    try:
+        connection._mariadb_polyfills_attached = True
+    except (AttributeError, TypeError):
+        pass
     return connection
 
 
@@ -666,6 +727,10 @@ def install():
     original_execute_query = sqlite_database.SQLiteDatabase.execute_query
 
     def execute_query(self, query, values=None):
+        if getattr(self, "_conn", None) and not getattr(self, "_mariadb_polyfills_attached", False):
+            attach_mariadb_functions(self._conn)
+            self._mariadb_polyfills_attached = True
+
         if re.match(r"^\s*CREATE\s+(?:TEMPORARY\s+)?SEQUENCE\b", str(query), re.IGNORECASE):
             m = re.search(
                 r"CREATE\s+(?:TEMPORARY\s+)?SEQUENCE\s+(?:IF\s+NOT\s+EXISTS\s+)?([`'\"a-zA-Z0-9_]+)",
@@ -742,6 +807,13 @@ def install():
 
         Document.load_from_db = load_from_db
     except ImportError:
+        pass
+
+    try:
+        import frappe
+        if getattr(frappe, "db", None) and getattr(frappe.db, "_conn", None):
+            attach_mariadb_functions(frappe.db._conn)
+    except Exception:
         pass
 
     sqlite_database._mariadb_polyfills_attached = True
