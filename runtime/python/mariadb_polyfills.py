@@ -12,6 +12,7 @@ This module acts as a translation layer by:
 """
 
 import re
+import sqlite3
 from datetime import datetime, timedelta
 
 __all__ = ["rewrite_sql_for_sqlite", "attach_mariadb_functions", "install"]
@@ -245,9 +246,17 @@ def rewrite_sql_for_sqlite(sql):
     sql = _rewrite_calls(sql, "IF", _translate_if)
     sql = _rewrite_calls(sql, "TIMESTAMPDIFF", _translate_timestampdiff)
 
-    # Quote unquoted sequence names in nextval and setval
-    sql = re.sub(r"\bnextval\s*\(\s*([a-zA-Z0-9_]+)\s*\)", r"nextval('\1')", sql, flags=re.IGNORECASE)
-    sql = re.sub(r"\bsetval\s*\(\s*([a-zA-Z0-9_]+)\s*,", r"setval('\1',", sql, flags=re.IGNORECASE)
+    # Quote unquoted or backticked sequence names in nextval and setval
+    sql = re.sub(r"\bnextval\s*\(\s*[`'\"]?([a-zA-Z0-9_]+)[`'\"]?\s*\)", r"nextval('\1')", sql, flags=re.IGNORECASE)
+    sql = re.sub(r"\bsetval\s*\(\s*[`'\"]?([a-zA-Z0-9_]+)[`'\"]?\s*,", r"setval('\1',", sql, flags=re.IGNORECASE)
+
+    # Ensure SQLite TEXT primary keys use NOCASE collation like MariaDB utf8mb4_unicode_ci
+    sql = re.sub(
+        r"\bname\s+TEXT\s+(?!COLLATE\s+NOCASE\s+)PRIMARY\s+KEY\b",
+        "name TEXT COLLATE NOCASE PRIMARY KEY",
+        sql,
+        flags=re.IGNORECASE,
+    )
 
     # Convert MariaDB's ON DUPLICATE KEY UPDATE to SQLite's ON CONFLICT DO UPDATE SET
     sql = re.sub(
@@ -354,8 +363,126 @@ def _days_in_month(year, month):
     return calendar.monthrange(year, month)[1]
 
 
+def _is_truthy(val):
+    if isinstance(val, str):
+        return val.strip().lower() in ("true", "1", "t")
+    return bool(val)
+
+
+def _ensure_sequence_table(conn):
+    if getattr(conn, "_frappe_sequences_ready", False):
+        return
+    try:
+        conn.execute(
+            "CREATE TABLE IF NOT EXISTS __frappe_sequences ("
+            "name TEXT PRIMARY KEY, current_val INTEGER NOT NULL)"
+        )
+        conn._frappe_sequences_ready = True
+    except Exception:
+        pass
+
+
+def _sqlite_setval(conn, seq_name, next_val, is_used=True):
+    _ensure_sequence_table(conn)
+    seq_name = str(seq_name).strip().strip("'\"`")
+    next_val = int(next_val)
+    stored_val = next_val if _is_truthy(is_used) else next_val - 1
+    try:
+        cur = conn.cursor()
+        cur.execute(
+            "INSERT INTO __frappe_sequences (name, current_val) VALUES (?, ?) "
+            "ON CONFLICT(name) DO UPDATE SET current_val = ?",
+            (seq_name, stored_val, stored_val),
+        )
+    except sqlite3.OperationalError as e:
+        if "readonly" in str(e).lower():
+            mem_seqs = getattr(conn, "_memory_sequences", None)
+            if mem_seqs is None:
+                mem_seqs = {}
+                conn._memory_sequences = mem_seqs
+            mem_seqs[seq_name] = stored_val
+            return next_val
+        raise
+    return next_val
+
+
+def _sqlite_nextval(conn, seq_name):
+    _ensure_sequence_table(conn)
+    seq_name = str(seq_name).strip().strip("'\"`")
+    try:
+        cur = conn.cursor()
+        cur.execute("SELECT current_val FROM __frappe_sequences WHERE name = ?", (seq_name,))
+        row = cur.fetchone()
+        if row is not None:
+            next_val = row[0] + 1
+            cur.execute("UPDATE __frappe_sequences SET current_val = ? WHERE name = ?", (next_val, seq_name))
+            return next_val
+
+        # If not present in __frappe_sequences, determine starting value from existing table/sequence
+        start_val = 0
+        base_name = seq_name
+        if base_name.endswith("_id_seq"):
+            base_name = base_name[:-7]
+
+        try:
+            cur.execute("SELECT name FROM sqlite_master WHERE type='table'")
+            tables = [r[0] for r in cur.fetchall()]
+        except Exception:
+            tables = []
+
+        matched_table = None
+        for tbl in tables:
+            clean = tbl[3:] if tbl.startswith("tab") else tbl
+            scrubbed = re.sub(r"[-\s]+", "_", clean).lower()
+            if scrubbed == base_name or tbl == base_name or tbl == f"tab{base_name}":
+                matched_table = tbl
+                break
+
+        if matched_table:
+            try:
+                cur.execute(f'SELECT MAX(CAST(name AS INTEGER)) FROM "{matched_table}"')
+                max_row = cur.fetchone()
+                if max_row and max_row[0] is not None:
+                    start_val = max(start_val, int(max_row[0]))
+            except Exception:
+                pass
+
+            try:
+                cur.execute("SELECT seq FROM sqlite_sequence WHERE name = ?", (matched_table,))
+                seq_row = cur.fetchone()
+                if seq_row and seq_row[0] is not None:
+                    start_val = max(start_val, int(seq_row[0]))
+            except Exception:
+                pass
+
+        next_val = start_val + 1
+        cur.execute(
+            "INSERT INTO __frappe_sequences (name, current_val) VALUES (?, ?) "
+            "ON CONFLICT(name) DO UPDATE SET current_val = __frappe_sequences.current_val + 1",
+            (seq_name, next_val),
+        )
+        cur.execute("SELECT current_val FROM __frappe_sequences WHERE name = ?", (seq_name,))
+        result = cur.fetchone()
+        return result[0] if result else next_val
+
+    except sqlite3.OperationalError as e:
+        if "readonly" in str(e).lower():
+            mem_seqs = getattr(conn, "_memory_sequences", None)
+            if mem_seqs is None:
+                mem_seqs = {}
+                conn._memory_sequences = mem_seqs
+            val = mem_seqs.get(seq_name, 0) + 1
+            mem_seqs[seq_name] = val
+            return val
+        raise
+
+
 def attach_mariadb_functions(connection):
     """Register MariaDB-compatible helpers on one SQLite connection."""
+    _ensure_sequence_table(connection)
+    connection.create_function("nextval", 1, lambda seq: _sqlite_nextval(connection, seq))
+    connection.create_function("setval", 2, lambda seq, val: _sqlite_setval(connection, seq, val, True))
+    connection.create_function("setval", 3, lambda seq, val, used: _sqlite_setval(connection, seq, val, used))
     connection.create_function("mariadb_date_math", 3, _mariadb_date_math)
     connection.create_function("date_format", 2, _sql_date_format)
     connection.create_function("datediff", 2, _sql_datediff)
@@ -395,6 +522,129 @@ def install():
 
     sqlite_database.modify_query = modify_query
 
+    original_multisql = getattr(sqlite_database.SQLiteDatabase, "multisql", None)
+
+    def multisql(self, sql_dict, values=(), **kwargs):
+        current_dialect = self.db_type or "sqlite"
+        query = (
+            sql_dict.get(current_dialect)
+            or sql_dict.get("mariadb")
+            or sql_dict.get("*")
+        )
+        return self.sql(query, values, **kwargs)
+
+    sqlite_database.SQLiteDatabase.multisql = multisql
+
+    def create_sequence(self, doctype_name, *args, **kwargs):
+        try:
+            from frappe import scrub
+        except ImportError:
+            scrub = lambda s: re.sub(r"[-\s]+", "_", str(s)).lower()
+        slug = kwargs.get("slug", "_id_seq")
+        sequence_name = scrub(f"{doctype_name}{slug}")
+        start_value = kwargs.get("start_value", 0)
+        if start_value:
+            self.sql(f"SELECT setval('{sequence_name}', {int(start_value)}, false)")
+        return sequence_name
+
+    sqlite_database.SQLiteDatabase.create_sequence = create_sequence
+
+    def get_next_sequence_val(self, doctype_name, slug="_id_seq"):
+        try:
+            from frappe import scrub
+        except ImportError:
+            scrub = lambda s: re.sub(r"[-\s]+", "_", str(s)).lower()
+        sequence_name = scrub(f"{doctype_name}{slug}")
+        return self.sql(f"SELECT nextval('{sequence_name}')")[0][0]
+
+    sqlite_database.SQLiteDatabase.get_next_sequence_val = get_next_sequence_val
+
+    def set_next_sequence_val(self, doctype_name, next_val, slug="_id_seq", is_val_used=False):
+        try:
+            from frappe import scrub
+        except ImportError:
+            scrub = lambda s: re.sub(r"[-\s]+", "_", str(s)).lower()
+        sequence_name = scrub(f"{doctype_name}{slug}")
+        is_used = "true" if is_val_used else "false"
+        return self.sql(f"SELECT setval('{sequence_name}', {int(next_val)}, {is_used})")[0][0]
+
+    sqlite_database.SQLiteDatabase.set_next_sequence_val = set_next_sequence_val
+
+    original_get_values = sqlite_database.SQLiteDatabase.get_values
+
+    def get_values(self, doctype, filters=None, *args, **kwargs):
+        res = original_get_values(self, doctype, filters, *args, **kwargs)
+        if res or not kwargs.get("run", True):
+            return res
+
+        # Case-insensitive fallback for SQLite when filtering on document name
+        docname = None
+        if isinstance(filters, str):
+            docname = filters
+        elif isinstance(filters, dict) and "name" in filters and isinstance(filters["name"], str):
+            docname = filters["name"]
+        elif isinstance(filters, list):
+            for item in filters:
+                if isinstance(item, (list, tuple)) and len(item) >= 3:
+                    if item[0] == "name" and item[1] in ("=", "==") and isinstance(item[2], str):
+                        docname = item[2]
+                        break
+                    elif len(item) == 4 and item[1] == "name" and item[2] in ("=", "==") and isinstance(item[3], str):
+                        docname = item[3]
+                        break
+
+        if docname:
+            try:
+                import frappe
+                from frappe.model.utils import is_single_doctype
+                if not is_single_doctype(doctype):
+                    table_name = frappe.utils.get_table_name(doctype)
+                    matches = self.sql(
+                        f'SELECT name FROM `{table_name}` WHERE name = ? COLLATE NOCASE LIMIT 1',
+                        (docname,),
+                    )
+                    if matches and matches[0][0] and matches[0][0] != docname:
+                        canonical_name = matches[0][0]
+                        if isinstance(filters, str):
+                            new_filters = canonical_name
+                        elif isinstance(filters, dict):
+                            new_filters = dict(filters)
+                            new_filters["name"] = canonical_name
+                        elif isinstance(filters, list):
+                            new_filters = []
+                            for item in filters:
+                                if isinstance(item, (list, tuple)) and len(item) >= 3:
+                                    if item[0] == "name" and item[1] in ("=", "==") and item[2] == docname:
+                                        item = list(item)
+                                        item[2] = canonical_name
+                                        new_filters.append(item)
+                                    elif len(item) == 4 and item[1] == "name" and item[2] in ("=", "==") and item[3] == docname:
+                                        item = list(item)
+                                        item[3] = canonical_name
+                                        new_filters.append(item)
+                                    else:
+                                        new_filters.append(item)
+                                else:
+                                    new_filters.append(item)
+                        else:
+                            new_filters = filters
+
+                        fallback_res = original_get_values(self, doctype, new_filters, *args, **kwargs)
+                        if fallback_res:
+                            try:
+                                if hasattr(self, "value_cache") and isinstance(self.value_cache, dict):
+                                    if doctype in self.value_cache:
+                                        self.value_cache[doctype][docname] = self.value_cache[doctype].get(canonical_name, {})
+                            except Exception:
+                                pass
+                            return fallback_res
+            except Exception:
+                pass
+
+        return res
+
+    sqlite_database.SQLiteDatabase.get_values = get_values
+
     original_is_primary_key_violation = getattr(sqlite_database.SQLiteDatabase, "is_primary_key_violation", None)
 
     def is_primary_key_violation(e):
@@ -416,6 +666,22 @@ def install():
     original_execute_query = sqlite_database.SQLiteDatabase.execute_query
 
     def execute_query(self, query, values=None):
+        if re.match(r"^\s*CREATE\s+(?:TEMPORARY\s+)?SEQUENCE\b", str(query), re.IGNORECASE):
+            m = re.search(
+                r"CREATE\s+(?:TEMPORARY\s+)?SEQUENCE\s+(?:IF\s+NOT\s+EXISTS\s+)?([`'\"a-zA-Z0-9_]+)",
+                str(query),
+                re.IGNORECASE,
+            )
+            if m:
+                seq_name = m.group(1).strip("`'\"")
+                start_m = re.search(r"\bSTART\s+(\d+)", str(query), re.IGNORECASE)
+                start_val = int(start_m.group(1)) if start_m else 1
+                try:
+                    _sqlite_setval(self._conn, seq_name, start_val, False)
+                except Exception:
+                    pass
+            return self._cursor.execute("SELECT 1 WHERE 0")
+
         query = query.replace("%s", "?")
         try:
             if isinstance(values, dict):
@@ -446,5 +712,37 @@ def install():
         return attach_mariadb_functions(original_get_connection(self, read_only=read_only))
 
     sqlite_database.SQLiteDatabase.get_connection = get_connection
+
+    try:
+        from frappe.model.document import Document
+        original_load_from_db = Document.load_from_db
+
+        def load_from_db(self):
+            try:
+                return original_load_from_db(self)
+            except Exception as e:
+                import frappe
+                if (
+                    isinstance(e, frappe.DoesNotExistError)
+                    and not getattr(self.meta, "issingle", False)
+                    and isinstance(self.name, str)
+                ):
+                    try:
+                        table_name = frappe.utils.get_table_name(self.doctype)
+                        matches = frappe.db.sql(
+                            f'SELECT name FROM `{table_name}` WHERE name = ? COLLATE NOCASE LIMIT 1',
+                            (self.name,),
+                        )
+                        if matches and matches[0][0] and matches[0][0] != self.name:
+                            self.name = matches[0][0]
+                            return original_load_from_db(self)
+                    except Exception:
+                        pass
+                raise
+
+        Document.load_from_db = load_from_db
+    except ImportError:
+        pass
+
     sqlite_database._mariadb_polyfills_attached = True
     print("[playground] MariaDB->SQLite compatibility installed.")
