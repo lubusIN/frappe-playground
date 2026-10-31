@@ -395,7 +395,7 @@ def install():
 
     sqlite_database.modify_query = modify_query
 
-    original_is_primary_key_violation = sqlite_database.SQLiteDatabase.is_primary_key_violation
+    original_is_primary_key_violation = getattr(sqlite_database.SQLiteDatabase, "is_primary_key_violation", None)
 
     def is_primary_key_violation(e):
         if hasattr(e, "sqlite_errorcode"):
@@ -404,7 +404,12 @@ def install():
             # We treat both as PK violation so `ignore_if_duplicate` works
             if getattr(e, "sqlite_errorcode") in (1555, 2067):
                 return True
-        return original_is_primary_key_violation(e)
+        msg = str(e).lower()
+        if "unique constraint failed" in msg or "primary key constraint failed" in msg:
+            return True
+        if original_is_primary_key_violation:
+            return original_is_primary_key_violation(e)
+        return False
 
     sqlite_database.SQLiteDatabase.is_primary_key_violation = staticmethod(is_primary_key_violation)
 

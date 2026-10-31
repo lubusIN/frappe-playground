@@ -23,6 +23,22 @@ def create_exception_mock(name):
     """Returns a dynamically generated Exception subclass to safely mock module errors."""
     return type(name, (Exception,), {})
 
+class DummyExceptionModule(DummyModule):
+    """A mock module that dynamically creates Exception classes for unknown attributes."""
+    def __getattr__(self, name):
+        if name.startswith("__") and name.endswith("__"):
+            raise AttributeError(name)
+        exc = create_exception_mock(name)
+        setattr(self, name, exc)
+        return exc
+
+def create_exception_module_mock(name, **kwargs):
+    m = DummyExceptionModule(name)
+    for k, v in kwargs.items():
+        setattr(m, k, v)
+    sys.modules[name] = m
+    return m
+
 class AbsorbingMeta(type):
     def __getattr__(cls, name):
         if name.startswith("__") and name.endswith("__"):
@@ -413,13 +429,17 @@ rq_mod = create_mock("rq",
     get_current_job=lambda *a, **k: None
 )
 rq_mod.defaults = create_mock("rq.defaults", DEFAULT_WORKER_TTL=420)
-rq_mod.exceptions = create_mock("rq.exceptions",
+rq_mod.exceptions = create_exception_module_mock("rq.exceptions",
+    DeserializationError=create_exception_mock("DeserializationError"),
     InvalidJobOperation=create_exception_mock("InvalidJobOperation"),
     NoSuchJobError=create_exception_mock("NoSuchJobError")
 )
 rq_mod.job = create_mock("rq.job", Job=DummyJob, JobStatus=DummyJobStatus)
 rq_mod.logutils = create_mock("rq.logutils", setup_loghandlers=lambda *a, **k: None)
-rq_mod.timeouts = create_mock("rq.timeouts", JobTimeoutException=create_exception_mock("JobTimeoutException"))
+rq_mod.timeouts = create_exception_module_mock("rq.timeouts",
+    JobTimeoutException=create_exception_mock("JobTimeoutException"),
+    TimerDeathPenalty=create_exception_mock("TimerDeathPenalty")
+)
 rq_mod.worker = create_mock("rq.worker",
     DequeueStrategy=DummyDequeueStrategy, StopRequested=create_exception_mock("StopRequested"),
     WorkerStatus=AbsorbingMock
