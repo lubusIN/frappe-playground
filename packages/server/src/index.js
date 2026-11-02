@@ -98,7 +98,7 @@ async function bootPython() {
   })
   await installSiteOps(pyodide, SITE_OPS_SOURCE)
 
-  const assetsText = await installRuntimeFilesystem({
+  const runtimeFs = await installRuntimeFilesystem({
     pyodide,
     fetchFn: resilientFetch,
     assetsEndpoint,
@@ -107,6 +107,8 @@ async function bootPython() {
     benchDirectories: BENCH_DIRECTORIES,
     log: message => logRuntime(message, RuntimeStage.RUNTIME),
   })
+  const assetsText = typeof runtimeFs === 'string' ? runtimeFs : (runtimeFs?.assetsText ?? String(runtimeFs))
+  const manifest = typeof runtimeFs === 'object' ? runtimeFs?.manifest : null
 
   await initializeSiteDatabase({
     pyodide,
@@ -115,6 +117,7 @@ async function bootPython() {
     dbPath: siteDbPath,
     storageEndpoint,
     freshSession,
+    manifest,
     log: message => logRuntime(message, RuntimeStage.DATABASE),
   })
 

@@ -113,7 +113,12 @@ async function handleFetch(event, url) {
     explicitScope,
     clientFrameType: client?.frameType,
   })
-  if (servesShell) return fetch(event.request)
+  if (servesShell) {
+    assetCache.revalidateCache().catch(error => {
+      console.warn('[SW] Background cache revalidation failed:', error)
+    })
+    return fetch(event.request)
+  }
 
   const clientScope = client?.url ? scopeFromUrl(client.url) : null
   let scope = explicitScope

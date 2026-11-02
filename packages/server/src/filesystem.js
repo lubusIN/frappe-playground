@@ -79,7 +79,12 @@ export async function installRuntimeFilesystem({
 
   ensureDirectories(pyodide.FS, benchDirectories)
   mountFrappeTranslations({ fs: pyodide.FS, manifest, assetsEndpoint })
-  return assetsText
+  return {
+    assetsText,
+    manifest,
+    toString() { return assetsText },
+    [Symbol.toPrimitive]() { return assetsText },
+  }
 }
 
 export function writeSiteFiles(fs, files) {

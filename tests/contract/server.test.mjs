@@ -252,7 +252,7 @@ test('catalog apps are verified, unpacked, and installed into the scoped site', 
     runPythonAsync: async source => calls.push(['python', source]),
   }
   const fetchFn = async url => {
-    assert.equal(url, '/apps/wiki/app.zip')
+    assert.equal(url, `/apps/wiki/app.zip?sha256=${archiveSha256}`)
     return {
       ok: true,
       arrayBuffer: async () => archive.buffer,

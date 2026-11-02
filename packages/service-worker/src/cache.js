@@ -14,6 +14,17 @@ export class RuntimeAssetCache {
     this.initCachePromise = null
   }
 
+  isManifestRequest(pathname) {
+    return pathname === '/assets/assets.json'
+      || pathname === '/apps/catalog.json'
+      || pathname === '/storage/manifest.json'
+  }
+
+  async revalidateCache() {
+    this.currentCacheName = null
+    return this.getCacheName()
+  }
+
   async getCacheName() {
     if (this.currentCacheName) return this.currentCacheName
     if (!this.initCachePromise) this.initCachePromise = this.initializeCacheName()
@@ -81,6 +92,17 @@ export class RuntimeAssetCache {
   }
 
   async respondAsset(request, overrideUrl = null) {
+    const targetUrl = new URL(overrideUrl || request.url, 'http://localhost')
+    if (this.isManifestRequest(targetUrl.pathname)) {
+      return overrideUrl
+        ? this.fetchFn(overrideUrl, {
+            method: request.method,
+            headers: request.headers,
+            credentials: request.credentials,
+          })
+        : this.fetchFn(request)
+    }
+
     let cache
     const cacheKey = overrideUrl || request.url
     try {

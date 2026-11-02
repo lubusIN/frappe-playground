@@ -167,6 +167,7 @@ test('instance registry owns client associations, readiness, and cleanup', async
 })
 
 test('runtime cache identity follows Frappe assets, app catalog, and runtime manifest', async () => {
+  let runtimeManifestText = 'asset'
   const entries = new Map()
   const deleted = []
   const fetched = []
@@ -186,6 +187,9 @@ test('runtime cache identity follows Frappe assets, app catalog, and runtime man
     }
     if (typeof value === 'string' && value.startsWith('/apps/catalog.json')) {
       return new Response('{"sourceCatalogSha256":"catalog.456"}')
+    }
+    if (typeof value === 'string' && value.startsWith('/storage/manifest.json')) {
+      return new Response(runtimeManifestText)
     }
     return new Response('asset')
   }
@@ -213,6 +217,19 @@ test('runtime cache identity follows Frappe assets, app catalog, and runtime man
   await runtimeCache.respond(lazyRequest)
   assert.equal(fetched.filter(url => url === lazyRequest.url).length, 1)
   assert.equal(entries.size, 2)
+
+  // Manifests must bypass CacheStorage
+  const manifestRequest = new Request('https://playground.test/storage/manifest.json')
+  await runtimeCache.respond(manifestRequest)
+  assert.equal(entries.has(manifestRequest.url), false)
+
+  // revalidateCache updates cache name when identity changes
+  runtimeManifestText = 'new-manifest'
+  const newCacheName = await runtimeCache.revalidateCache()
+  assert.equal(
+    newCacheName,
+    `frappe-assets-${hashString('{"app.js":"app.123.js"}\n{"sourceCatalogSha256":"catalog.456"}\nnew-manifest')}`,
+  )
 })
 
 test('backend proxy translates protocol responses and scopes redirects', async () => {
