@@ -1,6 +1,6 @@
-<p align="center"><img width="250" src=".github/logo.svg" alt="Frappe Playground"></p>
+<p align="center"><img width="160" src=".github/logo.svg" alt="Frappe Playground"></p>
 
-![Frappe Playground](.github/banner.jpg)
+![Frappe Playground](.github/banner.png)
 
 # Frappe Playground
 
