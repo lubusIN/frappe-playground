@@ -9,6 +9,28 @@ export function useFrameNavigation({ ready, instanceId }) {
   const iframeRef = ref(null)
   let addressTimer = 0
   let hasPrefilledLogin = false
+  let attachedWindow = null
+
+  function attachWindowListeners(iframeWindow) {
+    if (!iframeWindow || iframeWindow === attachedWindow) return
+    try {
+      iframeWindow.addEventListener('hashchange', syncAddressFromFrame)
+      iframeWindow.addEventListener('popstate', syncAddressFromFrame)
+      attachedWindow = iframeWindow
+    } catch (_) {
+      // Ignore cross-origin errors
+    }
+  }
+
+  function detachWindowListeners() {
+    if (attachedWindow) {
+      try {
+        attachedWindow.removeEventListener('hashchange', syncAddressFromFrame)
+        attachedWindow.removeEventListener('popstate', syncAddressFromFrame)
+      } catch (_) {}
+      attachedWindow = null
+    }
+  }
 
   function frameUrl(value) {
     return scopedFrameUrl(value, instanceId.value)
@@ -57,6 +79,7 @@ export function useFrameNavigation({ ready, instanceId }) {
   function syncAddressFromFrame() {
     try {
       const iframeWindow = iframeRef.value?.contentWindow
+      attachWindowListeners(iframeWindow)
       const href = iframeWindow?.location?.href
       if (href && !href.startsWith('about:')) {
         let displayHref = href
@@ -64,6 +87,9 @@ export function useFrameNavigation({ ready, instanceId }) {
           try {
             const url = new URL(displayHref)
             url.searchParams.delete('_frappe_playground_bounce')
+            if (url.hash.includes('_frappe_playground_bounce=')) {
+              url.hash = url.hash.replace(/[?&]_frappe_playground_bounce=\d+/, '')
+            }
             displayHref = url.href
           } catch (_) {}
         }
@@ -114,26 +140,37 @@ export function useFrameNavigation({ ready, instanceId }) {
   function resetFrame() {
     stopAddressSync()
     frameSrc.value = ''
-    address.value = parseBootOptions(new URLSearchParams(window.location.search)).initialPath
+    const search = typeof window !== 'undefined' ? window.location?.search || '' : ''
+    address.value = parseBootOptions(new URLSearchParams(search)).initialPath
     hasPrefilledLogin = false
   }
 
   function stopAddressSync() {
     clearInterval(addressTimer)
+    detachWindowListeners()
   }
 
   function handleNestedShell(event) {
-    if (event.origin !== window.location.origin || event.source !== iframeRef.value?.contentWindow) return
+    const origin = typeof window !== 'undefined' ? window.location?.origin : 'http://localhost'
+    if (event.origin !== origin || event.source !== iframeRef.value?.contentWindow) return
     if (event.data?.type !== 'frappe-playground-nested-shell') return
     const targetUrl = frameUrl(normalizeAddress(event.data.href))
-    const separator = targetUrl.includes('?') ? '&' : '?'
-    frameSrc.value = `${targetUrl}${separator}_frappe_playground_bounce=${Date.now()}`
+    try {
+      const url = new URL(targetUrl, origin)
+      url.searchParams.set('_frappe_playground_bounce', String(Date.now()))
+      frameSrc.value = `${url.pathname}${url.search}${url.hash}`
+    } catch (_) {
+      const separator = targetUrl.includes('?') ? '&' : '?'
+      frameSrc.value = `${targetUrl}${separator}_frappe_playground_bounce=${Date.now()}`
+    }
   }
 
-  onMounted(() => window.addEventListener('message', handleNestedShell))
+  onMounted(() => {
+    if (typeof window !== 'undefined') window.addEventListener?.('message', handleNestedShell)
+  })
   onBeforeUnmount(() => {
     stopAddressSync()
-    window.removeEventListener('message', handleNestedShell)
+    if (typeof window !== 'undefined') window.removeEventListener?.('message', handleNestedShell)
   })
   return { address, frameSrc, iframeRef, frameUrl, syncAddressFromFrame, startAddressSync,
     navigateFrame, reloadFrame, resetFrame, stopAddressSync }

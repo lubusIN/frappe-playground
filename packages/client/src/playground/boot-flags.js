@@ -21,12 +21,16 @@ export async function processBootFlags(params, context) {
     instanceId,
     installApp,
     signal,
+    document = globalThis.document,
+    logger = console,
+    createSiteApiFn = createSiteApi,
+    resolveLocaleFn = resolveBootLocale,
   } = context
 
   signal?.throwIfAborted()
 
   const { apps, autoLogin, skipOnboarding, initialPath } = parseBootOptions(params)
-  const request = createSiteApi({ instanceId, signal })
+  const request = createSiteApiFn({ instanceId, signal })
   for (const appId of apps) {
     signal?.throwIfAborted()
     if (!playground.listInstalledApps().includes(appId)) await installApp(appId)
@@ -35,7 +39,7 @@ export async function processBootFlags(params, context) {
   let csrfToken = ''
 
   if (autoLogin) {
-    console.log(`${LOG_PREFIX} Auto-login as ${LOGIN_DEMO.username}`)
+    logger.log(`${LOG_PREFIX} Auto-login as ${LOGIN_DEMO.username}`)
     const loginData = new FormData()
     loginData.append('usr', LOGIN_DEMO.username)
     loginData.append('pwd', LOGIN_DEMO.password)
@@ -45,16 +49,16 @@ export async function processBootFlags(params, context) {
     }, 'Auto-login')
 
     // Try to extract CSRF from document.cookie (set by service worker response)
-    const cookieMatch = document.cookie.match(/csrf_token=([^;]+)/)
+    const cookieMatch = document?.cookie?.match(/csrf_token=([^;]+)/)
     if (cookieMatch) {
       csrfToken = cookieMatch[1]
     }
 
-    console.log(`${LOG_PREFIX} Auto-login successful, CSRF from cookie:`, csrfToken ? 'yes' : 'no')
+    logger.log(`${LOG_PREFIX} Auto-login successful, CSRF from cookie:`, csrfToken ? 'yes' : 'no')
   }
 
   if (skipOnboarding) {
-    console.log(`${LOG_PREFIX} Skipping onboarding`)
+    logger.log(`${LOG_PREFIX} Skipping onboarding`)
 
     // The Frappe boot process checks three different flags to determine if setup is complete.
     // Instead of raw SQL or set_value, we call the official setup_complete API which clears
@@ -64,9 +68,9 @@ export async function processBootFlags(params, context) {
       headers['X-Frappe-CSRF-Token'] = csrfToken
     }
 
-    const { language, country, timeZone } = await resolveBootLocale({ signal })
+    const { language, country, timeZone } = await resolveLocaleFn({ signal })
 
-    console.log(`${LOG_PREFIX} Detected locale: language=${language}, country=${country}, timeZone=${timeZone}`)
+    logger.log(`${LOG_PREFIX} Detected locale: language=${language}, country=${country}, timeZone=${timeZone}`)
 
     const setupArgs = {
       language: language,
@@ -85,7 +89,7 @@ export async function processBootFlags(params, context) {
       body: JSON.stringify({ args: setupArgs })
     }, 'Skip onboarding (setup_complete API)')
 
-    console.log(`${LOG_PREFIX} Official setup_complete API succeeded`)
+    logger.log(`${LOG_PREFIX} Official setup_complete API succeeded`)
   }
 
   signal?.throwIfAborted()

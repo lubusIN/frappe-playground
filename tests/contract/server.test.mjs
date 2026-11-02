@@ -3,14 +3,19 @@ import { spawnSync } from 'node:child_process'
 import { readFile } from 'node:fs/promises'
 import test from 'node:test'
 
+const PYTHON = process.env.PYTHON || (process.platform === 'darwin' ? '/usr/bin/python3' : 'python3')
+
 import {
   FRAPPE_MOCKS_SOURCE,
+  SITE_OPS_SOURCE,
   WSGI_SERVER_SOURCE,
 } from '../../artifacts/generated/python-sources.js'
 import { ensureDirectories } from '../../packages/server/src/filesystem.js'
 import {
+  PLAYGROUND_POLYFILLS_DIR,
   PythonBridge,
   SerialRequestExecutor,
+  installPolyfillModule,
   shouldPersistRequest,
 } from '../../packages/server/src/request-handler.js'
 import { initializePyodide } from '../../packages/server/src/boot.js'
@@ -60,12 +65,14 @@ function memoryIndexedDb() {
 }
 
 test('generated Python text module exactly matches authored Python sources', async () => {
-  const [mocks, wsgi] = await Promise.all([
+  const [mocks, wsgi, siteOps] = await Promise.all([
     readFile(new URL('../../runtime/python/frappe_mocks.py', import.meta.url), 'utf8'),
     readFile(new URL('../../runtime/python/wsgi_server.py', import.meta.url), 'utf8'),
+    readFile(new URL('../../runtime/python/site_ops.py', import.meta.url), 'utf8'),
   ])
   assert.equal(FRAPPE_MOCKS_SOURCE, mocks)
   assert.equal(WSGI_SERVER_SOURCE, wsgi)
+  assert.equal(SITE_OPS_SOURCE, siteOps)
   assert.match(mocks, /create_mock\(\s*"resource"/)
   assert.match(mocks, /RUSAGE_SELF=0/)
   assert.match(mocks, /ru_maxrss = 0/)
@@ -196,7 +203,7 @@ test('Pyodide loader installs core and configured Python packages', async () => 
 
   // Execute the actual boot filter: compile-time warnings use filenames,
   // whereas warnings raised at runtime may have a dotted module name.
-  const warningCheck = spawnSync('python3', ['-'], { encoding: 'utf8', input:
+  const warningCheck = spawnSync(PYTHON, ['-'], { encoding: 'utf8', input:
     'import warnings\nwarnings.simplefilter("always")\n'
     + calls.find(call => call[0] === 'python')[1] + String.raw`
 whoosh_path = "/lib/python3.14/site-packages/whoosh/analysis/filters.py"
@@ -303,7 +310,7 @@ test('app state refresh preserves the handler session and destroys failed contex
     runPythonAsync: async value => { source = value },
   } })
   await bridge.refreshAppState()
-  const result = spawnSync('python3', ['-'], { encoding: 'utf8', input: `
+  const result = spawnSync(PYTHON, ['-'], { encoding: 'utf8', input: `
 import ast
 import sys
 import types
@@ -368,6 +375,28 @@ test('Python bridge converts requests and releases PyProxy values', () => {
     body: 'pong',
   })
   assert.deepEqual(destroyed, ['request', 'response'])
+})
+
+test('installPolyfillModule writes source file and registers polyfill directory in sys.path', async () => {
+  const dirs = []
+  const files = {}
+  const pythonRuns = []
+  const pyodide = {
+    FS: {
+      mkdirTree: dir => dirs.push(dir),
+      writeFile: (path, contents) => { files[path] = contents },
+    },
+    runPythonAsync: async script => pythonRuns.push(script),
+  }
+
+  await installPolyfillModule(pyodide, 'custom_mod', 'print("hello")')
+  assert.deepEqual(dirs, [PLAYGROUND_POLYFILLS_DIR])
+  assert.equal(files[`${PLAYGROUND_POLYFILLS_DIR}/custom_mod.py`], 'print("hello")')
+  assert.match(pythonRuns[0], /sys\.path\.insert\(0, '\/home\/pyodide\/playground_polyfills'\)/)
+
+  // Empty source does nothing
+  await installPolyfillModule(pyodide, 'empty', '')
+  assert.equal(pythonRuns.length, 1)
 })
 
 test('Python bridge restores and exports the WSGI handler cookie jar', async () => {

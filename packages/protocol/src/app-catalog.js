@@ -1,12 +1,8 @@
+import { requireObject, requireString } from './messages.js'
+
 const APP_ID = /^[a-z][a-z0-9_]*$/
 const COMMIT = /^[a-f0-9]{40}$/
 const ARCHIVE = /^apps\/([a-z][a-z0-9_]*)\/app\.zip$/
-
-function requireString(value, label) {
-  if (typeof value !== 'string' || !value.trim()) {
-    throw new TypeError(`${label} must be a non-empty string`)
-  }
-}
 
 export function validateAppId(appId) {
   if (typeof appId !== 'string' || !APP_ID.test(appId)) {
@@ -16,9 +12,7 @@ export function validateAppId(appId) {
 }
 
 export function validateAppCatalog(catalog, { generated = false } = {}) {
-  if (!catalog || typeof catalog !== 'object' || Array.isArray(catalog)) {
-    throw new TypeError('App catalog must be an object')
-  }
+  requireObject(catalog, 'App catalog')
   if (catalog.schemaVersion !== 1) throw new TypeError('App catalog schemaVersion must be 1')
   if (!Array.isArray(catalog.apps) || catalog.apps.length === 0) {
     throw new TypeError('App catalog must contain at least one app')
@@ -98,4 +92,22 @@ export function validateAppCatalog(catalog, { generated = false } = {}) {
   }
 
   return catalog
+}
+
+/**
+ * Loads and validates the generated app catalog JSON.
+ * @param {object} [options]
+ * @param {typeof fetch} [options.fetchFn] - Fetch implementation.
+ * @param {string} [options.catalogUrl] - URL to fetch catalog from.
+ * @returns {Promise<object>} Validated app catalog.
+ */
+export async function loadAppCatalog({
+  fetchFn = globalThis.fetch,
+  catalogUrl = '/apps/catalog.json',
+} = {}) {
+  const response = await fetchFn(catalogUrl)
+  if (!response.ok) {
+    throw new Error(`Could not load the app catalog (${response.status}).`)
+  }
+  return validateAppCatalog(await response.json(), { generated: true })
 }

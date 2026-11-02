@@ -11,6 +11,7 @@ This module acts as a translation layer by:
    simple function calls (like INTERVAL, ON DUPLICATE KEY UPDATE).
 """
 
+import json
 import re
 import sqlite3
 from datetime import datetime, timedelta
@@ -265,6 +266,14 @@ def rewrite_sql_for_sqlite(sql):
         sql,
         flags=re.IGNORECASE,
     )
+
+    # Strip MariaDB index hints (USE/FORCE/IGNORE INDEX/KEY ...) which SQLite does not support
+    sql = re.sub(
+        r"\b(?:USE|FORCE|IGNORE)\s+(?:INDEX|KEY)(?:\s+FOR\s+(?:JOIN|ORDER\s+BY|GROUP\s+BY))?\s*\([^)]*\)",
+        "",
+        sql,
+        flags=re.IGNORECASE,
+    )
     
     sql = _strip_union_parentheses(sql)
     return sql
@@ -416,6 +425,35 @@ def _sql_locate(*args):
     return idx + 1 if idx != -1 else 0
 
 
+def _sql_json_unquote(value):
+    """MariaDB JSON_UNQUOTE(val). Unquotes and unescapes JSON string."""
+    if value is None:
+        return None
+    val_str = str(value)
+    if len(val_str) >= 2 and val_str.startswith('"') and val_str.endswith('"'):
+        try:
+            return json.loads(val_str)
+        except Exception:
+            return val_str[1:-1]
+    return val_str
+
+
+def _sql_json_contains(target, candidate, path=None):
+    """MariaDB JSON_CONTAINS(target, candidate[, path])."""
+    if target is None or candidate is None:
+        return None
+    try:
+        t = json.loads(target) if isinstance(target, str) else target
+        c = json.loads(candidate) if isinstance(candidate, str) else candidate
+        if isinstance(t, list):
+            return 1 if c in t else 0
+        if isinstance(t, dict) and isinstance(c, dict):
+            return 1 if all(t.get(k) == v for k, v in c.items()) else 0
+        return 1 if t == c else 0
+    except Exception:
+        return 0
+
+
 def _is_truthy(val):
     if isinstance(val, str):
         return val.strip().lower() in ("true", "1", "t")
@@ -561,6 +599,8 @@ def attach_mariadb_functions(connection):
     connection.create_function("concat_ws", -1, _sql_concat_ws)
     connection.create_function("field", -1, _sql_field)
     connection.create_function("locate", -1, _sql_locate)
+    connection.create_function("json_unquote", 1, _sql_json_unquote)
+    connection.create_function("json_contains", -1, _sql_json_contains)
     try:
         connection._mariadb_polyfills_attached = True
     except (AttributeError, TypeError):
@@ -747,6 +787,7 @@ def install():
                     pass
             return self._cursor.execute("SELECT 1 WHERE 0")
 
+        query = rewrite_sql_for_sqlite(query)
         query = query.replace("%s", "?")
         try:
             if isinstance(values, dict):
@@ -814,6 +855,50 @@ def install():
         if getattr(frappe, "db", None) and getattr(frappe.db, "_conn", None):
             attach_mariadb_functions(frappe.db._conn)
     except Exception:
+        pass
+
+    try:
+        import frappe
+        from frappe.query_builder import utils as qb_utils
+        import frappe.query_builder.functions as qb_functions
+
+        if not getattr(qb_utils.ImportMapper, "_mariadb_polyfills_patched", False):
+            sqlite_db = qb_utils.db_type_is.SQLITE
+            mariadb_db = qb_utils.db_type_is.MARIADB
+
+            for attr_name in dir(qb_functions):
+                obj = getattr(qb_functions, attr_name)
+                if isinstance(obj, qb_utils.ImportMapper):
+                    if sqlite_db not in obj.func_map and mariadb_db in obj.func_map:
+                        obj.func_map[sqlite_db] = obj.func_map[mariadb_db]
+
+            original_import_mapper_call = qb_utils.ImportMapper.__call__
+
+            def import_mapper_call(self, *args, **kwargs):
+                conf_db = getattr(getattr(frappe, "conf", None), "db_type", None) or getattr(getattr(frappe, "local", None), "conf", {}).get("db_type", "sqlite")
+                try:
+                    db = qb_utils.db_type_is(conf_db)
+                except (ValueError, TypeError):
+                    db = sqlite_db
+                fn = self.func_map.get(db)
+                if fn is None and db == sqlite_db:
+                    fn = self.func_map.get(mariadb_db)
+                if fn is None:
+                    return original_import_mapper_call(self, *args, **kwargs)
+                return fn(*args, **kwargs)
+
+            qb_utils.ImportMapper.__call__ = import_mapper_call
+
+            original_import_mapper_init = qb_utils.ImportMapper.__init__
+
+            def import_mapper_init(self, func_map):
+                if sqlite_db not in func_map and mariadb_db in func_map:
+                    func_map[sqlite_db] = func_map[mariadb_db]
+                original_import_mapper_init(self, func_map)
+
+            qb_utils.ImportMapper.__init__ = import_mapper_init
+            qb_utils.ImportMapper._mariadb_polyfills_patched = True
+    except (ImportError, AttributeError):
         pass
 
     sqlite_database._mariadb_polyfills_attached = True

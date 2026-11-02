@@ -1,6 +1,7 @@
 // Frappe Playground — Service Worker entry point
 import {
   ProtocolMessageType,
+  RECOVERY_CHANNEL_NAME,
   createAssociateClientMessage,
   createRecoveryRequestMessage,
   isControlMessage,
@@ -56,20 +57,6 @@ self.addEventListener('message', event => {
 
   if (isControlMessage(event.data, ProtocolMessageType.ASSOCIATE_CLIENT)) {
     instances.associateClient(event.source?.id, event.data.payload.scope)
-    return
-  }
-
-  if (isControlMessage(event.data, ProtocolMessageType.CLEAR_OTHER_INSTANCES)) {
-    // Compatibility with older clients. A service worker is shared by every
-    // tab on the origin, so one client must never evict another playground.
-    console.warn('[SW] Ignoring deprecated CLEAR_OTHER_INSTANCES message.')
-    return
-  }
-
-  if (isControlMessage(event.data, ProtocolMessageType.CLAIM_CLIENTS)) {
-    // Compatibility with older clients. Claiming belongs to the activate
-    // event; a waiting worker throws InvalidStateError if it calls claim().
-    console.warn('[SW] Ignoring deprecated CLAIM_CLIENTS message.')
     return
   }
 
@@ -138,7 +125,7 @@ async function handleFetch(event, url) {
   if (!scope && instances.size === 0) {
     recoveryAttempted = true
     console.log('[SW] Instance registry empty; requesting channel recovery.')
-    const recoveryChannel = new BroadcastChannel('sw-recovery')
+    const recoveryChannel = new BroadcastChannel(RECOVERY_CHANNEL_NAME)
     recoveryChannel.postMessage(createRecoveryRequestMessage())
     scope = await instances.waitForOnlyActiveScope({
       timeoutMs: CHANNEL_RECOVERY_TIMEOUT_MS,

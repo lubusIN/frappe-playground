@@ -1,5 +1,6 @@
 import {
   ProtocolMessageType,
+  RECOVERY_CHANNEL_NAME,
   RuntimeStage,
   createAppInstallMessage,
   createAppUninstallMessage,
@@ -10,6 +11,7 @@ import {
 import { validateAppId } from '../../../protocol/src/app-catalog.js'
 import { getOrCreateInstanceSession, selectInstanceSession } from './session.js'
 import { runtimeEntryUrl } from './runtime-version.js'
+import { ServiceWorkerCoordinator } from './sw-coordinator.js'
 
 export const PlaygroundEventType = Object.freeze({
   PROGRESS: 'progress',
@@ -27,7 +29,7 @@ export class PlaygroundController {
     this.options = {
       serviceWorkerUrl: runtimeEntryUrl('/sw.js'),
       serverWorkerUrl: runtimeEntryUrl('/worker.js'),
-      recoveryChannelName: 'sw-recovery',
+      recoveryChannelName: RECOVERY_CHANNEL_NAME,
       serviceWorkerRegistrationTimeoutMs: 15000,
       serviceWorkerUpgradeTimeoutMs: 30000,
       readyDelayMs: 2000,
@@ -48,6 +50,16 @@ export class PlaygroundController {
       registrationClearTimeoutFn: options.registrationClearTimeoutFn
         || (timer => globalThis.clearTimeout(timer)),
     }
+    this.swCoordinator = new ServiceWorkerCoordinator({
+      serviceWorkerUrl: this.options.serviceWorkerUrl,
+      serviceWorkerRegistrationTimeoutMs: this.options.serviceWorkerRegistrationTimeoutMs,
+      serviceWorkerUpgradeTimeoutMs: this.options.serviceWorkerUpgradeTimeoutMs,
+      location: this.environment.location,
+      setTimeoutFn: this.environment.setTimeoutFn,
+      clearTimeoutFn: this.environment.clearTimeoutFn,
+      registrationSetTimeoutFn: this.environment.registrationSetTimeoutFn,
+      registrationClearTimeoutFn: this.environment.registrationClearTimeoutFn,
+    })
     this.listeners = new Map()
     this.session = null
     this.worker = null
@@ -99,7 +111,6 @@ export class PlaygroundController {
       this.progress(RuntimeStage.SERVICE_WORKER, 'active', 'Starting service worker...')
       const sessionOptions = {
         storage: this.options.storage,
-        cryptoApi: this.options.cryptoApi,
         now: this.options.now,
         random: this.options.random,
       }
@@ -110,20 +121,16 @@ export class PlaygroundController {
         throw new Error(`Playground instance not found: ${this.options.instanceId}`)
       }
 
-      let isInitialLoad = !serviceWorker.controller
-      let isUpgradingLegacyWorker = !isInitialLoad
-        && !this.isExpectedServiceWorker(serviceWorker.controller)
-      this.handleControllerChange = () => {
-        if (isInitialLoad || isUpgradingLegacyWorker) {
-          isInitialLoad = false
-          isUpgradingLegacyWorker = false
-        } else if (!this.disposed && !this.reloadingForServiceWorkerUpdate) {
-          this.reloadingForServiceWorkerUpdate = true
-          console.log('[Playground] Service Worker updated! Auto-reloading to apply changes...')
-          this.environment.location.reload()
-        }
-      }
-      serviceWorker.addEventListener('controllerchange', this.handleControllerChange)
+      this.handleControllerChange = this.swCoordinator.setupControllerChangeReload(
+        serviceWorker,
+        () => {
+          if (!this.disposed && !this.reloadingForServiceWorkerUpdate) {
+            this.reloadingForServiceWorkerUpdate = true
+            console.log('[Playground] Service Worker updated! Auto-reloading to apply changes...')
+            this.environment.location.reload()
+          }
+        },
+      )
 
       const registration = await this.withRegistrationTimeout(
         serviceWorker.register(this.options.serviceWorkerUrl, {
@@ -288,35 +295,15 @@ export class PlaygroundController {
     this.environment.document.addEventListener('visibilitychange', this.handleVisibilityChange)
   }
 
-  async checkForServiceWorkerUpdate() {
-    try {
-      await this.registration?.update?.()
-    } catch (error) {
-      // A transient update failure must not prevent the active worker from booting.
-      console.warn('[Playground] Service Worker update check failed.', error)
-    }
+  checkForServiceWorkerUpdate() {
+    return this.swCoordinator.checkForServiceWorkerUpdate(this.registration)
   }
 
   withRegistrationTimeout(registrationPromise) {
-    const signal = this.abortController?.signal
-    return new Promise((resolve, reject) => {
-      let timeout
-      const finish = (callback, value) => {
-        this.environment.registrationClearTimeoutFn(timeout)
-        signal?.removeEventListener('abort', abort)
-        callback(value)
-      }
-      const abort = () => finish(reject, signal.reason)
-      signal?.addEventListener('abort', abort, { once: true })
-      timeout = this.environment.registrationSetTimeoutFn(() => {
-        finish(reject, new Error('Service worker registration timed out.'))
-      }, this.options.serviceWorkerRegistrationTimeoutMs)
-      Promise.resolve(registrationPromise).then(
-        value => finish(resolve, value),
-        error => finish(reject, error),
-      )
-      if (signal?.aborted) abort()
-    })
+    return this.swCoordinator.withRegistrationTimeout(
+      registrationPromise,
+      this.abortController?.signal,
+    )
   }
 
   waitUntilReady() {
@@ -338,46 +325,18 @@ export class PlaygroundController {
   }
 
   isExpectedServiceWorker(worker) {
-    if (!worker) return false
-    if (!worker.scriptURL) return true
-    const baseUrl = this.environment.location?.href || 'http://localhost/'
-    return worker.scriptURL === new URL(this.options.serviceWorkerUrl, baseUrl).href
+    return this.swCoordinator.isExpectedServiceWorker(worker)
   }
 
   expectedServiceWorker(serviceWorker, registration) {
-    if (this.isExpectedServiceWorker(serviceWorker?.controller)) {
-      return serviceWorker.controller
-    }
-    if (this.isExpectedServiceWorker(registration?.active)) {
-      return registration.active
-    }
-    return null
+    return this.swCoordinator.expectedServiceWorker(serviceWorker, registration)
   }
 
   waitForExpectedServiceWorker(serviceWorker) {
-    const signal = this.abortController?.signal
-    return new Promise(resolve => {
-      let timeout
-      const finish = result => {
-        signal?.removeEventListener('abort', abort)
-        serviceWorker.removeEventListener('controllerchange', handleControllerChange)
-        this.environment.clearTimeoutFn(timeout)
-        resolve(result)
-      }
-      const handleControllerChange = () => {
-        if (this.isExpectedServiceWorker(serviceWorker.controller)) finish(true)
-      }
-
-      const abort = () => finish(false)
-      signal?.addEventListener('abort', abort, { once: true })
-      serviceWorker.addEventListener('controllerchange', handleControllerChange)
-      timeout = this.environment.setTimeoutFn(
-        () => finish(false),
-        this.options.serviceWorkerUpgradeTimeoutMs,
-      )
-      handleControllerChange()
-      if (signal?.aborted) abort()
-    })
+    return this.swCoordinator.waitForExpectedServiceWorker(
+      serviceWorker,
+      this.abortController?.signal,
+    )
   }
 
   emitError(error) {
@@ -453,9 +412,14 @@ export class PlaygroundController {
     this.recoveryChannel?.close()
     this.recoveryChannel = null
 
-    const serviceWorker = this.environment.navigator?.serviceWorker
     if (this.handleControllerChange) {
-      serviceWorker?.removeEventListener('controllerchange', this.handleControllerChange)
+      if (typeof this.handleControllerChange === 'function') {
+        this.handleControllerChange()
+      } else {
+        const serviceWorker = this.environment.navigator?.serviceWorker
+        serviceWorker?.removeEventListener('controllerchange', this.handleControllerChange)
+      }
+      this.handleControllerChange = null
     }
     if (this.handleVisibilityChange) {
       this.environment.document?.removeEventListener(

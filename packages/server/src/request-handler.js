@@ -1,27 +1,52 @@
 export const PLAYGROUND_POLYFILLS_DIR = '/home/pyodide/playground_polyfills'
 
+/**
+ * Installs a Python polyfill module into the playground polyfills directory
+ * and ensures the directory is present on Python's sys.path.
+ * @param {object} pyodide - Pyodide instance.
+ * @param {string} moduleName - Python module file basename (without .py).
+ * @param {string} source - Python module source code.
+ */
+export async function installPolyfillModule(pyodide, moduleName, source) {
+  if (!source) return
+  pyodide.FS.mkdirTree(PLAYGROUND_POLYFILLS_DIR)
+  pyodide.FS.writeFile(`${PLAYGROUND_POLYFILLS_DIR}/${moduleName}.py`, source)
+  await pyodide.runPythonAsync(`
+import sys
+if '${PLAYGROUND_POLYFILLS_DIR}' not in sys.path:
+    sys.path.insert(0, '${PLAYGROUND_POLYFILLS_DIR}')
+  `)
+}
+
+/**
+ * Installs the site_ops module into the Pyodide filesystem.
+ * @param {object} pyodide - Pyodide instance.
+ * @param {string} siteOpsSource - Python site_ops module source code.
+ */
+export async function installSiteOps(pyodide, siteOpsSource) {
+  return installPolyfillModule(pyodide, 'site_ops', siteOpsSource)
+}
+
 export class PythonBridge {
-  constructor({ pyodide, mocksSource, wsgiSource, cookieJarJson, mariadbPolyfillsSource }) {
+  constructor({ pyodide, mocksSource, wsgiSource, cookieJarJson, mariadbPolyfillsSource, siteOpsSource }) {
     this.pyodide = pyodide
     this.mocksSource = mocksSource
     this.wsgiSource = wsgiSource
     this.cookieJarJson = cookieJarJson
     this.mariadbPolyfillsSource = mariadbPolyfillsSource
+    this.siteOpsSource = siteOpsSource
   }
 
   async configure() {
+    await installSiteOps(this.pyodide, this.siteOpsSource)
     if (this.mariadbPolyfillsSource) {
-      this.pyodide.FS.mkdirTree(PLAYGROUND_POLYFILLS_DIR)
-      this.pyodide.FS.writeFile(`${PLAYGROUND_POLYFILLS_DIR}/mariadb_polyfills.py`, this.mariadbPolyfillsSource)
+      await installPolyfillModule(this.pyodide, 'mariadb_polyfills', this.mariadbPolyfillsSource)
     }
 
     await this.pyodide.runPythonAsync(this.mocksSource)
 
     if (this.mariadbPolyfillsSource) {
       await this.pyodide.runPythonAsync(`
-import sys
-if '${PLAYGROUND_POLYFILLS_DIR}' not in sys.path:
-    sys.path.insert(0, '${PLAYGROUND_POLYFILLS_DIR}')
 import mariadb_polyfills
 mariadb_polyfills.install()
       `)

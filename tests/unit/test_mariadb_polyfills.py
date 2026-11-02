@@ -251,6 +251,56 @@ class MariaDBPolyfillsTest(unittest.TestCase):
         once = rewrite_sql_for_sqlite("select DATE_ADD(posting_date, INTERVAL 1 DAY) from erpnext_dummy")
         self.assertEqual(once, rewrite_sql_for_sqlite(once))
 
+    # ── index hints ─────────────────────────────────────────────────────
+
+    def test_force_index_is_stripped(self):
+        # erpnext/accounts/report/financial_statements.py: query.force_index("posting_date_company_index")
+        sql = "select name from erpnext_dummy FORCE INDEX (posting_date_company_index) where qty = 10"
+        row = self.run_sql(sql)
+        self.assertEqual(row[0], "TEST_DOC")
+        self.assertNotIn("FORCE INDEX", rewrite_sql_for_sqlite(sql))
+
+    def test_force_index_with_quotes_and_backticks(self):
+        sql_backticks = "select name from erpnext_dummy FORCE INDEX (`posting_date_company_index`)"
+        self.assertNotIn("FORCE INDEX", rewrite_sql_for_sqlite(sql_backticks))
+
+        sql_quotes = 'select name from erpnext_dummy FORCE INDEX ("posting_date_company_index")'
+        row = self.run_sql(sql_quotes)
+        self.assertEqual(row[0], "TEST_DOC")
+        self.assertNotIn("FORCE INDEX", rewrite_sql_for_sqlite(sql_quotes))
+
+    def test_use_and_ignore_index_hints_stripped(self):
+        sql_use = "select name from erpnext_dummy USE INDEX FOR JOIN (idx1) IGNORE INDEX FOR ORDER BY (idx2)"
+        row = self.run_sql(sql_use)
+        self.assertEqual(row[0], "TEST_DOC")
+        self.assertNotIn("USE INDEX", rewrite_sql_for_sqlite(sql_use))
+        self.assertNotIn("IGNORE INDEX", rewrite_sql_for_sqlite(sql_use))
+
+    def test_key_hints_stripped(self):
+        sql_key = "select name from erpnext_dummy FORCE KEY (idx_primary)"
+        row = self.run_sql(sql_key)
+        self.assertEqual(row[0], "TEST_DOC")
+        self.assertNotIn("FORCE KEY", rewrite_sql_for_sqlite(sql_key))
+
+    # ── date_format and json functions ─────────────────────────────────
+
+    def test_date_format_function(self):
+        # CRM dashboard: DateFormat(union_query.date, "%Y-%m-%d")
+        row = self.conn.execute("SELECT DATE_FORMAT('2026-11-02 14:00:00', '%Y-%m-%d')").fetchone()
+        self.assertEqual(row[0], "2026-11-02")
+
+    def test_json_unquote_function(self):
+        row = self.conn.execute('SELECT JSON_UNQUOTE(\'"hello world"\')').fetchone()
+        self.assertEqual(row[0], "hello world")
+        row_plain = self.conn.execute('SELECT JSON_UNQUOTE("hello")').fetchone()
+        self.assertEqual(row_plain[0], "hello")
+
+    def test_json_contains_function(self):
+        row = self.conn.execute('SELECT JSON_CONTAINS(\'["x", "y"]\', \'"y"\')').fetchone()
+        self.assertEqual(row[0], 1)
+        row_missing = self.conn.execute('SELECT JSON_CONTAINS(\'["x", "y"]\', \'"z"\')').fetchone()
+        self.assertEqual(row_missing[0], 0)
+
 
 if __name__ == "__main__":
     unittest.main(verbosity=2)

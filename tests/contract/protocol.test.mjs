@@ -5,6 +5,7 @@ import test from 'node:test'
 import {
   PROTOCOL_VERSION,
   ProtocolMessageType,
+  RECOVERY_CHANNEL_NAME,
   RuntimeStage,
   assertProtocolMessage,
   createAppInstallMessage,
@@ -12,9 +13,7 @@ import {
   createAppUninstallMessage,
   createAppUninstallResultMessage,
   createAssociateClientMessage,
-  createClaimClientsMessage,
   createMessage,
-  createClearOtherInstancesMessage,
   createInitChannelMessage,
   createCloseChannelMessage,
   createRecoveryRequestMessage,
@@ -29,14 +28,17 @@ import {
   readBackendRequest,
   readBackendResponse,
 } from '../../packages/protocol/src/request.js'
+import {
+  INSTANCE_DB_PREFIX,
+  getInstanceDatabaseName,
+  scopePrefix,
+} from '../../packages/protocol/src/scope-url.js'
 
 test('control and runtime messages use the current protocol version', () => {
   const messages = [
-    createClaimClientsMessage(),
     createAssociateClientMessage('instance-1'),
     createInitChannelMessage('instance-1', { freshSession: true }),
     createCloseChannelMessage('instance-1'),
-    createClearOtherInstancesMessage('instance-1'),
     createRecoveryRequestMessage(),
     createRuntimeLogMessage('Loading Pyodide...', RuntimeStage.PYTHON),
     createRuntimeReadyMessage(),
@@ -54,11 +56,9 @@ test('control and runtime messages use the current protocol version', () => {
   assert.deepEqual(
     new Set(messages.map(message => message.type)),
     new Set([
-      ProtocolMessageType.CLAIM_CLIENTS,
       ProtocolMessageType.ASSOCIATE_CLIENT,
       ProtocolMessageType.INIT_CHANNEL,
       ProtocolMessageType.CLOSE_CHANNEL,
-      ProtocolMessageType.CLEAR_OTHER_INSTANCES,
       ProtocolMessageType.RECOVERY_REQUEST,
       ProtocolMessageType.RUNTIME_LOG,
       ProtocolMessageType.RUNTIME_READY,
@@ -69,8 +69,8 @@ test('control and runtime messages use the current protocol version', () => {
       ProtocolMessageType.APP_UNINSTALL_RESULT,
     ]),
   )
-  assert.deepEqual(messages[1].payload, { scope: 'instance-1' })
-  assert.deepEqual(messages[2].payload, { scope: 'instance-1', freshSession: true })
+  assert.deepEqual(messages[0].payload, { scope: 'instance-1' })
+  assert.deepEqual(messages[1].payload, { scope: 'instance-1', freshSession: true })
   assert.deepEqual(messages.at(-4).payload, { requestId: 'request-1', appId: 'wiki' })
   assert.deepEqual(messages.at(-3).payload, {
     requestId: 'request-1',
@@ -158,4 +158,19 @@ test('backend readers reject malformed headers and bodies before execution', () 
   assert.throws(() => readBackendResponse(createMessage(ProtocolMessageType.BACKEND_RESPONSE, {
     status: 200, body: { invalid: true },
   })), /body/)
+})
+
+test('instance database names follow a consistent scoped naming convention', () => {
+  assert.equal(INSTANCE_DB_PREFIX, 'frappe_playground_db_')
+  assert.equal(getInstanceDatabaseName('test-scope'), 'frappe_playground_db_test-scope')
+  assert.throws(() => getInstanceDatabaseName(''), /scope is required/)
+  assert.throws(() => getInstanceDatabaseName(null), /scope is required/)
+})
+
+test('recovery channel and scope prefix helpers provide canonical protocol values', () => {
+  assert.equal(RECOVERY_CHANNEL_NAME, 'sw-recovery')
+  assert.equal(scopePrefix('test-scope'), '/scope:test-scope')
+  assert.equal(scopePrefix('scoped/name'), '/scope:scoped%2Fname')
+  assert.throws(() => scopePrefix(''), /scope is required/)
+  assert.throws(() => scopePrefix(null), /scope is required/)
 })

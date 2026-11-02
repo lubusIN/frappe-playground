@@ -67,7 +67,8 @@ export function useInstanceManager({ instanceId, instances, initPlayground, stop
   const deleteInstance = id => changeInstance(id, true)
 
   onMounted(() => {
-    const params = new URLSearchParams(window.location.search)
+    const search = typeof window !== 'undefined' ? window.location?.search || '' : ''
+    const params = new URLSearchParams(search)
     let sessionToBoot = undefined
 
     const { name, createInstance: createFromFlags } = parseBootOptions(params)

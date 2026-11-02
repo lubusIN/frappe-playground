@@ -19,7 +19,7 @@ IndexedDB.
 
 - `src/index.js` is the server worker entry point and composition root.
 - `src/boot.js` loads Pyodide and Python packages.
-- `src/app-installer.js` owns catalog loading, archive verification, and the Frappe app lifecycle.
+- `src/app-installer.js` owns archive verification and the Frappe app lifecycle.
 - `src/filesystem.js` installs runtime assets and filesystem content.
 - `src/persistence.js` owns scoped IndexedDB state and database lifecycle.
 - `src/request-handler.js` bridges protocol requests to Python WSGI.

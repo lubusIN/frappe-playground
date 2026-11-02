@@ -33,7 +33,7 @@ frappe-playground/
 - `packages/client/src/composables/use-frame-navigation.js`: iframe navigation and compatibility fixes.
 - `packages/client/src/composables/use-app-manager.js`: shared catalog loading and app operations.
 - `packages/client/src/playground/controller.js`: worker lifecycle and channel wiring.
-- `session.js`, `apps.js`, `iframe-navigation.js`: instance, catalog, and scope behavior.
+- `session.js`, `iframe-navigation.js`: instance and scope behavior.
 
 See [Client shell internals](/architecture/client-shell) for the component-to-controller ownership model.
 

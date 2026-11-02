@@ -7,9 +7,9 @@ module.exports = defineConfig({
   fullyParallel: true,
   forbidOnly: !!process.env.CI,
   retries: process.env.CI ? 2 : 0,
-  workers: process.env.CI ? 2 : undefined,
+  workers: process.env.PLAYWRIGHT_WORKERS ? parseInt(process.env.PLAYWRIGHT_WORKERS, 10) : (process.env.CI ? 2 : 2),
   outputDir: './tests/results',
-  reporter: [['html', { outputFolder: './tests/results', open: 'never' }]],
+  reporter: [['html', { outputFolder: './tests/report', open: 'never' }]],
   webServer: process.env.PLAYWRIGHT_BASE_URL ? undefined : {
     command: 'npm run test:serve',
     url: 'http://127.0.0.1:8102',

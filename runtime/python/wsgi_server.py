@@ -42,7 +42,8 @@ class FrappeWSGIHandler:
         # The package lives outside a conventional Bench apps/ tree, so Frappe
         # cannot infer the asset/locale root from frappe.__file__.
         os.environ["FRAPPE_BENCH_ROOT"] = os.path.dirname(self.bench_sites_path)
-        os.chdir(self.bench_sites_path)
+        if os.path.exists(self.bench_sites_path):
+            os.chdir(self.bench_sites_path)
         os.environ["SITES_PATH"] = self.bench_sites_path
         os.environ["FRAPPE_SITE"] = self.default_site
 
@@ -84,20 +85,26 @@ class FrappeWSGIHandler:
 
     def build_wsgi_environ(self, req, site_name):
         """Constructs the WSGI environment dictionary from the JS request payload."""
-        
         # We must properly format the browser-sent cookies alongside our Pyodide-internal cookie_jar
         _browser_cookies = req.get("headers", {}).get("cookie", "") or ""
-        _parsed = SimpleCookie(_browser_cookies)
-        
+        _parsed = SimpleCookie()
+        if _browser_cookies:
+            try:
+                _parsed.load(_browser_cookies)
+            except Exception:
+                pass
+
         for k, v in self.cookie_jar.items():
             _parsed[k] = v
-            
+
         _all_cookies = "; ".join(f"{k}={m.value}" for k, m in _parsed.items())
 
         environ = {
             "REQUEST_METHOD": req["method"],
-            "PATH_INFO": req["path"],
+            "PATH_INFO": unquote(req["path"]),
             "QUERY_STRING": req.get("query", ""),
+            "RAW_URI": req["path"] + (("?" + req["query"]) if req.get("query") else ""),
+            "REQUEST_URI": req["path"] + (("?" + req["query"]) if req.get("query") else ""),
             "SERVER_NAME": site_name,
             "SERVER_PORT": "8000",
             "SERVER_PROTOCOL": "HTTP/1.1",
@@ -112,9 +119,15 @@ class FrappeWSGIHandler:
         }
 
         for k, v in req.get("headers", {}).items():
-            key = "HTTP_" + k.replace("-", "_").upper()
-            if key not in environ:
-                environ[key] = str(v)
+            k_lower = k.lower()
+            if k_lower == "content-type":
+                environ["CONTENT_TYPE"] = str(v)
+            elif k_lower == "content-length":
+                environ["CONTENT_LENGTH"] = str(v)
+            else:
+                key = "HTTP_" + k.replace("-", "_").upper()
+                if key not in environ:
+                    environ[key] = str(v)
 
         # Ensure body data is correctly converted from JS proxies to Python bytes
         body_data = req.get("body", b"")
@@ -128,7 +141,8 @@ class FrappeWSGIHandler:
         environ["wsgi.input"] = io.BytesIO(body_data)
 
         if req["method"] in ["POST", "PUT", "PATCH"]:
-            environ["CONTENT_TYPE"] = str(req.get("headers", {}).get("content-type", "application/x-www-form-urlencoded"))
+            if "CONTENT_TYPE" not in environ:
+                environ["CONTENT_TYPE"] = "application/x-www-form-urlencoded"
             environ["CONTENT_LENGTH"] = str(len(body_data))
 
         return environ
@@ -164,7 +178,12 @@ class FrappeWSGIHandler:
             # Pyodide cannot return generator/iterable wrappers across the JS boundary easily,
             # so we must exhaust the WSGI iterable and join the byte chunks manually here.
             for chunk in result_iter:
-                body_parts.append(chunk)
+                if isinstance(chunk, str):
+                    body_parts.append(chunk.encode("utf-8"))
+                elif not isinstance(chunk, bytes):
+                    body_parts.append(bytes(chunk))
+                else:
+                    body_parts.append(chunk)
 
             user_id = str(getattr(frappe.session, "user", "Guest"))
             if not user_id or user_id == "Guest":
@@ -198,18 +217,8 @@ class FrappeWSGIHandler:
     def handle_setup_wizard_completion(self, req, status, site_name):
         """Persists Frappe setup state securely to SQLite when the setup wizard finishes."""
         if req["path"] == "/api/method/frappe.desk.page.setup_wizard.setup_wizard.setup_complete" and status.startswith("2"):
-            # Frappe marks the app setup-complete after its own setup commit.
-            # We manually update these flags in SQLite before the redirect to /desk to ensure
-            # the persistent IDB backup captures the complete state in Pyodide.
-            conn = sqlite3.connect(self.get_site_db_path(site_name))
-            try:
-                conn.execute("PRAGMA journal_mode=WAL")
-                conn.execute("update 'tabInstalled Application' set is_setup_complete=1 where app_name='frappe'")
-                conn.execute("update tabSingles set value='1' where doctype='System Settings' and field='setup_complete'")
-                conn.execute("update tabDefaultValue set defvalue='workspace' where parent='__default' and defkey='desktop:home_page'")
-                conn.commit()
-            finally:
-                conn.close()
+            from site_ops import mark_setup_complete
+            mark_setup_complete(self.get_site_db_path(site_name))
 
     def handle_request(self, req):
         """Main WSGI entrypoint from the Pyodide/JS bridge."""
@@ -223,7 +232,8 @@ class FrappeWSGIHandler:
             return self.serve_static_file(req, site_name)
 
         # 2. Re-init Frappe environment variables per request
-        os.chdir(self.bench_sites_path)
+        if os.path.exists(self.bench_sites_path):
+            os.chdir(self.bench_sites_path)
         os.environ["SITES_PATH"] = self.bench_sites_path
         os.environ["FRAPPE_SITE"] = site_name
 

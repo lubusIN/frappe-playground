@@ -19,7 +19,26 @@ function collectFrameNavigations(page) {
 
 async function waitForPlaygroundBoot(page) {
     await page.goto('/');
-    await expect(page.locator('#loading-screen')).toBeHidden({ timeout: 600000 });
+
+    let lastLog = 0;
+    await expect.poll(async () => {
+        const errorEl = page.locator('#loading-screen .text-red-600');
+        if (await errorEl.isVisible().catch(() => false)) {
+            const errText = await errorEl.innerText().catch(() => 'Unknown boot error');
+            throw new Error(`Playground boot failed: ${errText}`);
+        }
+        const now = Date.now();
+        if (now - lastLog > 15000) {
+            lastLog = now;
+            const stepsText = await page.locator('#loading-screen').innerText().catch(() => '');
+            console.log(`[BOOT PROGRESS]:\n${stepsText.trim()}`);
+        }
+        return page.locator('#loading-screen').isHidden().catch(() => false);
+    }, {
+        message: 'waiting for playground boot to finish',
+        timeout: 600000,
+        intervals: [1000, 2000, 5000],
+    }).toBe(true);
 
     const iframe = page.locator('#frappe-desk');
     await expect(iframe).toBeVisible({ timeout: 120000 });
@@ -80,7 +99,8 @@ async function loginAsAdministrator(page) {
         { timeout: 60000 }
     );
 
-    await frame.click('.btn-login');
+    const submitBtn = frame.locator('.btn-login, button[type="submit"]:visible').first();
+    await submitBtn.click();
     expect((await loginResponse).status()).toBe(200);
 }
 
@@ -93,7 +113,7 @@ async function readDeskState(page) {
         bodyText: document.body.innerText,
         hasLogin: Boolean(document.querySelector('#login_email')),
         hasNestedPlayground: Boolean(document.querySelector('#frappe-desk')),
-        hasSetupWizard: Boolean(document.querySelector('.slides-wrapper')),
+        hasSetupWizard: Boolean(document.querySelector('.slides-wrapper, .setup-intro')),
         homePage: window.frappe?.boot?.sysdefaults?.home_page || window.frappe?.boot?.home_page,
         route: window.frappe?.get_route?.(),
         setupComplete: window.frappe?.boot?.sysdefaults?.setup_complete || window.frappe?.boot?.setup_complete,
@@ -134,7 +154,15 @@ async function completeSetupWizardIfShown(page) {
     }
 
     const iframe = page.frameLocator('#frappe-desk');
-    await expect(iframe.locator('.slide-wrapper:not(.hidden) .slide-title')).toContainText('Welcome');
+
+    // Frappe 16 Setup Wizard displays a Welcome screen on slide 0 with a "Get Started" button.
+    // The slide form (.slides-wrapper) is hidden until "Get Started" is clicked.
+    const introBtn = iframe.locator('.setup-intro__start, button:has-text("Get Started")').first();
+    if (await introBtn.isVisible({ timeout: 5000 }).catch(() => false)) {
+        await introBtn.click();
+    }
+
+    await expect(iframe.locator('.slide-wrapper:not(.hidden) .slide-title')).toHaveText(/Welcome|let's get the basics right/i);
 
     await iframe.locator('input[data-fieldname="country"]').fill('United States');
     await page.keyboard.press('ArrowDown');

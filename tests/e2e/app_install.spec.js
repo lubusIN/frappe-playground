@@ -11,9 +11,15 @@ const APPS_TO_TEST = [
     name: 'ERPNext',
     heavy: true,
     async customAssertions(_page, restoredFrame) {
-      // Verify the automatic refresh itself instead of rescuing it with navigation.
-      expect(new URL(restoredFrame.url()).pathname).toContain('/desk')
-      await expect(restoredFrame.getByText('Accounting', { exact: true }).first()).toBeVisible({
+      // In Frappe v16, ERPNext displays its setup wizard welcome screen after installation.
+      await expect(
+        restoredFrame.getByText(/Let's give your business a home/i)
+      ).toBeVisible({
+        timeout: 120000,
+      })
+      await expect(
+        restoredFrame.getByRole('button', { name: 'Get Started' })
+      ).toBeVisible({
         timeout: 120000,
       })
     }
