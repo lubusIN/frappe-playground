@@ -20,7 +20,7 @@ The `install` event calls `skipWaiting()`. The active worker calls `clients.clai
 The worker accepts only messages matching the current protocol version:
 
 - `service-worker:associate-client` updates a client mapping;
-- `channel:init` registers the transferred server-worker port and watches it for `runtime:ready`; and
+- `channel:init` registers the transferred server-worker port, receives `{ scope, freshSession }`, schedules background cache revalidation when `freshSession` is true, and watches the port for `runtime:ready`; and
 - deprecated claim/clear messages are logged and ignored.
 
 The runtime’s ready message travels both to the shell and over its Service Worker port. Only the latter marks the registry entry ready for Fetch routing.
@@ -52,9 +52,9 @@ Once a scope is known, backend dispatch waits up to 90 seconds for its runtime-r
 
 ## Runtime asset cache
 
-`RuntimeAssetCache` fetches cache-busted `assets/assets.json`, `apps/catalog.json`, and `storage/manifest.json`, concatenates their text, and hashes it with the repository’s lightweight string hash. That value names `frappe-assets-<hash>`. Older caches with that prefix are removed.
+`RuntimeAssetCache` fetches cache-busted `assets/assets.json?t=${now()}`, `apps/catalog.json?t=${now()}`, and `storage/manifest.json?t=${now()}`, concatenates their text, and hashes it with the repository’s lightweight string hash. That value names `frappe-assets-<hash>`.
 
-Reads are cache-first. Successful and opaque responses are cloned into the cache. If the identity manifests cannot be fetched, the worker logs a warning, serves the network response without caching, and retries identity initialization on a later request. Cache open, read, write, and pruning failures also preserve successful network responses. Documentation bypasses this cache so docs-only deployments update independently.
+Reads are cache-first from `frappe-assets-<hash>`. If a requested asset is not found in the primary cache—such as when a saved playground preserves an earlier runtime environment across deploys—the cache searches other existing `frappe-assets-*` caches in Cache Storage as a fallback. Successful and opaque responses are cloned into the cache. If the identity manifests cannot be fetched, the worker logs a warning, serves the network response without caching, and retries identity initialization on a later request. Cache open, read, write, and pruning failures also preserve successful network responses. Documentation bypasses this cache so docs-only deployments update independently. Manifest files are delivered with `no-store` headers to ensure cache invalidation checks are always live.
 
 ## Backend response adaptation
 

@@ -38,11 +38,12 @@ The synthetic WSGI environment reports `site1`, port `8000`, HTTP scheme, and si
 
 Frappe assumes infrastructure and native packages unavailable in Pyodide. The current compatibility layer includes:
 
-- selected MariaDB SQL constructs and date/time functions translated for SQLite, including `DATE_ADD`/`DATE_SUB`, `IF`, `TIMESTAMPDIFF`, `ON DUPLICATE KEY UPDATE`, and selected union/constraint behavior;
+- selected MariaDB SQL constructs, string functions, and date/time helpers translated for SQLite, including `CONCAT`/`CONCAT_WS`, `FIELD`, `LOCATE`, `DATE_ADD`/`DATE_SUB`, `IF`, `TIMESTAMPDIFF`, `ON DUPLICATE KEY UPDATE`, sequence generation (`tabSeries` and `get_next_sequence_val`), and case-insensitive name lookups;
 - a functional in-process fake Redis server for cache and session paths;
 - import-compatible RQ symbols while async work is disabled;
 - standard-library-backed substitutes for selected native modules such as `orjson`;
-- limited process information for `psutil`; and
+- limited process information for `psutil`;
+- runtime compatibility patches (such as Frappe Wiki asset hashing); and
 - inert import guards for selected optional integrations.
 
 These shims support the repository’s checked boot and application flows; they are not full implementations. Inert mocks can hide unsupported feature execution, so new code should prefer explicit minimal substitutes and clear errors.

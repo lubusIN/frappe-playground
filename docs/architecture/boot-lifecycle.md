@@ -18,18 +18,18 @@ The shell creates `/worker.js?scope=<id>&fresh=<boolean>` as an ES module worker
 
 ## 4. Transfer the channel
 
-A fresh `MessageChannel` is created. The shell sends the same versioned `channel:init` message to both workers and transfers one port to each. The server worker begins boot only after its first channel-init message.
+A fresh `MessageChannel` is created. The shell sends the same versioned `channel:init` message (carrying `{ scope, freshSession }`) to both workers and transfers one port to each. The server worker begins boot only after its first channel-init message.
 
 ## 5. Boot Python and Frappe
 
 The server worker performs these stages:
 
 1. load Pyodide and install the configured Python packages;
-2. unpack the prepared Frappe filesystem and assets;
+2. unpack the prepared Frappe filesystem and assets (for saved sessions with an existing virtual environment, extraction is skipped to preserve the runtime);
 3. restore the scoped IndexedDB state, or copy the seed `site1.db` for a fresh site;
 4. restore installed optional apps;
 5. write `site_config.json`, `currentsite.txt`, the asset manifest, and app list;
-6. load browser compatibility shims and MariaDB-to-SQLite polyfills;
+6. load browser compatibility shims and MariaDB-to-SQLite polyfills (such as string functions, sequence management, and case-insensitive lookups);
 7. configure the Python WSGI bridge; and
 8. publish `runtime:ready` with the installed app IDs.
 

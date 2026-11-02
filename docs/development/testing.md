@@ -8,9 +8,21 @@ Tests are split by the browser boundary they cross.
 npm run test:contract
 ```
 
-Node’s built-in test runner covers protocol validation, URL scopes, Service Worker routing and caching, backend envelopes, instance catalogs, runtime version consistency, app-catalog recipes, and server modules. The command regenerates Python sources first.
+Node’s built-in test runner covers protocol validation, URL scopes, Service Worker routing and caching, backend envelopes, instance catalogs, client composables (`useFrameNavigation`, `useAppManager`, `useInstanceManager`, `usePlaygroundLifecycle`), runtime version consistency, app-catalog recipes, and server modules. The command regenerates Python sources first.
 
 Run this suite for nearly every code change; it is fast and does not boot Pyodide in a browser.
+
+## Python unit tests
+
+```bash
+python3 -m unittest discover -s tests/unit
+```
+
+Python’s built-in `unittest` runner tests runtime Python components directly without needing a browser or Pyodide:
+
+- `test_mariadb_polyfills.py`: MariaDB string functions (`CONCAT`, `CONCAT_WS`, `FIELD`, `LOCATE`), sequence generation (`tabSeries`, `get_next_sequence_val`), and case-insensitive lookups on SQLite;
+- `test_wsgi_server.py`: WSGI request adaptation, header parsing, cookie jars, and uploaded file serving; and
+- `test_site_ops.py`: site operations and database patching.
 
 ## Clean-build verification
 

@@ -27,11 +27,13 @@ The controller records installed app IDs only after `runtime:ready`. A second re
 
 `dispose()` is the ownership boundary. It aborts pending startup and boot-flag requests, retires the owned Service Worker channel, clears timers, rejects pending app operations, terminates the dedicated worker, closes the BroadcastChannel, removes lifecycle listeners, and clears event subscribers. Switching instances always disposes the old controller first.
 
-## Service Worker upgrade handling
+## Service Worker coordination and upgrades
 
-Worker URLs include a source-derived `build` query parameter. The controller accepts a matching page controller or active registration. If an older script controls the page, it waits for a controller change rather than sending current protocol messages to it.
+Worker URLs include a source-derived `build` query parameter. `ServiceWorkerCoordinator` (`src/playground/sw-coordinator.js`) encapsulates Service Worker registration, version checking, update checking, and controller change lifecycle management.
 
-The first controller transition during initial install/legacy upgrade is expected. A later transition triggers one guarded top-level reload so the Vue shell and origin worker move releases together. On every return to a visible tab, the controller calls `registration.update()` and transfers a fresh channel; update errors are logged but do not block the active runtime.
+The coordinator validates whether the active registration or page controller matches the expected worker URL. If an older script controls the page, it bounds the wait for a controller change with an upgrade timeout (default 30 seconds) rather than sending current protocol messages to an obsolete worker.
+
+The first controller transition during initial install or legacy upgrade is expected. A later transition triggers one guarded top-level reload via `setupControllerChangeReload` so the Vue shell and origin worker move releases together. On every return to a visible tab, the coordinator calls `checkForServiceWorkerUpdate()` and transfers a fresh channel; update errors are logged but do not block the active runtime.
 
 ## App operation correlation
 

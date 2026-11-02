@@ -6,7 +6,11 @@ The runtime separates shared immutable files from scoped mutable state.
 
 Published Frappe, frontend, and optional-app assets are common to the origin. The Service Worker caches static/runtime responses and the configured jsDelivr Pyodide distribution in Cache Storage. Its cache name is derived from the contents of the Frappe asset manifest, generated app catalog, and runtime manifest; old `frappe-assets-*` caches are deleted when that identity changes. Documentation requests deliberately bypass this cache because docs can change without runtime artifacts changing.
 
-The extracted Python virtual environment is cached separately using Pyodide’s `IDBFS` mounted at `/home/pyodide/frappe_env`. The runtime archive SHA-256 from `storage/manifest.json` is stored in `version.txt`. When the hash matches, extraction is skipped; when it changes, obsolete environment files are removed and the prepared runtime archive is unpacked and the mount is synchronized back to IndexedDB. This environment cache is shared by workers through its fixed IDBFS mount, while site databases remain scope-specific.
+The extracted Python virtual environment is cached separately using Pyodide’s `IDBFS` mounted at `/home/pyodide/frappe_env`. The runtime archive SHA-256 from `storage/manifest.json` is stored in `version.txt`.
+
+For saved instances (`freshSession: false`), if IDBFS contains an existing extracted environment (`cachedHash`), the server worker preserves that environment and skips extraction—even if the deployment's remote runtime hash has updated. The worker restores stored `assets.json` and `manifest.json` files saved in `/home/pyodide/frappe_env`, and the Service Worker searches across fallback `frappe-assets-*` caches to ensure asset requests continue resolving.
+
+For fresh sessions (`freshSession: true`) or cold boots lacking a cached version, extraction is performed whenever `cachedHash` does not match `currentHash` (or on fresh initialization). The worker fetches fresh manifests with timestamp cache busting (`?t=${Date.now()}`), verifies the archive's 64-character SHA-256 digest, clears obsolete environment files, unpacks `frappe_runtime.tar.gz`, stores `version.txt`, `assets.json`, and `manifest.json`, and synchronizes IDBFS. This environment cache is shared by workers through its fixed IDBFS mount, while site databases remain scope-specific.
 
 Each active instance still has its own dedicated Pyodide worker and in-memory filesystem.
 

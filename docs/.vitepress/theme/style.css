@@ -169,3 +169,12 @@ article.prose img[alt*='minimized dock'] {
     grid-template-columns: 1fr;
   }
 }
+
+/* Docs Brand Logo */
+aside a > img,
+nav a > img,
+header a > img {
+  width: 1.5rem !important;
+  height: 1.5rem !important;
+}
+

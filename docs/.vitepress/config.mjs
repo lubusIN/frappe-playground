@@ -4,6 +4,7 @@ import { fileURLToPath, URL } from 'node:url'
 import fs from 'node:fs'
 
 const playgroundLogo = fileURLToPath(new URL('../../.github/logo.svg', import.meta.url))
+const playgroundFavicon = fileURLToPath(new URL('../public/favicon.svg', import.meta.url))
 
 export default defineConfig({
   title: 'Frappe Playground',
@@ -15,10 +16,11 @@ export default defineConfig({
   lastUpdated: true,
   head: [
     ['meta', { name: 'theme-color', content: '#171717' }],
-    ['link', { rel: 'icon', href: '/docs/logo.svg', type: 'image/svg+xml' }],
+    ['link', { rel: 'icon', href: '/docs/favicon.svg', type: 'image/svg+xml' }],
   ],
   themeConfig: {
-    name: 'Frappe Playground',
+    logo: '/favicon.svg',
+    name: 'Playground',
     githubUrl: 'https://github.com/lubusIN/frappe-playground',
     sidebar: [
       {
@@ -116,22 +118,33 @@ export default defineConfig({
     plugins: [
       lucideIcons(),
       {
-        name: 'frappe-playground-docs-logo',
+        name: 'frappe-playground-docs-assets',
         configureServer(server) {
           server.middlewares.use((request, response, next) => {
             const pathname = new URL(request.url || '/', 'http://docs.local').pathname
-            if (pathname !== '/docs/logo.svg' && pathname !== '/logo.svg') {
-              next()
+            if (pathname === '/docs/logo.svg' || pathname === '/logo.svg') {
+              response.statusCode = 200
+              response.setHeader('Content-Type', 'image/svg+xml')
+              response.setHeader('Cache-Control', 'no-store')
+              if (request.method === 'HEAD') {
+                response.end()
+                return
+              }
+              fs.createReadStream(playgroundLogo).pipe(response)
               return
             }
-            response.statusCode = 200
-            response.setHeader('Content-Type', 'image/svg+xml')
-            response.setHeader('Cache-Control', 'no-store')
-            if (request.method === 'HEAD') {
-              response.end()
+            if (pathname === '/docs/favicon.svg' || pathname === '/favicon.svg') {
+              response.statusCode = 200
+              response.setHeader('Content-Type', 'image/svg+xml')
+              response.setHeader('Cache-Control', 'no-store')
+              if (request.method === 'HEAD') {
+                response.end()
+                return
+              }
+              fs.createReadStream(playgroundFavicon).pipe(response)
               return
             }
-            fs.createReadStream(playgroundLogo).pipe(response)
+            next()
           })
         },
         generateBundle() {
@@ -139,6 +152,11 @@ export default defineConfig({
             type: 'asset',
             fileName: 'logo.svg',
             source: fs.readFileSync(playgroundLogo),
+          })
+          this.emitFile({
+            type: 'asset',
+            fileName: 'favicon.svg',
+            source: fs.readFileSync(playgroundFavicon),
           })
         },
       },

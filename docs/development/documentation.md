@@ -42,7 +42,7 @@ The standalone docs build replaces only `dist/docs`. The combined build first le
 
 The root Service Worker must continue to treat `/docs` as a static namespace and leave unscoped docs requests to native browser/host fetching. If the docs path changes, update routing, `_redirects`, VitePress `base`, and contract tests together.
 
-The docs use Frappe UI’s native Espresso VitePress theme with Playground-specific monochrome additions in `docs/.vitepress/theme/style.css`. The navigation brand is plain text. The repository logo is read directly from `.github/logo.svg` for the favicon: development middleware serves it at `/docs/logo.svg`, while the production plugin emits the identical file. Do not create a second authored logo copy under `docs/`.
+The docs use Frappe UI’s native Espresso VitePress theme with Playground-specific styling additions in `docs/.vitepress/theme/style.css`. The navigation brand displays the BrandIcon vector mark (`/docs/favicon.svg`) alongside the text "Playground", and the documentation favicon also uses the BrandIcon vector mark (`/docs/favicon.svg`).
 
 ## Refresh UI screenshots
 

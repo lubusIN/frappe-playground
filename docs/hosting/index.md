@@ -44,7 +44,7 @@ Access-Control-Allow-Origin: *
 
 The authored `static/_headers` file supplies them for Cloudflare Pages and is copied to `dist/_headers`. Vite supplies the same headers in local development and preview. Responses synthesized by the backend proxy add the COOP, COEP, and CORP headers themselves.
 
-Runtime entry modules and their source modules are also published with `no-store` rules so a shell update cannot accidentally load an incompatible mix. Large immutable Frappe assets use a separate content-derived Service Worker cache.
+Runtime entry modules, source modules, and identity manifests (`storage/manifest.json`, `assets/assets.json`, and `apps/catalog.json`) are also published with `no-store` rules so a shell update cannot accidentally load an incompatible mix or stale metadata. Large immutable Frappe assets use a separate content-derived Service Worker cache.
 
 ## URL layout
 

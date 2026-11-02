@@ -22,7 +22,7 @@ Use `packages/protocol/src/version.js` as the source of truth for the numeric ve
 
 | Family | Messages | Purpose |
 | --- | --- | --- |
-| Worker lifecycle | `channel:init`, `channel:close`, `channel:recovery-request` | Transfer, retire, or recreate instance channels |
+| Worker lifecycle | `channel:init`, `channel:close`, `channel:recovery-request` | Transfer, retire, or recreate instance channels (`channel:init` carries `scope` and optional `freshSession`) |
 | Client association | `service-worker:associate-client` | Bind an iframe client to an instance scope |
 | Runtime lifecycle | `runtime:log`, `runtime:ready`, `runtime:error` | Structured boot progress and outcome |
 | App operations | `app:install`, `app:install-result`, `app:uninstall`, `app:uninstall-result` | Request-correlated catalog mutations |

@@ -113,6 +113,14 @@ appear in the later sections.
 
 **Possible improvement:** Include every runtime-loaded browser dependency in a generated, versioned asset manifest.
 
+### Issue 9: MariaDB-specific SQL functions, sequence syntax, and case sensitivity on SQLite
+
+**Problem:** Frappe and ecosystem apps (such as ERPNext) utilize MariaDB-specific SQL functions (`CONCAT`, `CONCAT_WS`, `FIELD`, `LOCATE`, `DATE_ADD`, `DATEDIFF`, `TIMESTAMPDIFF`), sequence DDL (`CREATE SEQUENCE`, `NEXTVAL()`, `SETVAL()`), and rely on MariaDB's default case-insensitive collations for DocType name lookups without portable SQLite abstractions.
+
+**Impact:** Database queries executing these functions or sequence operations fail on SQLite with syntax or missing-function errors, and exact-case lookups fail when document names differ in casing.
+
+**Possible improvement:** Provide database-agnostic query builder expressions via PyPika/Frappe Query, native SQLite user function registrations in Frappe's `SQLiteDatabase` backend, and case-insensitive collation defaults for identifier lookups.
+
 ## Compatibility implementation inventory
 
 `runtime/python/frappe_mocks.py` modifies Python imports before loading Frappe.
@@ -230,6 +238,20 @@ Upstream relevance:
 
 - Load `psutil` only when a process optimization or process-inspection operation
   is actually enabled.
+
+#### MariaDB SQL functions and sequence polyfills for SQLite
+
+The playground implements a SQL translation and compatibility layer in `runtime/python/mariadb_polyfills.py`:
+
+- custom SQLite user functions for string operations (`CONCAT`, `CONCAT_WS`, `FIELD`, `LOCATE`), JSON helpers (`JSON_UNQUOTE`, `JSON_CONTAINS`), and date calculations (`mariadb_date_math`, `timestampdiff`, `date_format`);
+- query rewriting for `INTERVAL` date math (`DATE_ADD`/`DATE_SUB`), `IF()` to `IIF()`, `ON DUPLICATE KEY UPDATE` to `ON CONFLICT DO UPDATE`, and stripping parentheses around operands of `UNION`;
+- sequence management emulating `CREATE SEQUENCE`, `NEXT VALUE FOR`, `NEXTVAL()`, and `SETVAL()` against SQLite; and
+- case-insensitive fallback (`COLLATE NOCASE`) for DocType name lookups and unified handling of SQLite constraint error codes (`SQLITE_CONSTRAINT_PRIMARYKEY` and `SQLITE_CONSTRAINT_UNIQUE`).
+
+Upstream relevance:
+
+- Incorporate SQLite user function registrations and sequence polyfills into `frappe.database.sqlite.database.SQLiteDatabase`.
+- Normalize case-insensitive identifier resolution across database engines.
 
 ### Feature-path guards
 

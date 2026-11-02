@@ -45,7 +45,7 @@ The route and instance name are status displays, not text fields. In particular,
 | --- | --- | --- |
 | **New** | New playground form | Creates and selects a fresh isolated site. This is the primary action and does not clone the active site. |
 | **Sites** | Playground manager | Switch, rename, reset, or delete browser-local sites. Switching disposes the current worker before starting the selected instance. |
-| **Apps** | Optional-app catalog | Install or uninstall only catalog apps for the active site. The shell reloads after a successful mutation. |
+| **Apps** | Optional-app catalog | Install or uninstall only catalog apps for the active site. After a successful mutation, the Frappe view returns to the site root; the Python worker and outer playground page stay running. |
 | **Info** | About dialog | View documentation links, copy demo credentials, and inspect timings for the completed boot. |
 
 The action buttons are disabled until the runtime is ready. Dialogs appear above both Frappe and the dock; close a dialog to return to the same Frappe route.

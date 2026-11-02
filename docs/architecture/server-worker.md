@@ -4,7 +4,7 @@ Each active playground owns a dedicated module Web Worker. It contains one Pyodi
 
 ## Module state
 
-The worker reads `scope` and `fresh` from its own entry URL. Important module-level state includes:
+The worker reads `scope` and `fresh` from its own entry URL and receives `freshSession` via `channel:init`. Important module-level state includes:
 
 - `pyodide`, created once per worker;
 - `bootPromise`, shared by every channel initialization;
@@ -19,11 +19,11 @@ If boot rejects, `bootPromise` is cleared so a later channel initialization can 
 `bootPython()` composes modules instead of embedding their implementations:
 
 1. `boot.js` loads Pyodide and browser-installed packages;
-2. `filesystem.js` restores/extracts the shared environment;
+2. `filesystem.js` verifies manifest SHA-256 integrity, preserves the existing IDBFS environment for saved sessions, or extracts a fresh runtime when the archive hash changes;
 3. `persistence.js` restores or seeds scoped site state;
 4. `app-installer.js` verifies and prepares previously installed catalog apps;
 5. static site config, current-site, asset manifest, and app list are written; and
-6. `request-handler.js` configures mocks, SQL polyfills, and the WSGI Python source.
+6. `request-handler.js` configures mocks, SQL polyfills (string functions, sequence management, and collations), and the WSGI Python source.
 
 The installed app list is reported in `runtime:ready` both to the Service Worker channel and the shell’s worker listener.
 

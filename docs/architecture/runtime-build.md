@@ -65,6 +65,6 @@ The shell assembly later copies these into `dist/`. `artifacts/` and `dist/` are
 
 Keep browser assets separate from the Python runtime archive. The service worker fetches individual scripts, styles, images, and translations when requested and caches successful responses in CacheStorage. Publishing assets does not download them at startup; unused app assets, languages, and source maps do not need to be included in the initial transfer. Optional app Python archives are downloaded when installing that app.
 
-The extracted Python environment is persisted in IDBFS and versioned by the runtime archive SHA-256 in `storage/manifest.json`. Changing the archive forces re-extraction. The asset cache identity combines the asset manifest, app catalog, and runtime manifest, so a new build invalidates previously cached assets.
+The extracted Python environment is persisted in IDBFS and versioned by the runtime archive SHA-256 in `storage/manifest.json`. For fresh sessions or cold boots, changing the archive forces re-extraction; for saved sessions, the existing virtual environment is preserved without forced re-extraction to keep local sites functional. The asset cache identity combines the asset manifest, app catalog, and runtime manifest, with fallback matching against prior `frappe-assets-*` caches so preserved runtimes continue resolving their assets.
 
 Runtime publication fails if generated files exceed the hosting size or count limits. Further reduction of the core Python archive is a separate optimization from on-demand browser asset delivery.

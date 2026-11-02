@@ -10,7 +10,7 @@ Any host can serve the built `dist/` tree if it reproduces the project’s HTTP 
 - Do not rewrite real files under `/docs`, `/assets`, `/storage`, `/apps`, `/frontend`, `/protocol`, `/server`, `/service-worker`, `/runtime-config`, or `/generated` to the shell.
 - Rewrite unknown playground navigation routes to `/index.html`.
 - Redirect `/docs` to `/docs/` or serve the same documentation index at both locations.
-- Avoid long-lived caching for `/sw.js`, `/worker.js`, and the authored runtime JavaScript modules listed in `static/_headers`.
+- Avoid long-lived caching for `/sw.js`, `/worker.js`, manifests (`/storage/manifest.json`, `/assets/assets.json`, `/apps/catalog.json`), and the authored runtime JavaScript modules listed in `static/_headers`.
 - Allow a root-scoped module Service Worker.
 
 ## Why origin-root hosting matters

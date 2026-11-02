@@ -15,8 +15,8 @@ This page maps supported build/runtime knobs to their source. There is no single
 | Service Worker entry | `/sw.js` plus runtime build ID |
 | Server worker entry | `/worker.js` plus runtime build ID |
 | Recovery channel | `sw-recovery` |
-| Service Worker registration timeout | 15 seconds |
-| Service Worker upgrade timeout | 30 seconds |
+| Service Worker registration timeout | 15 seconds (managed by `ServiceWorkerCoordinator`) |
+| Service Worker upgrade timeout | 30 seconds (managed by `ServiceWorkerCoordinator`) |
 | Ready-event UI delay | 2 seconds |
 | App install/uninstall result timeout | 10 minutes |
 
@@ -61,7 +61,7 @@ Authentication is provided through Wrangler’s supported environment/login mech
 
 ## Hosting metadata
 
-- `static/_headers` defines isolation and worker/module cache rules.
+- `static/_headers` defines isolation, worker/module cache rules, and `no-store` rules for identity manifests.
 - `static/_redirects` normalizes `/docs` and supplies the playground SPA fallback.
 - `vite.config.mjs` defines stable development/runtime paths, public output layout, build identity, and dev/preview headers.
 - `docs/.vitepress/config.mjs` defines the `/docs/` base and `dist/docs` output.

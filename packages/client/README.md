@@ -25,6 +25,7 @@ events between the page, Service Worker, and Pyodide server worker.
 - `src/composables/use-app-manager.js` shares catalog loading and app-operation state.
 - `src/components/` contains presentation components.
 - `src/playground/controller.js` owns worker lifecycle and channel wiring.
+- `src/playground/sw-coordinator.js` coordinates Service Worker registration, version verification, and controller change reloads.
 - `src/playground/session.js` owns the persistent instance catalog.
 - `src/playground/iframe-navigation.js` owns scoped iframe URL conversion.
 - `src/playground/runtime-version.js` builds versioned worker entry URLs.
