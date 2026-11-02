@@ -104,10 +104,21 @@ article.prose img[alt*='minimized dock'] {
   color: var(--ink-gray-8) !important;
   font-weight: 500;
   text-decoration: none !important;
+  transition:
+    background-color 0.15s ease,
+    border-color 0.15s ease,
+    color 0.15s ease,
+    opacity 0.15s ease;
 }
 
 .playground-action:hover {
+  border-color: var(--outline-gray-3);
   background: var(--surface-gray-1);
+  color: var(--ink-gray-9) !important;
+}
+
+.playground-action:active {
+  background: var(--surface-gray-2);
 }
 
 .playground-action-primary {
@@ -117,7 +128,14 @@ article.prose img[alt*='minimized dock'] {
 }
 
 .playground-action-primary:hover {
+  border-color: var(--ink-gray-9);
+  background: var(--ink-gray-9);
+  color: var(--surface-base) !important;
   opacity: 0.86;
+}
+
+.playground-action-primary:active {
+  opacity: 0.75;
 }
 
 .playground-features {
