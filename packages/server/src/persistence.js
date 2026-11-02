@@ -79,6 +79,7 @@ export async function initializeSiteDatabase({
   dbPath,
   storageEndpoint,
   freshSession,
+  manifest,
   log,
   logger = console,
 }) {
@@ -97,9 +98,13 @@ export async function initializeSiteDatabase({
 
   if (result.status === 'missing') {
     log('Seeding fresh database...')
+    const seedSha256 = manifest?.files?.['site1.db']?.sha256
+    const dbUrl = seedSha256
+      ? `${storageEndpoint}/site1.db?sha256=${seedSha256}`
+      : `${storageEndpoint}/site1.db`
     pyodide.FS.writeFile(
       dbPath,
-      await fetchBinary(fetchFn, `${storageEndpoint}/site1.db`),
+      await fetchBinary(fetchFn, dbUrl),
     )
     await resetFreshSiteSetupState(pyodide, dbPath)
     logger.time('saveInitialStateToIDB')

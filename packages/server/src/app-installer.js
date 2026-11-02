@@ -36,7 +36,10 @@ export async function prepareApp({
   if (app.pythonDependencies.length) {
     await pyodide.pyimport('micropip').install(app.pythonDependencies, { keep_going: true })
   }
-  const archive = await fetchBinary(fetchFn, `/${app.archive}`)
+  const appUrl = app.archiveSha256
+    ? `/${app.archive}?sha256=${app.archiveSha256}`
+    : `/${app.archive}`
+  const archive = await fetchBinary(fetchFn, appUrl)
   if (archive.byteLength !== app.archiveBytes) {
     throw new Error(`App archive size check failed: ${app.id}`)
   }

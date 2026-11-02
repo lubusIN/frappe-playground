@@ -53,13 +53,20 @@ test('database read and filesystem restore failures never seed or save over stor
 
 test('only an explicitly missing database is seeded and saved', async () => {
   const calls = []
+  const fetchedUrls = []
   await initializeSiteDatabase({
     stateStore: { load: async () => ({ status: 'missing' }), save: async () => calls.push('save') },
     pyodide: { FS: { writeFile: () => calls.push('seed') }, runPythonAsync: async () => calls.push('setup') },
-    fetchFn: async () => new Response(new Uint8Array([1])), storageEndpoint: '/storage',
+    fetchFn: async url => {
+      fetchedUrls.push(url)
+      return new Response(new Uint8Array([1]))
+    },
+    storageEndpoint: '/storage',
+    manifest: { files: { 'site1.db': { sha256: 'abc123hash' } } },
     dbPath: '/site.db', logger, log() {},
   })
   assert.deepEqual(calls, ['seed', 'setup', 'save'])
+  assert.deepEqual(fetchedUrls, ['/storage/site1.db?sha256=abc123hash'])
 })
 
 test('cache open, lookup, write and pruning failures preserve a network response', async () => {

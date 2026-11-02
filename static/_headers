@@ -24,3 +24,12 @@
 
 /runtime-config/*
   Cache-Control: no-cache, no-store, must-revalidate
+
+/storage/manifest.json
+  Cache-Control: no-cache, no-store, must-revalidate
+
+/assets/assets.json
+  Cache-Control: no-cache, no-store, must-revalidate
+
+/apps/catalog.json
+  Cache-Control: no-cache, no-store, must-revalidate
