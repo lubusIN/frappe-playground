@@ -251,7 +251,12 @@ export class PlaygroundController {
     const sendInit = serviceWorker => {
       if (!serviceWorker || this.disposed) return
       const channel = new this.environment.MessageChannelClass()
-      serviceWorker.postMessage(createInitChannelMessage(this.session.id), [channel.port1])
+      serviceWorker.postMessage(
+        createInitChannelMessage(this.session.id, {
+          freshSession: this.session.freshSession,
+        }),
+        [channel.port1],
+      )
       this.worker.postMessage(
         createInitChannelMessage(this.session.id, {
           freshSession: this.session.freshSession,

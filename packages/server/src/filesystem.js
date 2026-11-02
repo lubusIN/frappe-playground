@@ -33,15 +33,23 @@ export async function installRuntimeFilesystem({
   storageEndpoint,
   environmentRoot,
   benchDirectories,
+  freshSession = true,
   log,
   logger = console,
   now = Date.now,
 }) {
   log('Fetching Frappe runtime...')
-  const assetsResponse = await fetchFn(`${assetsEndpoint}/assets.json?t=${now()}`)
+  const assetsUrl = freshSession
+    ? `${assetsEndpoint}/assets.json?t=${now()}`
+    : `${assetsEndpoint}/assets.json`
+  const manifestUrl = freshSession
+    ? `${storageEndpoint}/manifest.json?t=${now()}`
+    : `${storageEndpoint}/manifest.json`
+
+  const assetsResponse = await fetchFn(assetsUrl)
   if (!assetsResponse.ok) throw new Error('Failed to fetch the Frappe assets manifest.')
-  const assetsText = await assetsResponse.text()
-  const manifest = await (await fetchOk(fetchFn, `${storageEndpoint}/manifest.json?t=${now()}`)).json()
+  let assetsText = await assetsResponse.text()
+  let manifest = await (await fetchOk(fetchFn, manifestUrl)).json()
   const currentHash = manifest.files?.['frappe_runtime.tar.gz']?.sha256
   if (typeof currentHash !== 'string' || !/^[a-f0-9]{64}$/i.test(currentHash)) {
     throw new Error('Runtime manifest is missing the archive SHA-256.')
@@ -53,18 +61,32 @@ export async function installRuntimeFilesystem({
   await syncFilesystem(pyodide.FS, true)
 
   const versionPath = `${environmentRoot}/version.txt`
-  let needsExtract = true
+  let cachedHash = null
   try {
-    const cachedHash = pyodide.FS.readFile(versionPath, { encoding: 'utf8' })
-    if (cachedHash === currentHash) {
-      needsExtract = false
-      log('Restored virtual environment from IDBFS!')
-      logger.log('[Worker] Restored virtual environment from IDBFS. Skipping extraction.')
-    } else {
-      logger.log(`[Worker] Runtime hash changed: ${cachedHash} -> ${currentHash}`)
-    }
+    cachedHash = pyodide.FS.readFile(versionPath, { encoding: 'utf8' }).trim()
   } catch (_) {
     logger.log('[Worker] No valid runtime version found in IDBFS.')
+  }
+
+  let needsExtract = true
+  if (!freshSession && cachedHash) {
+    needsExtract = false
+    log('Restored virtual environment from IDBFS!')
+    logger.log(`[Worker] Preserving runtime (${cachedHash}) for saved playground. Skipping extraction.`)
+    try {
+      const storedAssets = pyodide.FS.readFile(`${environmentRoot}/assets.json`, { encoding: 'utf8' })
+      if (storedAssets) assetsText = storedAssets
+    } catch (_) {}
+    try {
+      const storedManifest = pyodide.FS.readFile(`${environmentRoot}/manifest.json`, { encoding: 'utf8' })
+      if (storedManifest) manifest = JSON.parse(storedManifest)
+    } catch (_) {}
+  } else if (cachedHash === currentHash) {
+    needsExtract = false
+    log('Restored virtual environment from IDBFS!')
+    logger.log('[Worker] Restored virtual environment from IDBFS. Skipping extraction.')
+  } else {
+    logger.log(`[Worker] Runtime hash changed or fresh session: ${cachedHash} -> ${currentHash}`)
   }
 
   if (needsExtract) {
@@ -74,6 +96,8 @@ export async function installRuntimeFilesystem({
     clearDirectory(pyodide.FS, environmentRoot)
     pyodide.unpackArchive(archive, 'gztar', { extractDir: environmentRoot })
     pyodide.FS.writeFile(versionPath, currentHash)
+    pyodide.FS.writeFile(`${environmentRoot}/assets.json`, assetsText)
+    pyodide.FS.writeFile(`${environmentRoot}/manifest.json`, JSON.stringify(manifest))
     await syncFilesystem(pyodide.FS, false)
   }
 

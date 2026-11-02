@@ -109,8 +109,18 @@ export class RuntimeAssetCache {
       const name = await this.getCacheName()
       if (name) {
         cache = await this.cacheStorage.open(name)
-        const cached = await cache.match(cacheKey)
+        let cached = await cache.match(cacheKey)
         if (cached) return cached
+
+        if (typeof this.cacheStorage.keys === 'function') {
+          for (const key of await this.cacheStorage.keys()) {
+            if (key.startsWith('frappe-assets-') && key !== name) {
+              const fallbackCache = await this.cacheStorage.open(key)
+              cached = await fallbackCache.match(cacheKey)
+              if (cached) return cached
+            }
+          }
+        }
       }
     } catch (error) {
       this.logger.warn('[SW] Asset cache read failed.', error)

@@ -121,6 +121,57 @@ test('Python-only archive changes refresh the environment and remove obsolete fi
   assert.equal(extracts, 2)
 })
 
+test('saved playgrounds preserve their existing virtual environment and skip extraction on archive change', async () => {
+  const initialHash = 'a'.repeat(64)
+  const newHash = 'b'.repeat(64)
+  const files = new Map([
+    ['/env/version.txt', initialHash],
+    ['/env/saved.py', 'legacy-code'],
+    ['/env/assets.json', '{"saved.js":"saved.111.js"}'],
+    ['/env/manifest.json', JSON.stringify({ files: { 'frappe_runtime.tar.gz': { sha256: initialHash } } })],
+  ])
+  let extracts = 0
+  const fetchedUrls = []
+  const fs = {
+    filesystems: { IDBFS: {} }, mkdir() {}, mount() {}, syncfs(_populate, callback) { callback() },
+    readFile: name => {
+      if (!files.has(name)) throw new Error(`File not found: ${name}`)
+      return files.get(name)
+    },
+    writeFile: (name, value) => files.set(name, value),
+    readdir: () => [...files.keys()].map(name => name.split('/').at(-1)),
+    lstat: () => ({ mode: 0 }), isDir: () => false, unlink: name => files.delete(name),
+  }
+  const result = await installRuntimeFilesystem({
+    pyodide: { FS: fs, unpackArchive() { extracts++; files.set('/env/new.py', 'new') } },
+    fetchFn: async url => {
+      fetchedUrls.push(url)
+      if (url.includes('manifest.json')) {
+        return Response.json({ files: { 'frappe_runtime.tar.gz': { sha256: newHash } } })
+      }
+      return new Response('{"new.js":"new.222.js"}')
+    },
+    assetsEndpoint: '/assets',
+    storageEndpoint: '/storage',
+    environmentRoot: '/env',
+    benchDirectories: [],
+    freshSession: false,
+    logger,
+    log() {},
+  })
+
+  // Extraction was skipped to avoid breaking compatibility with saved database
+  assert.equal(extracts, 0)
+  assert.equal(files.get('/env/version.txt'), initialHash)
+  assert.equal(files.get('/env/saved.py'), 'legacy-code')
+  assert.equal(files.has('/env/new.py'), false)
+  // Preserved assets and manifest are returned
+  assert.equal(result.assetsText, '{"saved.js":"saved.111.js"}')
+  assert.deepEqual(result.manifest.files['frappe_runtime.tar.gz'].sha256, initialHash)
+  // Requests for saved playground did not include cache-busting query
+  assert.equal(fetchedUrls.some(url => url.includes('?t=')), false)
+})
+
 test('untrusted control messages reject missing or malformed fields and ports', () => {
   for (const type of [Type.INIT_CHANNEL, Type.RUNTIME_LOG, Type.RUNTIME_ERROR, Type.APP_INSTALL, Type.APP_INSTALL_RESULT]) {
     assert.equal(isControlMessage(createMessage(type)), false)

@@ -105,6 +105,7 @@ async function bootPython() {
     storageEndpoint,
     environmentRoot,
     benchDirectories: BENCH_DIRECTORIES,
+    freshSession,
     log: message => logRuntime(message, RuntimeStage.RUNTIME),
   })
   const assetsText = typeof runtimeFs === 'string' ? runtimeFs : (runtimeFs?.assetsText ?? String(runtimeFs))
@@ -123,7 +124,10 @@ async function bootPython() {
 
   pyodide.FS.writeFile(assetsJsonPath, assetsText)
   writeSiteFiles(pyodide.FS, staticSiteFiles)
-  appCatalog = await loadAppCatalog({ fetchFn: resilientFetch })
+  appCatalog = await loadAppCatalog({
+    fetchFn: resilientFetch,
+    fresh: freshSession,
+  })
   await prepareInstalledApps({
     pyodide,
     fetchFn: resilientFetch,
@@ -247,7 +251,9 @@ self.onmessage = async event => {
 
   const serviceWorkerPort = event.ports[0]
   if (!bootPromise) {
-    freshSession = event.data.payload.freshSession !== false
+    if (typeof event.data?.payload?.freshSession === 'boolean') {
+      freshSession = event.data.payload.freshSession
+    }
     bootPromise = bootPython()
   }
 

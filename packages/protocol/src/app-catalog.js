@@ -105,8 +105,9 @@ export async function loadAppCatalog({
   fetchFn = globalThis.fetch,
   catalogUrl = '/apps/catalog.json',
   now = Date.now,
+  fresh = true,
 } = {}) {
-  const url = catalogUrl.includes('?') ? catalogUrl : `${catalogUrl}?t=${now()}`
+  const url = fresh && !catalogUrl.includes('?') ? `${catalogUrl}?t=${now()}` : catalogUrl
   const response = await fetchFn(url)
   if (!response.ok) {
     throw new Error(`Could not load the app catalog (${response.status}).`)

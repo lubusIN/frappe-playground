@@ -65,6 +65,11 @@ self.addEventListener('message', event => {
     const scope = event.data.payload.scope
     const clientId = event.source?.id || event.data.payload.clientId
     const instance = instances.register(scope, event.ports[0], clientId)
+    if (event.data.payload?.freshSession) {
+      assetCache.revalidateCache().catch(error => {
+        console.warn('[SW] Background cache revalidation failed for fresh session:', error)
+      })
+    }
     instance.port.onmessage = messageEvent => {
       if (isControlMessage(messageEvent.data, ProtocolMessageType.RUNTIME_READY)) {
         console.log(`[SW] Received READY from worker: ${scope}`)
@@ -113,12 +118,7 @@ async function handleFetch(event, url) {
     explicitScope,
     clientFrameType: client?.frameType,
   })
-  if (servesShell) {
-    assetCache.revalidateCache().catch(error => {
-      console.warn('[SW] Background cache revalidation failed:', error)
-    })
-    return fetch(event.request)
-  }
+  if (servesShell) return fetch(event.request)
 
   const clientScope = client?.url ? scopeFromUrl(client.url) : null
   let scope = explicitScope

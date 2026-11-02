@@ -232,6 +232,42 @@ test('runtime cache identity follows Frappe assets, app catalog, and runtime man
   )
 })
 
+test('asset cache checks previous frappe-assets caches for saved playground compatibility', async () => {
+  const previousEntries = new Map([
+    ['https://playground.test/assets/desk.bundle.old123.js', new Response('old-bundle-content')],
+  ])
+  const currentEntries = new Map()
+  const cacheStorage = {
+    keys: async () => ['frappe-assets-new', 'frappe-assets-old'],
+    delete: async () => {},
+    open: async name => {
+      if (name === 'frappe-assets-old') {
+        return {
+          match: async key => previousEntries.get(key)?.clone(),
+          put: async (key, val) => previousEntries.set(key, val),
+        }
+      }
+      return {
+        match: async key => currentEntries.get(key)?.clone(),
+        put: async (key, val) => currentEntries.set(key, val),
+      }
+    },
+  }
+  const fetchFn = async () => {
+    throw new Error('Network should not be contacted for asset existing in fallback cache')
+  }
+  const runtimeCache = new RuntimeAssetCache({
+    fetchFn,
+    cacheStorage,
+    logger: { log() {}, warn() {} },
+  })
+  runtimeCache.currentCacheName = 'frappe-assets-new'
+
+  const request = new Request('https://playground.test/assets/desk.bundle.old123.js')
+  const response = await runtimeCache.respond(request)
+  assert.equal(await response.text(), 'old-bundle-content')
+})
+
 test('backend proxy translates protocol responses and scopes redirects', async () => {
   class FakeMessageChannel {
     constructor() {
