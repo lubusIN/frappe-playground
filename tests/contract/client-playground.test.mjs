@@ -13,6 +13,7 @@ import {
   PlaygroundController,
   PlaygroundEventType,
 } from '../../packages/client/src/playground/controller.js'
+import { ServiceWorkerCoordinator } from '../../packages/client/src/playground/sw-coordinator.js'
 import {
   normalizeAddress,
   scopedFrameUrl,
@@ -33,7 +34,6 @@ import {
   RUNTIME_BUILD_ID,
   runtimeEntryUrl,
 } from '../../packages/client/src/playground/runtime-version.js'
-import { loadAppCatalog } from '../../packages/client/src/playground/apps.js'
 
 const INSTANCE_ID_REGEX = /^[a-z0-9]+-[a-z0-9]+$/
 
@@ -45,41 +45,6 @@ function memoryStorage() {
     removeItem: key => values.delete(key),
   }
 }
-
-test('client app catalog loader validates generated metadata', async () => {
-  const app = {
-    id: 'wiki',
-    title: 'Wiki',
-    description: 'Knowledge base',
-    version: '3.0.0',
-    license: 'MIT',
-    experimental: true,
-    frappeVersion: '>=16 <17',
-    archive: 'apps/wiki/app.zip',
-    assetPrefix: '/assets/wiki',
-    packageRoot: 'wiki',
-    archiveExcludes: ['public'],
-    pythonDependencies: ['mistune>=3'],
-    source: { repository: 'https://example.com/wiki.git', ref: 'a'.repeat(40) },
-    archiveBytes: 10,
-    archiveSha256: 'b'.repeat(64),
-  }
-  const catalog = await loadAppCatalog({
-    fetchFn: async () => ({
-      ok: true,
-      json: async () => ({
-        schemaVersion: 1,
-        sourceCatalogSha256: 'c'.repeat(64),
-        apps: [app],
-      }),
-    }),
-  })
-  assert.equal(catalog.apps[0].id, 'wiki')
-  await assert.rejects(
-    loadAppCatalog({ fetchFn: async () => ({ ok: false, status: 503 }) }),
-    /Could not load the app catalog \(503\)/,
-  )
-})
 
 test('instance sessions are created once and restored on reload', () => {
   const storage = memoryStorage()
@@ -581,4 +546,55 @@ test('boot app installation does not wait for the optional dialog catalog', asyn
     completeCatalog({ apps: [] })
     await installing
   }
+})
+
+test('service worker coordinator handles expected worker checks and controller change reload', async () => {
+  let reloads = 0
+  const listeners = new Set()
+  const coordinator = new ServiceWorkerCoordinator({
+    serviceWorkerUrl: '/sw.js?build=test',
+    location: { href: 'http://localhost:5173/' },
+  })
+
+  assert.equal(coordinator.isExpectedServiceWorker(null), false)
+  assert.equal(coordinator.isExpectedServiceWorker({}), true)
+  assert.equal(coordinator.isExpectedServiceWorker({ scriptURL: 'http://localhost:5173/sw.js' }), false)
+  assert.equal(coordinator.isExpectedServiceWorker({ scriptURL: 'http://localhost:5173/sw.js?build=test' }), true)
+
+  const activeWorker = { scriptURL: 'http://localhost:5173/sw.js?build=test' }
+  assert.equal(coordinator.expectedServiceWorker({ controller: null }, { active: activeWorker }), activeWorker)
+
+  const mockSw = {
+    controller: null,
+    addEventListener(type, listener) { if (type === 'controllerchange') listeners.add(listener) },
+    removeEventListener(type, listener) { if (type === 'controllerchange') listeners.delete(listener) },
+  }
+
+  const cleanup = coordinator.setupControllerChangeReload(mockSw, () => reloads++)
+  assert.equal(listeners.size, 1)
+
+  // Initial load transition should not reload
+  for (const listener of [...listeners]) listener()
+  assert.equal(reloads, 0)
+
+  // Subsequent controller change should trigger reload
+  for (const listener of [...listeners]) listener()
+  assert.equal(reloads, 1)
+
+  // Duplicate notifications should not reload again
+  for (const listener of [...listeners]) listener()
+  assert.equal(reloads, 1)
+
+  cleanup()
+  assert.equal(listeners.size, 0)
+
+  // Update check handles errors gracefully
+  let updateCalled = false
+  await coordinator.checkForServiceWorkerUpdate({
+    update: async () => {
+      updateCalled = true
+      throw new Error('network down')
+    },
+  })
+  assert.equal(updateCalled, true)
 })

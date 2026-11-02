@@ -1,13 +1,8 @@
 import { validateAppCatalog, validateAppId } from '../../protocol/src/app-catalog.js'
-import { fetchBinary, fetchOk } from './filesystem.js'
+import { fetchBinary } from './filesystem.js'
 
 function bytesToHex(bytes) {
   return [...bytes].map(value => value.toString(16).padStart(2, '0')).join('')
-}
-
-export async function loadAppCatalog({ fetchFn, catalogUrl = '/apps/catalog.json' }) {
-  const response = await fetchOk(fetchFn, catalogUrl)
-  return validateAppCatalog(await response.json(), { generated: true })
 }
 
 export function appById(catalog, appId) {
@@ -74,19 +69,7 @@ export async function installFrappeApp(pyodide, appId) {
   validateAppId(appId)
   pyodide.globals.set('playground_app_id', appId)
   try {
-    await pyodide.runPythonAsync(`
-import frappe
-from frappe.installer import install_app
-
-frappe.init(site="site1", sites_path="/home/pyodide/bench/sites")
-frappe.connect()
-try:
-    if playground_app_id not in frappe.get_installed_apps():
-        install_app(playground_app_id)
-        frappe.db.commit()
-finally:
-    frappe.destroy()
-`)
+    await pyodide.runPythonAsync('import site_ops; site_ops.install_app(playground_app_id)')
   } finally {
     pyodide.globals.delete('playground_app_id')
   }
@@ -122,19 +105,7 @@ export async function uninstallFrappeApp(pyodide, appId) {
   validateAppId(appId)
   pyodide.globals.set('playground_app_id', appId)
   try {
-    await pyodide.runPythonAsync(`
-import frappe
-from frappe.installer import remove_app
-
-frappe.init(site="site1", sites_path="/home/pyodide/bench/sites")
-frappe.connect()
-try:
-    if playground_app_id in frappe.get_installed_apps():
-        remove_app(playground_app_id, yes=True, no_backup=True)
-        frappe.db.commit()
-finally:
-    frappe.destroy()
-`)
+    await pyodide.runPythonAsync('import site_ops; site_ops.remove_app(playground_app_id)')
   } finally {
     pyodide.globals.delete('playground_app_id')
   }

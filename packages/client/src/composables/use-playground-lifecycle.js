@@ -10,6 +10,7 @@ export function usePlaygroundLifecycle({
   createRuntime = createPlayground,
   processFlags = processBootFlags,
   listSessions = listInstanceSessions,
+  window: win = globalThis.window,
 } = {}) {
   const runtimeState = ref('idle')
   const ready = computed(() => runtimeState.value === 'ready')
@@ -106,7 +107,7 @@ export function usePlaygroundLifecycle({
 
       installedApps.value = current.listInstalledApps()
 
-      const params = new URLSearchParams(window.location.search)
+      const params = new URLSearchParams(win?.location?.search || '')
 
       const result = await processFlags(params, {
         playground: current,
@@ -124,8 +125,8 @@ export function usePlaygroundLifecycle({
       startAddressSync()
 
       // Clear boot flags from URL so they aren't reapplied when switching playgrounds
-      if (window.location.search) {
-        window.history.replaceState(null, '', window.location.pathname)
+      if (win?.location?.search && win?.history?.replaceState) {
+        win.history.replaceState(null, '', win.location.pathname)
       }
 
       if (session.freshSession && !result.autoLogin && !result.skipOnboarding) {

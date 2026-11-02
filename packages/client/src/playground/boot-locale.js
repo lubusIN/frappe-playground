@@ -1,3 +1,5 @@
+export const PLAYGROUND_COUNTRY_KEY = 'frappe_playground_country'
+
 export async function resolveBootLocale({
   signal,
   fetchFn = globalThis.fetch,
@@ -15,7 +17,7 @@ export async function resolveBootLocale({
   const timeZone = Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC'
   try {
     storage ??= globalThis.localStorage
-    const cached = storage?.getItem('frappe_playground_country')
+    const cached = storage?.getItem?.(PLAYGROUND_COUNTRY_KEY)
     if (cached) return { language, country: cached, timeZone }
   } catch (_) {}
 
@@ -29,7 +31,7 @@ export async function resolveBootLocale({
       const data = await response.json()
       if (typeof data.name === 'string' && data.name.trim()) {
         country = data.name
-        try { storage?.setItem('frappe_playground_country', country) } catch (_) {}
+        try { storage?.setItem?.(PLAYGROUND_COUNTRY_KEY, country) } catch (_) {}
       }
     }
   } catch (_) {

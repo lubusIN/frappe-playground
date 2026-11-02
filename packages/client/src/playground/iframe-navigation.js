@@ -1,3 +1,9 @@
+import {
+  addScopeToPath,
+  queryWithoutLegacyScope,
+  stripScopeFromPath,
+} from '../../../protocol/src/scope-url.js'
+
 function browserOrigin() {
   return globalThis.location?.origin || 'http://localhost'
 }
@@ -16,8 +22,7 @@ export function normalizeAddress(value, origin = browserOrigin()) {
 
 export function stripScope(value, origin = browserOrigin()) {
   const parsed = new URL(value, origin)
-  parsed.searchParams.delete('__scope')
-  const search = parsed.searchParams.toString()
+  const search = queryWithoutLegacyScope(parsed)
   return `${stripScopeFromPath(parsed.pathname)}${search ? `?${search}` : ''}${parsed.hash}`
 }
 
@@ -25,10 +30,6 @@ export function scopedFrameUrl(value, instanceId, origin = browserOrigin()) {
   if (!instanceId) throw new TypeError('instanceId is required')
 
   const parsed = new URL(normalizeAddress(value, origin), origin)
-  parsed.searchParams.delete('__scope')
-  return `${addScopeToPath(parsed.pathname, instanceId)}${parsed.search}${parsed.hash}`
+  const search = queryWithoutLegacyScope(parsed)
+  return `${addScopeToPath(parsed.pathname, instanceId)}${search ? `?${search}` : ''}${parsed.hash}`
 }
-import {
-  addScopeToPath,
-  stripScopeFromPath,
-} from '../../../protocol/src/scope-url.js'

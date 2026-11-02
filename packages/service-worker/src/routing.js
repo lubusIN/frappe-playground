@@ -1,11 +1,12 @@
 import {
+  LEGACY_SCOPE_QUERY_PARAM,
   addScopeToPath,
   queryWithoutLegacyScope,
   scopeFromUrl,
   stripScopeFromPath,
 } from '../../protocol/src/scope-url.js'
 
-export { scopeFromUrl }
+export { scopeFromUrl, queryWithoutLegacyScope as queryWithoutScope }
 
 export const VIRTUAL_SITE_HOST = 'site1'
 
@@ -118,7 +119,6 @@ const STATIC_PATHS = new Set([
 ])
 const STATIC_PATH_PREFIXES = [
   '/assets',
-  '/docs',
   '/frontend',
   '/generated',
   '/protocol',
@@ -140,10 +140,6 @@ export function isShellStaticPath(pathname) {
   return pathname === '/favicon.ico'
     || pathname === '/index.html'
     || pathname.startsWith('/frontend/')
-}
-
-export function queryWithoutScope(url) {
-  return queryWithoutLegacyScope(url)
 }
 
 export function isStaticPath(pathname) {
@@ -178,7 +174,7 @@ export function remapStaticPath(pathname) {
 export function staticRequestUrl(requestUrl) {
   const url = new URL(requestUrl)
   url.pathname = remapStaticPath(stripScopeFromPath(url.pathname))
-  url.searchParams.delete('__scope')
+  url.searchParams.delete(LEGACY_SCOPE_QUERY_PARAM)
   return url
 }
 
@@ -197,7 +193,7 @@ export function scopeRedirectLocation(headers, scope, origin) {
     if (isStaticPath(stripScopeFromPath(scopedLocation.pathname))) return
 
     scopedLocation.pathname = addScopeToPath(scopedLocation.pathname, scope)
-    scopedLocation.searchParams.delete('__scope')
+    scopedLocation.searchParams.delete(LEGACY_SCOPE_QUERY_PARAM)
     headers.set(
       'Location',
       `${scopedLocation.pathname}${scopedLocation.search}${scopedLocation.hash}`,

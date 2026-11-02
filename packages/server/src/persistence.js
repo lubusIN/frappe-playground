@@ -1,3 +1,4 @@
+import { getInstanceDatabaseName } from '../../protocol/src/scope-url.js'
 import { fetchBinary } from './filesystem.js'
 
 function requestToPromise(request) {
@@ -59,57 +60,16 @@ export function restoreSiteFiles(fs, files = [], allowedRoots = []) {
 }
 
 export async function checkpointDatabase(pyodide, dbPath) {
-  await pyodide.runPythonAsync(`
-import sqlite3
-conn = sqlite3.connect('${dbPath}')
-try:
-    checkpoint = conn.execute('PRAGMA wal_checkpoint(TRUNCATE)').fetchone()
-    if checkpoint[0] != 0:
-        raise RuntimeError('Database checkpoint is busy; state was not saved.')
-finally:
-    conn.close()
-  `)
+  await pyodide.runPythonAsync(`import site_ops; site_ops.checkpoint_database(${JSON.stringify(dbPath)})`)
   // SQLite owns its sidecars. Never unlink a WAL that may contain live data.
 }
 
 export async function repairCompletedSiteDefaults(pyodide, dbPath) {
-  await pyodide.runPythonAsync(`
-import sqlite3
-conn = sqlite3.connect('${dbPath}')
-try:
-    values = [row[0] for row in conn.execute(
-        "select is_setup_complete from 'tabInstalled Application' where app_name in ('frappe', 'erpnext')"
-    ).fetchall()]
-    home_page = conn.execute(
-        "select defvalue from tabDefaultValue where parent='__default' and defkey='desktop:home_page'"
-    ).fetchone()
-    if values and all(bool(value) for value in values) and home_page and home_page[0] == 'setup-wizard':
-        conn.execute("update tabDefaultValue set defvalue='workspace' where parent='__default' and defkey='desktop:home_page'")
-        conn.commit()
-finally:
-    conn.close()
-  `)
+  await pyodide.runPythonAsync(`import site_ops; site_ops.repair_completed_site_defaults(${JSON.stringify(dbPath)})`)
 }
 
 export async function resetFreshSiteSetupState(pyodide, dbPath) {
-  await pyodide.runPythonAsync(`
-import sqlite3
-conn = sqlite3.connect('${dbPath}')
-try:
-    conn.execute("update tabSingles set value='0' where doctype='System Settings' and field='setup_complete'")
-    conn.execute("update 'tabInstalled Application' set is_setup_complete=0")
-    updated = conn.execute(
-        "update tabDefaultValue set defvalue='setup-wizard' where parent='__default' and defkey='desktop:home_page'"
-    ).rowcount
-    if not updated:
-        conn.execute(
-            "insert into tabDefaultValue (name, parent, defkey, defvalue) values (?, '__default', 'desktop:home_page', 'setup-wizard')",
-            ('__default:desktop:home_page',),
-        )
-    conn.commit()
-finally:
-    conn.close()
-  `)
+  await pyodide.runPythonAsync(`import site_ops; site_ops.reset_fresh_site_setup_state(${JSON.stringify(dbPath)})`)
 }
 
 export async function initializeSiteDatabase({
@@ -174,7 +134,7 @@ export class BrowserStateStore {
 
   open() {
     return new Promise((resolve, reject) => {
-      const request = this.indexedDB.open(`frappe_playground_db_${this.scope}`, 1)
+      const request = this.indexedDB.open(getInstanceDatabaseName(this.scope), 1)
       request.onupgradeneeded = () => {
         if (!request.result.objectStoreNames.contains('files')) {
           request.result.createObjectStore('files')

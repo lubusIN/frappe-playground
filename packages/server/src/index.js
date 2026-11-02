@@ -1,5 +1,5 @@
 // Frappe Playground — Pyodide server worker entry point
-import { FRAPPE_MOCKS_SOURCE, MARIADB_POLYFILLS_SOURCE, WSGI_SERVER_SOURCE } from '/generated/python-sources.js'
+import { FRAPPE_MOCKS_SOURCE, MARIADB_POLYFILLS_SOURCE, SITE_OPS_SOURCE, WSGI_SERVER_SOURCE } from '/generated/python-sources.js'
 import {
   ProtocolMessageType,
   RuntimeStage,
@@ -15,6 +15,7 @@ import {
   createBackendResponse,
   readBackendRequest,
 } from '/protocol/request.js'
+import { loadAppCatalog } from '/protocol/app-catalog.js'
 import {
   installRuntimeFilesystem,
   writeSiteFiles,
@@ -27,11 +28,11 @@ import {
 import {
   PythonBridge,
   SerialRequestExecutor,
+  installSiteOps,
 } from '/server/request-handler.js'
 import { initializePyodide } from '/server/boot.js'
 import {
   installCatalogApp,
-  loadAppCatalog,
   prepareInstalledApps,
   uninstallCatalogApp,
   writeInstalledApps,
@@ -71,6 +72,19 @@ const stateStore = new BrowserStateStore({
   siteFileRoots,
 })
 
+async function resilientFetch(...args) {
+  let lastErr
+  for (let i = 0; i < 3; i++) {
+    try {
+      return await fetch(...args)
+    } catch (e) {
+      lastErr = e
+      if (i < 2) await new Promise(r => setTimeout(r, 500 * (i + 1)))
+    }
+  }
+  throw lastErr
+}
+
 function logRuntime(message, stage, status = 'active') {
   self.postMessage(createRuntimeLogMessage(message, stage, status))
 }
@@ -78,14 +92,15 @@ function logRuntime(message, stage, status = 'active') {
 async function bootPython() {
   pyodide = await initializePyodide({
     globalScope: self,
-    fetchFn: (...args) => fetch(...args),
+    fetchFn: resilientFetch,
     pythonPackages: PYTHON_PACKAGES,
     log: message => logRuntime(message, RuntimeStage.PYTHON),
   })
+  await installSiteOps(pyodide, SITE_OPS_SOURCE)
 
   const assetsText = await installRuntimeFilesystem({
     pyodide,
-    fetchFn: (...args) => fetch(...args),
+    fetchFn: resilientFetch,
     assetsEndpoint,
     storageEndpoint,
     environmentRoot,
@@ -95,7 +110,7 @@ async function bootPython() {
 
   await initializeSiteDatabase({
     pyodide,
-    fetchFn: (...args) => fetch(...args),
+    fetchFn: resilientFetch,
     stateStore,
     dbPath: siteDbPath,
     storageEndpoint,
@@ -105,10 +120,10 @@ async function bootPython() {
 
   pyodide.FS.writeFile(assetsJsonPath, assetsText)
   writeSiteFiles(pyodide.FS, staticSiteFiles)
-  appCatalog = await loadAppCatalog({ fetchFn: (...args) => fetch(...args) })
+  appCatalog = await loadAppCatalog({ fetchFn: resilientFetch })
   await prepareInstalledApps({
     pyodide,
-    fetchFn: (...args) => fetch(...args),
+    fetchFn: resilientFetch,
     catalog: appCatalog,
     appIds: stateStore.installedApps,
     environmentRoot,
@@ -122,6 +137,7 @@ async function bootPython() {
     mocksSource: FRAPPE_MOCKS_SOURCE,
     wsgiSource: WSGI_SERVER_SOURCE,
     mariadbPolyfillsSource: MARIADB_POLYFILLS_SOURCE,
+    siteOpsSource: SITE_OPS_SOURCE,
     cookieJarJson: stateStore.cookieJarJson,
   })
   await bridge.configure()
@@ -160,7 +176,7 @@ async function mutateInstalledApps(mutation) {
 async function installApp(appId) {
   return mutateInstalledApps(installedAppIds => installCatalogApp({
     pyodide,
-    fetchFn: (...args) => fetch(...args),
+    fetchFn: resilientFetch,
     catalog: appCatalog,
     appId,
     installedAppIds,

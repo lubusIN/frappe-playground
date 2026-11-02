@@ -1,5 +1,6 @@
 import { SCOPE_BOOTSTRAP_SOURCE } from './scope-bootstrap.js'
 import { scopeRedirectLocation, VIRTUAL_SITE_HOST } from './routing.js'
+import { scopePrefix } from '../../protocol/src/scope-url.js'
 
 export function rewriteVirtualSiteUrls(body, headers, origin, scope) {
   const contentType = headers.get('Content-Type')?.toLowerCase() || ''
@@ -9,8 +10,9 @@ export function rewriteVirtualSiteUrls(body, headers, origin, scope) {
 
   const text = typeof body === 'string' ? body : new TextDecoder().decode(body)
   const playgroundOrigin = new URL(origin)
-  const scopedOrigin = `${origin}/scope:${encodeURIComponent(scope)}`
-  const scopedProtocolRelativeOrigin = `//${playgroundOrigin.host}/scope:${encodeURIComponent(scope)}`
+  const prefix = scopePrefix(scope)
+  const scopedOrigin = `${origin}${prefix}`
+  const scopedProtocolRelativeOrigin = `//${playgroundOrigin.host}${prefix}`
   const escapedScopedOrigin = scopedOrigin.replaceAll('/', '\\/')
   const rewritten = text
     .replace(/https?:\/\/site1(?::\d+)?/g, scopedOrigin)
@@ -22,7 +24,7 @@ export function rewriteVirtualSiteUrls(body, headers, origin, scope) {
 
 function scopeBootstrapScript(scope, associationMessage, userId) {
   const options = JSON.stringify({
-    scopePrefix: `/scope:${encodeURIComponent(scope)}`,
+    scopePrefix: scopePrefix(scope),
     virtualSiteHost: VIRTUAL_SITE_HOST,
     associationMessage,
     userId: userId && userId !== 'Guest' ? userId : '',

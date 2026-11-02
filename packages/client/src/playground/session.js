@@ -1,7 +1,8 @@
+import { ADJECTIVES, NOUNS } from './names.js'
+import { getInstanceDatabaseName } from '../../../protocol/src/scope-url.js'
+
 export const PLAYGROUND_SESSION_KEY = 'frappe_playground_instance_id'
 export const PLAYGROUND_INSTANCES_KEY = 'frappe_playground_instances'
-
-import { ADJECTIVES, NOUNS } from './names.js'
 
 function createId({ random }) {
   const adj = ADJECTIVES[Math.floor(random() * ADJECTIVES.length)]
@@ -33,7 +34,6 @@ export function listInstanceSessions({ storage = globalThis.localStorage } = {})
 
 export function createInstanceSession({
   storage = globalThis.localStorage,
-  cryptoApi = globalThis.crypto,
   now = Date.now,
   random = Math.random,
   name,
@@ -112,7 +112,7 @@ export function renameInstanceSession(id, name, { storage = globalThis.localStor
 export function deleteInstanceData(id, { indexedDB = globalThis.indexedDB, onBlocked = () => {} } = {}) {
   if (!indexedDB) return Promise.resolve()
   return new Promise((resolve, reject) => {
-    const request = indexedDB.deleteDatabase(`frappe_playground_db_${id}`)
+    const request = indexedDB.deleteDatabase(getInstanceDatabaseName(id))
     request.onsuccess = () => resolve()
     request.onerror = () => reject(request.error)
     // A blocked deletion is still pending and cannot be cancelled.
@@ -123,7 +123,6 @@ export function deleteInstanceData(id, { indexedDB = globalThis.indexedDB, onBlo
 export function getOrCreateInstanceSession(options = {}) {
   const {
     storage = globalThis.localStorage,
-    cryptoApi = globalThis.crypto,
     now = Date.now,
     random = Math.random,
   } = options
@@ -153,5 +152,5 @@ export function getOrCreateInstanceSession(options = {}) {
     return { ...instance, freshSession: false }
   }
 
-  return createInstanceSession({ storage, cryptoApi, now, random, name: options.name })
+  return createInstanceSession({ storage, now, random, name: options.name })
 }

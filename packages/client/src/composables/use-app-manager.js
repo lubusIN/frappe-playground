@@ -1,5 +1,5 @@
 import { nextTick, ref } from 'vue'
-import { loadAppCatalog } from '../playground/apps.js'
+import { loadAppCatalog } from '../../../protocol/src/app-catalog.js'
 
 export function useAppManager(getPlayground, {
   loadCatalog = loadAppCatalog,

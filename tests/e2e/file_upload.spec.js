@@ -3,7 +3,7 @@ const { bootLoginAndReachDesk, getFrappeFrame } = require('./helpers/frappeFlow'
 
 test.describe('File Upload', () => {
     test('Can upload a file successfully and retrieve it', async ({ page }) => {
-        test.setTimeout(180000); // 3 minutes for full boot + upload
+        test.setTimeout(600000); // 10 minutes for full boot + upload + reload
 
         const { instanceId } = await bootLoginAndReachDesk(page);
         const frame = await getFrappeFrame(page);

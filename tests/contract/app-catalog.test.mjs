@@ -7,6 +7,7 @@ import {
   catalogFingerprint,
   validateAppCatalog,
 } from '../../scripts/app-catalog.mjs'
+import { loadAppCatalog } from '../../packages/protocol/src/app-catalog.js'
 
 test('authored app catalog contains pinned and isolated artifacts', async () => {
   const catalog = JSON.parse(await readFile(
@@ -98,5 +99,40 @@ test('app catalog rejects mutable refs and duplicate ids', () => {
   assert.throws(
     () => validateAppCatalog({ schemaVersion: 1, apps: [app, { ...app }] }),
     /Duplicate app id/,
+  )
+})
+
+test('app catalog loader validates generated metadata', async () => {
+  const app = {
+    id: 'wiki',
+    title: 'Wiki',
+    description: 'Knowledge base',
+    version: '3.0.0',
+    license: 'MIT',
+    experimental: true,
+    frappeVersion: '>=16 <17',
+    archive: 'apps/wiki/app.zip',
+    assetPrefix: '/assets/wiki',
+    packageRoot: 'wiki',
+    archiveExcludes: ['public'],
+    pythonDependencies: ['mistune>=3'],
+    source: { repository: 'https://example.com/wiki.git', ref: 'a'.repeat(40) },
+    archiveBytes: 10,
+    archiveSha256: 'b'.repeat(64),
+  }
+  const catalog = await loadAppCatalog({
+    fetchFn: async () => ({
+      ok: true,
+      json: async () => ({
+        schemaVersion: 1,
+        sourceCatalogSha256: 'c'.repeat(64),
+        apps: [app],
+      }),
+    }),
+  })
+  assert.equal(catalog.apps[0].id, 'wiki')
+  await assert.rejects(
+    loadAppCatalog({ fetchFn: async () => ({ ok: false, status: 503 }) }),
+    /Could not load the app catalog \(503\)/,
   )
 })

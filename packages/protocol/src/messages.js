@@ -3,9 +3,7 @@ import { PROTOCOL_VERSION } from './version.js'
 export { PROTOCOL_VERSION }
 
 export const ProtocolMessageType = Object.freeze({
-  CLAIM_CLIENTS: 'service-worker:claim-clients',
   ASSOCIATE_CLIENT: 'service-worker:associate-client',
-  CLEAR_OTHER_INSTANCES: 'service-worker:clear-other-instances',
   INIT_CHANNEL: 'channel:init',
   CLOSE_CHANNEL: 'channel:close',
   RECOVERY_REQUEST: 'channel:recovery-request',
@@ -19,6 +17,8 @@ export const ProtocolMessageType = Object.freeze({
   BACKEND_REQUEST: 'backend:request',
   BACKEND_RESPONSE: 'backend:response',
 })
+
+export const RECOVERY_CHANNEL_NAME = 'sw-recovery'
 
 export const RuntimeStage = Object.freeze({
   SERVICE_WORKER: 'service-worker',
@@ -45,7 +45,7 @@ export function requireObject(value, label) {
 }
 
 export function requireString(value, label) {
-  if (typeof value !== 'string' || value.length === 0) {
+  if (typeof value !== 'string' || !value.trim()) {
     throw new TypeError(`${label} must be a non-empty string`)
   }
   return value
@@ -69,23 +69,8 @@ export function assertProtocolMessage(value, type) {
   return value
 }
 
-export function createClaimClientsMessage() {
-  // Deprecated: activation owns clients.claim(). Retained for protocol-v2
-  // compatibility so older messages remain recognizable and can be ignored.
-  return createMessage(ProtocolMessageType.CLAIM_CLIENTS)
-}
-
 export function createAssociateClientMessage(scope) {
   return createMessage(ProtocolMessageType.ASSOCIATE_CLIENT, {
-    scope: requireString(scope, 'scope'),
-  })
-}
-
-export function createClearOtherInstancesMessage(scope) {
-  // Deprecated: retained only so protocol-v2 clients can be parsed safely.
-  // A service worker is shared across tabs, making cross-instance eviction
-  // unsafe for the multi-playground model.
-  return createMessage(ProtocolMessageType.CLEAR_OTHER_INSTANCES, {
     scope: requireString(scope, 'scope'),
   })
 }
@@ -175,7 +160,6 @@ export function isControlMessage(value, type) {
   const string = field => typeof payload?.[field] === 'string' && payload[field].length > 0
   const object = payload && typeof payload === 'object' && !Array.isArray(payload)
   switch (value.type) {
-    case ProtocolMessageType.CLAIM_CLIENTS:
     case ProtocolMessageType.RECOVERY_REQUEST:
       return payload === undefined || Boolean(object)
     case ProtocolMessageType.RUNTIME_READY:
@@ -188,7 +172,6 @@ export function isControlMessage(value, type) {
         && (payload.clientId === undefined || string('clientId')))
     case ProtocolMessageType.ASSOCIATE_CLIENT:
     case ProtocolMessageType.CLOSE_CHANNEL:
-    case ProtocolMessageType.CLEAR_OTHER_INSTANCES:
       return Boolean(object && string('scope'))
     case ProtocolMessageType.RUNTIME_ERROR:
       return Boolean(object && string('message'))

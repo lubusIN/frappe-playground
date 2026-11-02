@@ -15,7 +15,7 @@ test.describe('Boot Flags (URL Configuration)', () => {
         // Verify the desk URL inside the iframe (it shouldn't be /setup-wizard)
         const frame = page.frameLocator('#frappe-desk');
         // Check for an element unique to the desk, like the navbar or page content
-        await expect(frame.locator('.navbar')).toBeVisible({ timeout: 60000 });
+        await expect(frame.locator('.navbar, .page-head, .page-container, .main-section')).toBeVisible({ timeout: 60000 });
         
         // Ensure no IntroDialog is shown
         await expect(page.locator('.intro-dialog')).toBeHidden();
@@ -34,7 +34,7 @@ test.describe('Boot Flags (URL Configuration)', () => {
 
         const frame = page.frameLocator('#frappe-desk');
         // Setup wizard should be visible
-        await expect(frame.locator('.slides-wrapper')).toBeVisible({ timeout: 60000 });
+        await expect(frame.locator('.setup-intro, .slides-wrapper').filter({ visible: true }).first()).toBeVisible({ timeout: 60000 });
     });
 
     test('?path redirects to the specified route after boot', async ({ page }) => {

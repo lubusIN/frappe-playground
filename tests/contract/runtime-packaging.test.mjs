@@ -8,6 +8,8 @@ import test from 'node:test'
 import { catalogFingerprint } from '../../scripts/app-catalog.mjs'
 import { verifyBuild } from '../../scripts/verify-build.mjs'
 
+const PYTHON = process.env.PYTHON || (process.platform === 'darwin' ? '/usr/bin/python3' : 'python3')
+
 test('core packaging removes only verified browser copies and translation sources', async () => {
   const root = await mkdtemp(path.join(os.tmpdir(), 'frappe-packaging-'))
   const source = path.join(root, 'source')
@@ -20,7 +22,7 @@ test('core packaging removes only verified browser copies and translation source
     await mkdir(path.dirname(name), { recursive: true })
     await writeFile(name, contents)
   }
-  const packageRuntime = () => spawnSync('python3', [
+  const packageRuntime = () => spawnSync(PYTHON, [
     'runtime/build/package-core-runtime.py', source, assets, output,
   ], { encoding: 'utf8' })
   try {
@@ -37,7 +39,7 @@ test('core packaging removes only verified browser copies and translation source
     await write(path.join(source, 'frappe/__init__.py'), 'runtime')
     const result = packageRuntime()
     assert.equal(result.status, 0, result.stderr)
-    const listing = spawnSync('python3', ['-c',
+    const listing = spawnSync(PYTHON, ['-c',
       'import json,sys,tarfile; t=tarfile.open(sys.argv[1]); print(json.dumps([m.name.removeprefix("./") for m in t if m.isfile()]))',
       output], { encoding: 'utf8' })
     assert.equal(listing.status, 0, listing.stderr)
