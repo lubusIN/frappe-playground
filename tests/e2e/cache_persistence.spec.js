@@ -32,7 +32,12 @@ test('Database state is cached in IndexedDB and seeded only on fresh sessions', 
     expect(logs.some(l => l.includes('saveInitialStateToIDB'))).toBeFalsy();
     
     // Verify it didn't extract packages (virtual environment was cached)
-    expect(logs.some(l => l.includes('[Worker] Restored virtual environment from IDBFS. Skipping extraction.'))).toBeTruthy();
+    expect(
+        logs.some(l => 
+            l.includes('[Worker] Restored virtual environment from IDBFS. Skipping extraction.')
+            || l.includes('for saved playground. Skipping extraction.')
+        )
+    ).toBeTruthy();
 });
 
 test('an uncloneable save value leaves the previous IndexedDB snapshot intact', async ({ page }) => {

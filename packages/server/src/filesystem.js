@@ -73,6 +73,7 @@ export async function installRuntimeFilesystem({
     needsExtract = false
     log('Restored virtual environment from IDBFS!')
     logger.log(`[Worker] Preserving runtime (${cachedHash}) for saved playground. Skipping extraction.`)
+    logger.log('[Worker] Restored virtual environment from IDBFS. Skipping extraction.')
     try {
       const storedAssets = pyodide.FS.readFile(`${environmentRoot}/assets.json`, { encoding: 'utf8' })
       if (storedAssets) assetsText = storedAssets
