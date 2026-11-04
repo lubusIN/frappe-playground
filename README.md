@@ -1,4 +1,4 @@
-<p align="center"><img width="160" src=".github/logo.svg" alt="Frappe Playground"></p>
+<p align="center"><img height="50" src=".github/logo.svg" alt="Frappe Playground"></p>
 
 ![Frappe Playground](.github/banner.png)
 
