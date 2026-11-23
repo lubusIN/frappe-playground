@@ -362,6 +362,73 @@ class MockOrjson:
 
 sys.modules["orjson"] = MockOrjson
 
+# ── hashlib.pbkdf2_hmac Polyfill ────────────────────────────────────
+
+# Pyodide's minimal WebAssembly standard library in Python 3.14 lacks
+# the OpenSSL-backed hashlib.pbkdf2_hmac. passlib (used by Frappe for
+# password hashing and verification) calls hashlib.pbkdf2_hmac, raising
+# AttributeError during authentication.
+import hashlib
+
+
+def _pbkdf2_hmac(hash_name, password, salt, iterations, dklen=None):
+    if isinstance(password, str):
+        password = password.encode("utf-8")
+    elif isinstance(password, (bytearray, memoryview)):
+        password = bytes(password)
+    if isinstance(salt, str):
+        salt = salt.encode("utf-8")
+    elif isinstance(salt, (bytearray, memoryview)):
+        salt = bytes(salt)
+
+    hash_obj = hashlib.new(hash_name)
+    if dklen is None:
+        dklen = hash_obj.digest_size
+
+    try:
+        from cryptography.hazmat.primitives.kdf.pbkdf2 import PBKDF2HMAC
+        from cryptography.hazmat.primitives import hashes
+
+        name = hash_name.lower().replace("-", "_")
+        mapping = {
+            "sha256": hashes.SHA256,
+            "sha512": hashes.SHA512,
+            "sha384": hashes.SHA384,
+            "sha224": hashes.SHA224,
+            "sha1": hashes.SHA1,
+            "md5": hashes.MD5,
+        }
+        algo = mapping.get(name)
+        algo_inst = algo() if algo else getattr(hashes, name.upper())()
+
+        kdf = PBKDF2HMAC(
+            algorithm=algo_inst,
+            length=dklen,
+            salt=salt,
+            iterations=iterations,
+        )
+        return kdf.derive(password)
+    except Exception:
+        import hmac
+
+        hash_len = hash_obj.digest_size
+
+        def _f(p, s, c, i):
+            u = hmac.new(p, s + i.to_bytes(4, "big"), hash_name).digest()
+            res = bytearray(u)
+            for _ in range(2, c + 1):
+                u = hmac.new(p, u, hash_name).digest()
+                for j in range(len(res)):
+                    res[j] ^= u[j]
+            return bytes(res)
+
+        l = (dklen + hash_len - 1) // hash_len
+        return b"".join(_f(password, salt, iterations, i) for i in range(1, l + 1))[:dklen]
+
+
+if not hasattr(hashlib, "pbkdf2_hmac"):
+    hashlib.pbkdf2_hmac = _pbkdf2_hmac
+
 # ── Additional Database Drivers ─────────────────────────────────────
 
 # >>> mock-test-target: psycopg2

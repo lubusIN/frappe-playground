@@ -77,6 +77,7 @@ test('generated Python text module exactly matches authored Python sources', asy
   assert.match(mocks, /RUSAGE_SELF=0/)
   assert.match(mocks, /ru_maxrss = 0/)
   assert.match(mocks, /threading\.Timer = DummyTimer/)
+  assert.match(mocks, /hashlib\.pbkdf2_hmac/)
 })
 
 test('source-only Python packages are bundled instead of sent to micropip', async () => {
